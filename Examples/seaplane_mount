@@ -1,0 +1,9 @@
+from pvlib import pvsystem
+import pandas as pd
+
+class SeaplaneMount(pvsystem.AbstractMount):
+    
+    def get_orientation(self,solar_zenith,solar_azimuth):
+        return {'surface_tilt': 0,
+                'surface_azimuth':self.wind_direction}
+    

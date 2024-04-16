@@ -63,6 +63,10 @@ irrad_cs = pd.concat(irrad_cs, axis=1)
 
 # Implement in loop - loop for varying temperatures
 # TODO: Pull in weather data to cell temp based on wind speed
+# TODO: Calculate total energy collected
+# TODO: Add weather data
+# TODO: Change orientation of the plane based on wind direction
+
 plt.figure()
 for temp_air in [10,20,30] :
     

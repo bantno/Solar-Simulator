@@ -1,4 +1,5 @@
 import pandas as pd
+import pvlib.iotools
 from pvlib import location
 from pvlib import tracking
 from pvlib.bifacial.pvfactors import pvfactors_timeseries
@@ -7,17 +8,20 @@ from pvlib import pvsystem
 import matplotlib.pyplot as plt
 import warnings
 
+# Calculate clearsky collected energy for an 80W seaplane in the ocean
+
 # supressing shapely warnings that occur on import of pvfactors
 warnings.filterwarnings(action='ignore', module='pvfactors')
 
 # Determine times for Gulf of Mexico
-lat, lon = 25.3, 90.0
-tz = 'Etc/GMT-5'
-times = pd.date_range('2021-06-21', '2021-06-22', freq='1T', tz=tz)
+lat = 29.02291491363789
+lon = -90.23223029442693
+tz = 'Etc/GMT+5'
+times = pd.date_range('2021-06-21', '2021-06-29', freq='15min', tz=tz) # Get times for entire study period
 
 # create location object and get clearsky data
 site_location = location.Location(lat, lon, tz=tz, name = 'Gulf of Mexico')
-cs = site_location.get_clearsky(times)
+cs = site_location.get_clearsky(times) # Get clearsky weather data
 
 # get solar position data
 solar_position = site_location.get_solarposition(times)
@@ -69,7 +73,7 @@ irrad_cs = pd.concat(irrad_cs, axis=1)
 
 plt.figure()
 for temp_air in [10,20,30] :
-    
+
     effective_irrad_mono = irrad_cs['total_abs_front']
     temp_cell = temperature.faiman(effective_irrad_mono, temp_air=temp_air,
                                 wind_speed=1) 
@@ -86,8 +90,32 @@ for temp_air in [10,20,30] :
     series_label = f'{temp_air}' u'\u2103'
     pdc.plot(label=series_label)
 
-
 plt.title('Hot vs Cool Simulation - June Solstice')
 plt.ylabel('DC Power')
 plt.legend()
 plt.show()
+
+### Weather Based Simulation
+# Create location object
+site_location = location.Location(lat, lon, tz=tz, name = 'Gulf of Mexico')
+
+# get solar position data
+solar_position = site_location.get_solarposition(times)
+
+# Retrieve Weather Data
+latitude = 29.02291491363789
+longitude = -90.23223029442693
+api_key = 'unURaXbAGeMjP8359wy5gyQfWIKq1g1y7hdhUmNo'
+email = 'bepstein8@gatech.edu'
+
+keys = ['ghi', 'dni', 'dhi', 'temp_air', 'wind_speed', 'wind_direction',
+        'albedo', 'precipitable_water']
+
+psm3, psm3_metadata = pvlib.iotools.get_psm3(latitude, longitude, api_key,
+                                             email, interval=60, names=2019,
+                                             map_variables=True, leap_day=True,
+                                             attributes=keys)
+
+# fig = plt.figure()
+# plt.plot(psm3)
+# fig.show()

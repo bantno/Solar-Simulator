@@ -27,10 +27,7 @@ tz = 'Etc/GMT+5'
 # create location object
 site_location = location.Location(lat, lon, tz=tz, name = 'Gulf of Mexico')
 
-year = 2021
-month = 6
-day = 1
-total_energy = 0
+
 
 # Implement in loop - loop for varying temperatures
 # TODO: Pull in weather data to cell temp based on wind speed
@@ -39,92 +36,100 @@ total_energy = 0
 # TODO: Change orientation of the plane based on wind direction
 # TODO: Plot fixed and tracking results next to each other
 # TODO: Include effects of flight
-fig = plt.figure()
-ax = plt.subplot(111)
-fig.subplots_adjust(bottom=0.2)
-for i in range(0,29) :
+# fig = plt.figure()
+# ax = plt.subplot(111)
+# fig.subplots_adjust(bottom=0.2)
+power_kWh = []
 
-    # get times of interest
+for j in range(1,12) :
+    year = 2021
+    month = j
+    day = 1
+    total_energy = 0
+    for i in range(0,27) :
 
-    start = "{0}-0{1}-{2}".format(year,month,day)
-    day = day + 1
-    end = "{0}-0{1}-{2}".format(year,month,day)
+        # get times of interest
 
-    times = pd.date_range(start, end, freq='15min', tz=tz) # Get times for entire study period
-    # get clearsky weather
-    cs = site_location.get_clearsky(times) # Get clearsky weather data
+        start = "{0}-{1}-{2}".format(year,month,day)
+        day = day + 1
+        end = "{0}-{1}-{2}".format(year,month,day)
 
-    # get solar position data
-    solar_position = site_location.get_solarposition(times)
+        times = pd.date_range(start, end, freq='15min', tz=tz) # Get times for entire study period
+        # get clearsky weather
+        cs = site_location.get_clearsky(times) # Get clearsky weather data
 
-    # set ground coverage ratio and max_angle to
-    # pull orientation data for a single-axis tracker
-    gcr = 0.01
-    max_phi = 0
-    orientation = tracking.singleaxis(solar_position['apparent_zenith'],
-                                    solar_position['azimuth'],
-                                    max_angle=max_phi,
-                                    backtrack=True,
-                                    gcr=gcr
+        # get solar position data
+        solar_position = site_location.get_solarposition(times)
+
+        # set ground coverage ratio and max_angle to
+        # pull orientation data for a single-axis tracker
+        gcr = 0.01
+        max_phi = 30
+        orientation = tracking.singleaxis(solar_position['apparent_zenith'],
+                                        solar_position['azimuth'],
+                                        max_angle=max_phi,
+                                        backtrack=True,
+                                        gcr=gcr
+                                        )
+
+        # set axis_azimuth, albedo, pvrow width and height, and use
+        # the pvfactors engine for both front and rear-side absorbed irradiance
+        pvrow_height = 1
+        pvrow_width = 1
+        albedo = 0.06
+
+        # Set windspeed and azimuth randomly
+        axis_azimuth = np.random.rand(1)*360
+        wind_speed = np.random.rand(1)*10
+
+        # explicity simulate on pvarray with sensor placed in middle row
+        # users may select different values depending on needs
+        irrad_cs = pvfactors_timeseries(solar_position['azimuth'],
+                                    solar_position['apparent_zenith'],
+                                    orientation['surface_azimuth'],
+                                    orientation['surface_tilt'],
+                                    axis_azimuth,
+                                    cs.index,
+                                    cs['dni'],
+                                    cs['dhi'],
+                                    gcr,
+                                    pvrow_height,
+                                    pvrow_width,
+                                    albedo,
+                                    n_pvrows=1,
+                                    index_observed_pvrow=0
                                     )
 
-    # set axis_azimuth, albedo, pvrow width and height, and use
-    # the pvfactors engine for both front and rear-side absorbed irradiance
-    pvrow_height = 1
-    pvrow_width = 1
-    albedo = 0.06
+        # turn into pandas DataFrame
+        irrad_cs = pd.concat(irrad_cs, axis=1)
+        # Constant air temperature
+        temp_air = 30
+        effective_irrad_mono = irrad_cs['total_abs_front']
+        temp_cell = temperature.faiman(effective_irrad_mono, temp_air=temp_air,
+                                    wind_speed=wind_speed) 
+        pdc0 = 80 # Nominal Power Rating
+        gamma_pdc = -0.0043 # Temperature dependence coefficient
 
-    # Set windspeed and azimuth randomly
-    axis_azimuth = np.random.rand(1)*360
-    wind_speed = np.random.rand(1)*10
+        # Create pvsystem using pvwatts model for single face solar cell
+        pdc = pvsystem.pvwatts_dc(effective_irrad_mono,
+                                    temp_cell,
+                                    pdc0,
+                                    gamma_pdc=gamma_pdc
+                                    ).fillna(0)
+        
+        # Plot Results
+        # series_label = "WS={val0:.1f} m/s, AZ = {val1:.1f}"
+        # pdc.plot(label=series_label.format(val0 = wind_speed[0],val1 = axis_azimuth[0]))
+        total_energy += np.trapz(pdc,dx=15*60)/3600000
+    power_kWh.append(total_energy)
 
-    # explicity simulate on pvarray with sensor placed in middle row
-    # users may select different values depending on needs
-    irrad_cs = pvfactors_timeseries(solar_position['azimuth'],
-                                solar_position['apparent_zenith'],
-                                orientation['surface_azimuth'],
-                                orientation['surface_tilt'],
-                                axis_azimuth,
-                                cs.index,
-                                cs['dni'],
-                                cs['dhi'],
-                                gcr,
-                                pvrow_height,
-                                pvrow_width,
-                                albedo,
-                                n_pvrows=1,
-                                index_observed_pvrow=0
-                                )
-
-    # turn into pandas DataFrame
-    irrad_cs = pd.concat(irrad_cs, axis=1)
-    # Constant air temperature
-    temp_air = 30
-    effective_irrad_mono = irrad_cs['total_abs_front']
-    temp_cell = temperature.faiman(effective_irrad_mono, temp_air=temp_air,
-                                wind_speed=wind_speed) 
-    pdc0 = 80 # Nominal Power Rating
-    gamma_pdc = -0.0043 # Temperature dependence coefficient
-
-    # Create pvsystem using pvwatts model for single face solar cell
-    pdc = pvsystem.pvwatts_dc(effective_irrad_mono,
-                                temp_cell,
-                                pdc0,
-                                gamma_pdc=gamma_pdc
-                                ).fillna(0)
-    
-    # Plot Results
-    series_label = "WS={val0:.1f} m/s, AZ = {val1:.1f}"
-    pdc.plot(label=series_label.format(val0 = wind_speed[0],val1 = axis_azimuth[0]))
-    total_energy += np.trapz(pdc,dx=15*60)/3600000
-
-box = ax.get_position()
-ax.set_position([box.x0, box.y0, box.width * 0.65, box.height])
-title = "80W Panel - Energy Collected: {val:.3f}kWh"
-plt.title(title.format(val = total_energy))
-plt.ylabel('DC Power [W]')
-plt.xlabel('Date')
-ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+# box = ax.get_position()
+# ax.set_position([box.x0, box.y0, box.width * 0.65, box.height])
+# title = "80W Panel - Energy Collected: {val:.3f}kWh"
+# plt.title(title.format(val = total_energy))
+# plt.ylabel('DC Power [W]')
+# plt.xlabel('Date')
+# ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 # plt.show()
 
 # ### Weather Based Simulation
@@ -148,6 +153,10 @@ ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 #                                              map_variables=True, leap_day=True,
 #                                              attributes=keys)
 
-# fig = plt.figure()
-# plt.plot(psm3)
-# fig.show()
+fig = plt.figure()
+plt.bar(range(1,12),power_kWh)
+title = "80W Panel - Annual Energy Collected"
+plt.title(title)
+plt.ylabel('Energy [kWh]')
+plt.xlabel('Month')
+plt.show()

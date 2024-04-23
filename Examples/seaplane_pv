@@ -21,24 +21,42 @@ lat = 29.02291491363789
 lon = -90.23223029442693
 tz = 'Etc/GMT+5'
 
-
-
-
 # create location object
 site_location = location.Location(lat, lon, tz=tz, name = 'Gulf of Mexico')
 
-
-
-# Implement in loop - loop for varying temperatures
 # TODO: Pull in weather data to cell temp based on wind speed
 # TODO: Calculate total energy collected
 # TODO: Add weather data
 # TODO: Change orientation of the plane based on wind direction
 # TODO: Plot fixed and tracking results next to each other
 # TODO: Include effects of flight
+
+## Uncomment for plotting
 # fig = plt.figure()
 # ax = plt.subplot(111)
 # fig.subplots_adjust(bottom=0.2)
+
+### Weather Based Simulation
+# Create location object
+site_location = location.Location(lat, lon, tz=tz, name = 'Gulf of Mexico')
+
+# get solar position data
+
+
+# Weather Data Info
+api_key = 'unURaXbAGeMjP8359wy5gyQfWIKq1g1y7hdhUmNo'
+email = 'bepstein8@gatech.edu'
+keys = ['ghi', 'dni', 'dhi', 'temp_air', 'wind_speed', 'wind_direction',
+        'albedo']
+
+psm3, psm3_metadata = pvlib.iotools.get_psm3(lat, lon, api_key,
+                                        email, interval=60, names='tmy',
+                                        map_variables=True, leap_day=True,
+                                        attributes=keys)
+
+
+
+
 power_kWh = []
 
 for j in range(1,12) :
@@ -54,7 +72,9 @@ for j in range(1,12) :
         day = day + 1
         end = "{0}-{1}-{2}".format(year,month,day)
 
-        times = pd.date_range(start, end, freq='15min', tz=tz) # Get times for entire study period
+        times = pd.date_range(start, end, freq='60min', tz=tz) # Get times for entire study period
+        wthr = psm3.iloc[0:len(times)]
+
         # get clearsky weather
         cs = site_location.get_clearsky(times) # Get clearsky weather data
 
@@ -79,8 +99,8 @@ for j in range(1,12) :
         albedo = 0.06
 
         # Set windspeed and azimuth randomly
-        axis_azimuth = np.random.rand(1)*360
-        wind_speed = np.random.rand(1)*10
+        axis_azimuth = wthr['wind_direction']
+        wind_speed = wthr['wind_speed']
 
         # explicity simulate on pvarray with sensor placed in middle row
         # users may select different values depending on needs
@@ -89,9 +109,9 @@ for j in range(1,12) :
                                     orientation['surface_azimuth'],
                                     orientation['surface_tilt'],
                                     axis_azimuth,
-                                    cs.index,
-                                    cs['dni'],
-                                    cs['dhi'],
+                                    wthr.index,
+                                    wthr['dni'],
+                                    wthr['dhi'],
                                     gcr,
                                     pvrow_height,
                                     pvrow_width,
@@ -99,11 +119,11 @@ for j in range(1,12) :
                                     n_pvrows=1,
                                     index_observed_pvrow=0
                                     )
-
+    
         # turn into pandas DataFrame
         irrad_cs = pd.concat(irrad_cs, axis=1)
         # Constant air temperature
-        temp_air = 30
+        temp_air = wthr['temp_air']
         effective_irrad_mono = irrad_cs['total_abs_front']
         temp_cell = temperature.faiman(effective_irrad_mono, temp_air=temp_air,
                                     wind_speed=wind_speed) 
@@ -116,12 +136,21 @@ for j in range(1,12) :
                                     pdc0,
                                     gamma_pdc=gamma_pdc
                                     ).fillna(0)
-        
         # Plot Results
         # series_label = "WS={val0:.1f} m/s, AZ = {val1:.1f}"
         # pdc.plot(label=series_label.format(val0 = wind_speed[0],val1 = axis_azimuth[0]))
-        total_energy += np.trapz(pdc,dx=15*60)/3600000
+        total_energy += np.trapz(pdc,dx=60*60)/3600000
     power_kWh.append(total_energy)
+
+total_energy = np.sum(power_kWh)
+
+fig = plt.figure()
+plt.bar(range(1,12),power_kWh)
+title = "80W Panel - Energy Collected: {val:.3f}kWh"
+plt.title(title.format(val = total_energy))
+plt.ylabel('Energy [kWh]')
+plt.xlabel('Month')
+plt.show()
 
 # box = ax.get_position()
 # ax.set_position([box.x0, box.y0, box.width * 0.65, box.height])
@@ -132,31 +161,6 @@ for j in range(1,12) :
 # ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 # plt.show()
 
-# ### Weather Based Simulation
-# # Create location object
-# site_location = location.Location(lat, lon, tz=tz, name = 'Gulf of Mexico')
 
-# # get solar position data
-# solar_position = site_location.get_solarposition(times)
 
-# # Retrieve Weather Data
-# latitude = 29.02291491363789
-# longitude = -90.23223029442693
-# api_key = 'unURaXbAGeMjP8359wy5gyQfWIKq1g1y7hdhUmNo'
-# email = 'bepstein8@gatech.edu'
 
-# keys = ['ghi', 'dni', 'dhi', 'temp_air', 'wind_speed', 'wind_direction',
-#         'albedo', 'precipitable_water']
-
-# psm3, psm3_metadata = pvlib.iotools.get_psm3(latitude, longitude, api_key,
-#                                              email, interval=60, names=2019,
-#                                              map_variables=True, leap_day=True,
-#                                              attributes=keys)
-
-fig = plt.figure()
-plt.bar(range(1,12),power_kWh)
-title = "80W Panel - Annual Energy Collected"
-plt.title(title)
-plt.ylabel('Energy [kWh]')
-plt.xlabel('Month')
-plt.show()

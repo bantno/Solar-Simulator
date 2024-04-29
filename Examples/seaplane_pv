@@ -48,15 +48,10 @@ api_key = 'unURaXbAGeMjP8359wy5gyQfWIKq1g1y7hdhUmNo'
 email = 'bepstein8@gatech.edu'
 keys = ['ghi', 'dni', 'dhi', 'temp_air', 'wind_speed', 'wind_direction',
         'albedo']
-
 psm3, psm3_metadata = pvlib.iotools.get_psm3(lat, lon, api_key,
                                         email, interval=60, names='tmy',
                                         map_variables=True, leap_day=True,
                                         attributes=keys)
-
-
-
-
 power_kWh = []
 
 for j in range(1,12) :
@@ -84,7 +79,7 @@ for j in range(1,12) :
         # set ground coverage ratio and max_angle to
         # pull orientation data for a single-axis tracker
         gcr = 0.01
-        max_phi = 30
+        max_phi = 0
         orientation = tracking.singleaxis(solar_position['apparent_zenith'],
                                         solar_position['azimuth'],
                                         max_angle=max_phi,

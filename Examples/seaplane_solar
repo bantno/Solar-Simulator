@@ -15,7 +15,9 @@ warnings.filterwarnings(action='ignore', module='pvfactors')
 
 
 class Seaplane:
-    def __init__(self, lat, lon, tz, pdc0,gamma,tracking:bool):
+    def __init__(self, lat, lon, tz, pdc0,gamma,tracking:bool,cs:bool):
+        
+        # Define solar parameters
         self.lat = lat
         self.lon = lon
         self.tz = tz
@@ -24,23 +26,51 @@ class Seaplane:
         self.pdc0 = pdc0
         self.gamma = gamma
         self.collected_energy = 0 #kWh
+        self.cs = cs
+
+        # Define airframe and motion parameters
+        self.installed_power_w
+        self.cd0
+        self.n_tot
+        self.U_max
+        self.S
+        self.weight
+        self.voltage
+        self.capacity
+        self.Rt
+        self.n
+        self.k
+
+
         print("Plane Initialized")
 
+    def get_endurance(self,U,rho):
+        E = self.Rt**(1-self.n)*(self.n_tot*self.voltage*self.capacity)/(0.5*rho*U**3*self.S*self.cd0 + (2*self.weight**2*self.k)/rho*U*self.S)
+
+    def get_dynamic_pressure(self,rho,u):
+        return 0.5*rho*u
+    
+    def get_power(self,U,rho):
+        q = self.get_dynamic_pressure(self,U)
+        D = q*self.S*self.cdtot
+        return D*U # U in m/s
+        # return .5*rho*U*self.S*self.cd0 + 2*self.weight**2*self.k/(rho*U*self.S)
+    
     def get_times(self,year,month,day,tz):
         # get times of interest
         start = "{0}-{1}-{2}".format(year,month,day)
         day = day + 1
         end = "{0}-{1}-{2}".format(year,month,day)
-        print("Retrieved Times")
         return pd.date_range(start, end, freq='60min', tz=tz) # Get times for entire study period      
 
     def get_weather(self,cs:bool,times):
         if cs:
             # get clearsky weather
             wthr = self.location.get_clearsky(times) # Get clearsky weather data
+            print("Retrieved CS Weather Data")
         else:
             wthr = self.get_tmy()
-        print("Retrieved Weather Data")
+            print("Retrieved TMY Weather Data")
         return wthr
 
     def get_tmy(self):
@@ -60,18 +90,22 @@ class Seaplane:
 
         power_kWh = []
         pdc_list = []
-        psm3 = self.get_tmy()
+
+        start = "{0}-{1}-{2}".format(year,1,1)
+        end = "{0}-{1}-{2}".format(year,12,31)
+        times = pd.date_range(start, end, freq='60min', tz=tz) # Get times for entire study period
+
+        psm3 = self.get_weather(self.cs,times)
         months = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        day_counter = 0
 
         for j in range(0,12) :
-            print(j)
             month = j+1
             day = 1
             total_energy = 0
             for i in range(0,months[j]-1) : # need to change this so that every day of the year is accounted for
-                print(i)
                 times = self.get_times(year,month,day+i,self.tz)
-                wthr = psm3.iloc[0:len(times)] # update to only be the correct times
+                wthr = psm3.iloc[day_counter*24:day_counter*24+len(times)] # update to only be the correct times
 
                 # get solar position data
                 solar_position = self.location.get_solarposition(times)
@@ -96,9 +130,16 @@ class Seaplane:
                 pvrow_width = 1
                 albedo = 0.06
 
-                # Set windspeed and azimuth based on TMY data
-                axis_azimuth = np.mod(wthr['wind_direction']+90,360) #tilt axis is 90 degrees offset from wind direction
-                wind_speed = wthr['wind_speed'] # m/s
+
+                if self.cs:
+                    axis_azimuth = np.random.rand(1)*360
+                    wind_speed = np.random.rand(1)*10
+                    temp_air = 30
+                else:
+                    # Set windspeed and azimuth based on TMY data
+                    axis_azimuth = np.mod(wthr['wind_direction']+90,360) #tilt axis is 90 degrees offset from wind direction
+                    wind_speed = wthr['wind_speed'] # m/s
+                    temp_air = wthr['temp_air']
 
                 # explicity simulate on pvarray with sensor placed in middle row
                 # users may select different values depending on needs
@@ -120,12 +161,12 @@ class Seaplane:
             
                 # turn into pandas DataFrame
                 irrad_cs = pd.concat(irrad_cs, axis=1)
-                # Constant air temperature
-                temp_air = wthr['temp_air']
+                
                 effective_irrad_mono = irrad_cs['total_abs_front']
                 
                 temp_cell = temperature.faiman(effective_irrad_mono, temp_air=temp_air,
                                             wind_speed=wind_speed) 
+                
                 # Create pvsystem using pvwatts model for single face solar cell
                 pdc = pvsystem.pvwatts_dc(effective_irrad_mono,
                                             temp_cell,
@@ -134,20 +175,139 @@ class Seaplane:
                                             ).fillna(0)
                 
                 total_energy += np.trapz(pdc,dx=60*60)/3600000 # energy in kWh
+                day_counter+=1
             power_kWh.append(total_energy)
             pdc_list.append(pdc)
 
         total_energy = np.sum(power_kWh)
-        return total_energy,pdc_list
+        return total_energy,power_kWh
 
-# Determine times for Gulf of Mexico
+
+# Define constant parameters
 lat = 29.02291491363789
 lon = -90.23223029442693
 tz = 'Etc/GMT+5'
+
+
+# TZ2 - massachusetts
+lat2 = 41.228766304923454
+lon2 = -69.91957622209218
+tz2 = 'Etc/GMT+5'
+
 pdc0 = 80
 gamma = -0.0043
-plane = Seaplane(lat,lon,tz,pdc0,gamma,tracking=True)
-energy = plane.calc_tmy_energy(2019)
-print(energy)
+# Create months
+months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+months_n = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+# ### Create comparison between CS and TMY
+# # Determine times for Gulf of Mexico
+# plane_cs = Seaplane(lat,lon,tz,pdc0,gamma,tracking=False,cs=True)
+# total_energy_cs,power_kWh_cs = plane_cs.calc_tmy_energy(2021)
+
+# plane_w = Seaplane(lat,lon,tz,pdc0,gamma,tracking=False,cs=False)
+# total_energy_w,power_kWh_w = plane_w.calc_tmy_energy(2021)
+
+# print("Total Energy (CS,TMY)")
+# print(total_energy_cs,total_energy_w)
+
+# # Creating side-by-side bar chart
+# bar_width = 0.35
+# index = range(len(months))
+
+# plt.bar(index, np.divide(power_kWh_cs,months_n), bar_width, label='Clear Sky')
+# plt.bar([i + bar_width for i in index], np.divide(power_kWh_w,months_n), bar_width, label='TMY')
+
+# plt.xlabel('Months')
+# plt.ylabel('Values')
+# plt.title('Energy Collected by 80W Panel CS vs TMY')
+# plt.xticks([i + bar_width / 2 for i in index], months)
+# plt.legend()
+
+# plt.tight_layout()
+# plt.show()
+
+# ### Create comparison between untracked and tracked TMY results
+# plane_utr = Seaplane(lat,lon,tz,pdc0,gamma,tracking=False,cs=False)
+# total_energy_utr,power_kWh_utr = plane_utr.calc_tmy_energy(2021)
+
+# plane_tr = Seaplane(lat,lon,tz,pdc0,gamma,tracking=True,cs=False)
+# total_energy_tr,power_kWh_tr = plane_tr.calc_tmy_energy(2021)
+
+# print("Daily Collected Energy [kWh] (TMY - Untracked,TMY - Tracked)")
+# print(total_energy_utr,total_energy_tr)
+
+# # Sample data for two categories (e.g., A and B) across months
+# months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+# months_n = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+# # Creating side-by-side bar chart
+# bar_width = 0.35
+# index = range(len(months))
+
+# plt.bar(index, np.divide(power_kWh_utr,months_n), bar_width, label='Untracked')
+# plt.bar([i + bar_width for i in index], np.divide(power_kWh_tr,months_n), bar_width, label='Tracked')
+
+# plt.xlabel('Months')
+# plt.ylabel('Values')
+# plt.title("80W Panel - Daily Collected Energy [kWh] (TMY - Untracked,TMY - Tracked)")
+# plt.xticks([i + bar_width / 2 for i in index], months)
+# plt.legend()
+
+# plt.tight_layout()
+# plt.show()
 
 
+# ## Create comparison between different lattitudes
+# # Determine times for Gulf of Mexico
+# plane_1 = Seaplane(lat,lon,tz,pdc0,gamma,tracking=True,cs=False)
+# total_energy_1,power_kWh_1 = plane_1.calc_tmy_energy(2021)
+
+# plane_2 = Seaplane(lat2,lon2,tz2,pdc0,gamma,tracking=True,cs=False)
+# total_energy_2,power_kWh_2 = plane_2.calc_tmy_energy(2021)
+
+# print("Total Energy (CS,TMY)")
+# print(total_energy_1,total_energy_2)
+
+# # Creating side-by-side bar chart
+# bar_width = 0.35
+# index = range(len(months))
+
+# plt.bar(index, np.divide(power_kWh_1,months_n), bar_width, label='Gulf of Mexico')
+# plt.bar([i + bar_width for i in index], np.divide(power_kWh_2,months_n), bar_width, label='Massachusetts Bay')
+
+# plt.xlabel('Months')
+# plt.ylabel('Values')
+# plt.title('Energy Collected by 80W Panel Gulf vs Mass')
+# plt.xticks([i + bar_width / 2 for i in index], months)
+# plt.legend()
+
+# plt.tight_layout()
+# plt.show()
+
+## Create comparison between different lattitudes
+# Determine times for Gulf of Mexico
+plane_1 = Seaplane(lat2,lon2,tz2,pdc0,gamma,tracking=False,cs=False)
+total_energy_1,power_kWh_1 = plane_1.calc_tmy_energy(2021)
+
+plane_2 = Seaplane(lat2,lon2,tz2,pdc0,gamma,tracking=True,cs=False)
+total_energy_2,power_kWh_2 = plane_2.calc_tmy_energy(2021)
+
+print("Total Energy (CS,TMY)")
+print(total_energy_1,total_energy_2)
+
+# Creating side-by-side bar chart
+bar_width = 0.35
+index = range(len(months))
+
+plt.bar(index, np.divide(power_kWh_1,months_n), bar_width, label='Fixed')
+plt.bar([i + bar_width for i in index], np.divide(power_kWh_2,months_n), bar_width, label='Tracking')
+
+plt.xlabel('Months')
+plt.ylabel('Values')
+plt.title('Energy Collected by 80W Panel, Massachussetts (Fixed vs Tracking)')
+plt.xticks([i + bar_width / 2 for i in index], months)
+plt.legend()
+
+plt.tight_layout()
+plt.show()

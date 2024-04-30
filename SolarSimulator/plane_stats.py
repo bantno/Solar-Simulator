@@ -13,33 +13,33 @@ gamma = -0.0043
 
 plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=0.0145,cdtot = 0.025,n_tot=.75,S=0.38,weight=4*9.81,voltage=37.0,capacity=10)
 
+print(plane.calc_collected_energy((2021,2021),(1,1),(1,3),(1,12)))
 
-E = []
-P_req = []
-U = range(10,40)
-for v in U:
-    # U = 30
-    rho = 1.225
-    E.append(plane.get_endurance(v,rho))
-    P_req.append(plane.get_required_power(U=v,rho=rho))
 
-print("Endurance [h],Required Power [W]")
-print(E,P_req)
+# # Endurance and P_req calculations
+# E = []
+# P_req = []
+# U = range(10,40)
+# for v in U:
+#     # U = 30
+#     rho = 1.225
+#     E.append(plane.get_endurance(v,rho))
+#     P_req.append(plane.get_required_power(U=v,rho=rho))
 
-# Create a figure and two subplots
-fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(10,5))
+# # Create a figure and two subplots
+# fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(10,5))
 
-# Plot the first graph
-ax1.plot(U, E)
-ax1.set_title('Endurance vs Forward Flight Speed')
-ax1.set_xlabel('Forward Flight Speed [m/s]')
-ax1.set_ylabel('Endurance [H]')
+# # Plot endurance
+# ax1.plot(U, E)
+# ax1.set_title('Endurance vs Forward Flight Speed')
+# ax1.set_xlabel('Forward Flight Speed [m/s]')
+# ax1.set_ylabel('Endurance [H]')
 
-# Plot the second graph
-ax2.plot(U, P_req)
-ax2.set_title('Required Power vs Forward Flight Speed')
-ax2.set_xlabel("Forward Flight Speed [m/s]")
-ax2.set_ylabel('Required Power [W]')
+# # Plot Required Power
+# ax2.plot(U, P_req)
+# ax2.set_title('Required Power vs Forward Flight Speed')
+# ax2.set_xlabel("Forward Flight Speed [m/s]")
+# ax2.set_ylabel('Required Power [W]')
 
-# Display the plots
-plt.show()
+# # Display the plots
+# plt.show()

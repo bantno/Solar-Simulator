@@ -35,21 +35,22 @@ class Seaplane:
         self.capacity = capacity
         self.Rt = 1
         self.n = 1
-        self.k = 1
+        self.k = 1.1
         self.cdtot = cdtot
 
 
         print("Plane Initialized")
 
     def get_endurance(self,U,rho):
-        E = self.Rt**(1-self.n)*(self.n_tot*self.voltage*self.capacity)/(0.5*rho*U**3*self.S*self.cd0 + (2*self.weight**2*self.k)/rho*U*self.S)
-
-    def get_dynamic_pressure(self,rho,u):
-        return 0.5*rho*u
+        E = self.Rt**(1-self.n)*(self.n_tot*self.voltage*self.capacity)/(0.5*rho*U**3.0*self.S*self.cd0 + ((2.0*self.weight**2.0)*self.k)/(rho*U*self.S))
+        return E
+    
+    def get_dynamic_pressure(self,U,rho):
+        return 0.5*rho*U
     
     def get_required_power(self,U,rho):
-        q = self.get_dynamic_pressure(self,U)
-        D = q*self.S*self.cdtot
+        q = self.get_dynamic_pressure(U,rho)
+        D = q*self.S*self.cdtot*U
         return D*U # U in m/s
         # return .5*rho*U*self.S*self.cd0 + 2*self.weight**2*self.k/(rho*U*self.S)
     

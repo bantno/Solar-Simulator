@@ -37,8 +37,6 @@ class Seaplane:
         self.n = 1
         self.k = 1.1
         self.cdtot = cdtot
-
-
         print("Plane Initialized")
 
     def get_endurance(self,U,rho):
@@ -61,7 +59,7 @@ class Seaplane:
         end = "{0}-{1}-{2}".format(year,month,day)
         return pd.date_range(start, end, freq='60min', tz=tz) # Get times for entire study period      
 
-    def get_weather(self,cs:bool,times):
+    def get_weather(self,cs:bool,times=0):
         if cs:
             # get clearsky weather
             wthr = self.location.get_clearsky(times) # Get clearsky weather data
@@ -80,10 +78,100 @@ class Seaplane:
 
         psm3, psm3_metadata = pvlib.iotools.get_psm3(self.lat, self.lon, api_key,
                                                 email, interval=60, names='tmy',
-                                                map_variables=True, leap_day=True,
+                                                map_variables=True, leap_day=False,
                                                 attributes=keys)
         return psm3
     
+    def calc_collected_energy(self,year,month,day):
+        # format (start,end)
+        # start = "{0}-{1}-{2}".format(year[0],month[0],day[0])
+        # end = "{0}-{1}-{2}".format(year[1],month[1],day[1])
+        # times = pd.date_range(start, end, freq='60min', tz=self.tz)
+        
+        wthr = self.get_weather(self.cs)
+
+        month_s = month[0]
+        month_e = month[1]
+        day_s = day[0]
+        day_e = day[1]
+
+        wthr.query('Month >= @month_s and Month <= @month_e',inplace=True)
+        wthr.query('Day >= @day_s and Day <= @day_e',inplace=True)
+        
+        start = "{0}-{1}-{2}".format(year[0],month[0],day[0])
+        end = "{0}-{1}-{2}".format(year[1],month[1],day[1])
+        times = wthr.index
+
+        # wthr.to_csv('2019TMY.csv')
+
+
+        # get solar position data
+        solar_position = self.location.get_solarposition(times)
+
+
+        # set ground coverage ratio and max tilt angle
+        gcr = 0.01
+        if self.tracking:
+            max_phi = 30
+        else:
+            max_phi = 0
+
+        orientation = tracking.singleaxis(solar_position['apparent_zenith'],
+                                        solar_position['azimuth'],
+                                        max_angle=max_phi,
+                                        backtrack=True,
+                                        gcr=gcr)
+
+        # set axis_azimuth, albedo, pvrow width and height, and use
+        # the pvfactors engine for absorbed irradiance
+        pvrow_height = 1
+        pvrow_width = 1
+        albedo = 0.06
+
+        #TODO: Create separate function
+        if self.cs:
+            axis_azimuth = np.random.rand(1)*360
+            wind_speed = np.random.rand(1)*10
+            temp_air = 30
+        else:
+            # Set windspeed and azimuth based on TMY data
+            axis_azimuth = np.mod(wthr['wind_direction']+90,360) #tilt axis is 90 degrees offset from wind direction
+            wind_speed = wthr['wind_speed'] # m/s
+            temp_air = wthr['temp_air']
+
+        # explicity simulate on pvarray with sensor placed in middle row
+        # users may select different values depending on needs
+        irrad_cs = pvfactors_timeseries(solar_position['azimuth'],
+                                    solar_position['apparent_zenith'],
+                                    orientation['surface_azimuth'],
+                                    orientation['surface_tilt'],
+                                    axis_azimuth,
+                                    wthr.index,
+                                    wthr['dni'],
+                                    wthr['dhi'],
+                                    gcr,
+                                    pvrow_height,
+                                    pvrow_width,
+                                    albedo,
+                                    n_pvrows=1,
+                                    index_observed_pvrow=0
+                                    )
+        # turn into pandas DataFrame
+        irrad_cs = pd.concat(irrad_cs, axis=1)
+        effective_irrad_mono = irrad_cs['total_abs_front']
+        temp_cell = temperature.faiman(effective_irrad_mono, temp_air=temp_air,
+                                    wind_speed=wind_speed) 
+        # Create pvsystem using pvwatts model for single face solar cell
+        pdc = pvsystem.pvwatts_dc(effective_irrad_mono,
+                                    temp_cell,
+                                    self.pdc0,
+                                    gamma_pdc=self.gamma
+                                    ).fillna(0)
+        
+        return times, pdc
+
+
+
     def calc_tmy_energy(self,year):
 
         power_kWh = []

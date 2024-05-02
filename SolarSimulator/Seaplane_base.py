@@ -33,24 +33,38 @@ class Seaplane:
         self.weight = weight
         self.voltage = voltage
         self.capacity = capacity
-        self.Rt = 1
-        self.n = 1
-        self.k = 1.1
+        self.Rt = 1.0
+        self.n = 1.0
+        self.AR = 6.0 #remove hardcode
+        self.e = 0.8
+        self.k = 1.0/(np.pi*self.AR*self.e)
         self.cdtot = cdtot
         print("Plane Initialized")
 
     def get_endurance(self,U,rho):
-        E = self.Rt**(1-self.n)*(self.n_tot*self.voltage*self.capacity)/(0.5*rho*U**3.0*self.S*self.cd0 + ((2.0*self.weight**2.0)*self.k)/(rho*U*self.S))
+        E = self.Rt**(1.0-self.n)*(self.n_tot*self.voltage*self.capacity)/self.get_required_power(U,rho)
         return E
     
+    def get_weather_endurance(self,P_req,dt=15):
+        
+        joules = self.voltage*self.capacity*3600
+        E = 0
+        for i in range(5,len(P_req)):
+            joules-=P_req[i]
+            if joules < 0:
+                return E
+            E += dt
+            
+    
     def get_dynamic_pressure(self,U,rho):
-        return 0.5*rho*U
+        return 0.5*rho*U**2
     
     def get_required_power(self,U,rho):
         q = self.get_dynamic_pressure(U,rho)
         D = q*self.S*self.cdtot*U
-        return D*U # U in m/s
-        # return .5*rho*U*self.S*self.cd0 + 2*self.weight**2*self.k/(rho*U*self.S)
+
+        # return D*U # U in m/s
+        return .5*rho*U**3*self.S*self.cd0 + 2*self.weight**2*self.k/(rho*U*self.S)
     
     def get_times(self,year,month,day,tz):
         # get times of interest
@@ -83,27 +97,26 @@ class Seaplane:
         return psm3
     
     def calc_collected_energy(self,year,month,day):
-        # format (start,end)
-        # start = "{0}-{1}-{2}".format(year[0],month[0],day[0])
-        # end = "{0}-{1}-{2}".format(year[1],month[1],day[1])
-        # times = pd.date_range(start, end, freq='60min', tz=self.tz)
         
-        wthr = self.get_weather(self.cs)
+        if self.cs:
+            start = "{0}-{1}-{2}".format(year[0],month[0],day[0])
+            end = "{0}-{1}-{2}".format(year[1],month[1],day[1])
+            times = pd.date_range(start, end, freq='15min', tz=self.tz)
+            
+            wthr = self.get_weather(self.cs,times)
+        else:
+            wthr = self.get_weather(self.cs)
+            month_s = month[0]
+            month_e = month[1]
+            day_s = day[0]
+            day_e = day[1]
 
-        month_s = month[0]
-        month_e = month[1]
-        day_s = day[0]
-        day_e = day[1]
-
-        wthr.query('Month >= @month_s and Month <= @month_e',inplace=True)
-        wthr.query('Day >= @day_s and Day <= @day_e',inplace=True)
-        
-        start = "{0}-{1}-{2}".format(year[0],month[0],day[0])
-        end = "{0}-{1}-{2}".format(year[1],month[1],day[1])
-        times = wthr.index
-
-        # wthr.to_csv('2019TMY.csv')
-
+            wthr.query('Month >= @month_s and Month <= @month_e',inplace=True)
+            wthr.query('Day >= @day_s and Day <= @day_e',inplace=True)
+            
+            start = "{0}-{1}-{2}".format(year[0],month[0],day[0])
+            end = "{0}-{1}-{2}".format(year[1],month[1],day[1])
+            times = wthr.index
 
         # get solar position data
         solar_position = self.location.get_solarposition(times)

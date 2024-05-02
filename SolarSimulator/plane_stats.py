@@ -24,18 +24,24 @@ gamma = -0.0043
 
 # Battery Power Required Plot
 plane_cs = Seaplane(lat, lon, tz, pdc0,gamma,cd0=0.0145,cs=True,tracking=False,cdtot = 0.025,n_tot=.75,S=0.38,weight=4*9.81,voltage=15.2,capacity=5.3)
-times, P_solar_cs = plane_cs.calc_collected_energy((2019,2019),(1,1),(1,30))
+times, P_solar_cs = plane_cs.calc_collected_energy((2019,2019),(1,1),(1,14))
+
+plane_w = Seaplane(lat, lon, tz, pdc0,gamma,cd0=0.0145,cs=False,tracking=False,cdtot = 0.025,n_tot=.75,S=0.38,weight=4*9.81,voltage=15.2,capacity=5.3)
+times, P_solar_w = plane_w.calc_collected_energy((2019,2019),(1,1),(1,14))
+
 rho = 1.225
 U = 15
 P_req_cruise = plane_cs.get_required_power(U,rho)
-P_bat = P_req_cruise#-P_solar_cs
-available = plane_cs.capacity*plane_cs.voltage
-consumed = P_req_cruise*1/plane_cs.n_tot*2 #np.trapz(P_bat[0:4],dx=60*60)*1/plane_cs.n_tot
-print(available)
-print(consumed)
+P_bat_cs = P_req_cruise-P_solar_cs
+P_bat_w = P_req_cruise-P_solar_w
 
-print(consumed/available)
-plt.plot(P_bat)
+plt.figure(figsize=(10, 6))
+plt.plot(P_bat_cs,label="Clear Sky")
+plt.plot(P_bat_w,label="TMY")
+plt.xlabel("Date")
+plt.ylabel("Required Battery Power")
+plt.title("Required Battery Power vs Date")
+plt.legend()
 plt.show()
 
 # Endurance and P_req calculations
@@ -129,4 +135,3 @@ plt.show()
 
 # # Show plot
 # plt.show()
-

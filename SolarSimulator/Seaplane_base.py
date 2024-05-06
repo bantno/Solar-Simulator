@@ -278,7 +278,6 @@ class Seaplane:
             power_kWh.append(total_energy)
             pdc_list.append(pdc)
 
-        total_energy = np.sum(power_kWh)
-        return total_energy,power_kWh
+        return pdc_list,power_kWh
 
 

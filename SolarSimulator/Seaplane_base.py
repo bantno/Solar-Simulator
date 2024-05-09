@@ -8,6 +8,7 @@ from pvlib import pvsystem
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
+from datetime import datetime, timedelta
 
 # supressing shapely warnings that occur on import of pvfactors
 warnings.filterwarnings(action='ignore', module='pvfactors')
@@ -40,6 +41,18 @@ class Seaplane:
         self.e = 0.8
         self.k = 1.0/(np.pi*self.AR*self.e)
         self.cdtot = cdtot
+
+    def convert_to_datetime_index(self, day_number, base_year=2024):
+        # Calculate the base date for the given year
+        base_date = datetime(base_year, 1, 1)
+        
+        # Add the day_number - 1 to the base date (since day_number starts from 1)
+        target_date = base_date + timedelta(days=day_number - 1)
+        
+        # Convert the target date to a Pandas datetime index
+        datetime_index = pd.to_datetime(target_date)
+        
+        return datetime_index
 
     def get_endurance(self,U,rho):
         """Returns endurance estimate according to Traub
@@ -146,7 +159,7 @@ class Seaplane:
             wthr.index = times
         return wthr
 
-    def calc_collected_energy(self,year,month,day):
+    def calc_collected_energy(self,year,month,day,periods,frequency):
         """Calculate energy collected by solar array for given period
         
         Parameters
@@ -157,15 +170,16 @@ class Seaplane:
             Start and end month
         day : tuple, int
             Start and end day
+        periods : int
+            Number of times at which power should be determined
+        frequency : char
+            Period between times Ex. '5min'
+
     
         """
-
-
         if self.cs:
             start = "{0}-{1}-{2}".format(year[0],month[0],day[0])
-            end = "{0}-{1}-{2}".format(year[1],month[1],day[1])
-            times = pd.date_range(start, end, freq='60min', tz=self.tz)
-            
+            times = pd.date_range(start, periods=periods, freq=frequency, tz=self.tz)
             wthr = self.get_weather(self.cs,times)
         else:
             wthr = self.get_weather(self.cs)
@@ -176,12 +190,8 @@ class Seaplane:
 
             wthr.query('Month >= @month_s and Month <= @month_e',inplace=True)
             wthr.query('Day >= @day_s and Day <= @day_e',inplace=True)
-            
-            start = "{0}-{1}-{2}".format(year[0],month[0],day[0])
-            end = "{0}-{1}-{2}".format(year[1],month[1],day[1])
             times = wthr.index
 
-        # get solar position data
         solar_position = self.location.get_solarposition(times)
 
         # set ground coverage ratio and max tilt angle
@@ -203,7 +213,7 @@ class Seaplane:
         pvrow_width = 1
         albedo = 0.06
 
-        #TODO: Create separate function
+        #TODO: Create separate function to set these parameters
         if self.cs:
             axis_azimuth = np.random.rand(1)*360
             wind_speed = np.random.rand(1)*10
@@ -245,7 +255,7 @@ class Seaplane:
         
         return times, pdc
 
-    def simulate_deployment(self,U,rho,takeoff_voltage,landing_voltage,period,P_solar,dt):
+    def simulate_deployment(self,U,rho,takeoff_capacity,landing_capacity,period,P_solar,dt):
         """Determines duty cycle for specified period
         
         Parameters
@@ -255,9 +265,9 @@ class Seaplane:
         rho : float
             Air density at cruise altitude in kg/m^3
         takeoff_voltage : float
-            Voltage at which the vehicle is sufficiently charged to takeoff
+            Percentage of total capacity at which the vehicle is sufficiently charged to takeoff
         landing_voltage : float
-            Voltage at which the vehicle must land
+            Percentage of total capacity at which the vehicle must land (%)
         period : int
             Time in days over which the simulation should run
         P_solar : numpy arr
@@ -265,19 +275,50 @@ class Seaplane:
         dt : int
             Time in minutes between each sample in P_solar
 
+        Returns
+        -------
+        duty_cycle : float
+            Percentage of time period spent in air
+        energy_j : list, float
+            Energy stored in battery for each simulated time
+
         """
         # Get cruise power
         P_cruise = self.get_required_power(U,rho)
-        P_bat = P_cruise-P_bat
+
+        state = "Moored"
+        flying = 0
+        state_history = [0]
 
         # TODO: Add correction for energy gained from solar panels
-        joules = self.voltage*self.capacity*3600
-        E = 0
-        for i in range(5,len(P_req)):
-            joules-=P_req[i]
-            if joules < 0:
-                return E
-            E += dt
+        capacity_j = self.voltage*self.capacity*dt*60
+        energy_j = capacity_j*.8
+        energy_history = [energy_j/capacity_j]
+
+        # Define the daytime range (e.g., from 7 AM to 7 PM)
+        daytime_start = pd.to_datetime('07:00:00').time()
+        daytime_end = pd.to_datetime('19:00:00').time()
+        is_daytime = (P_solar.index.time >= daytime_start) & (P_solar.index.time <= daytime_end)
+        
+        for i in range(0,len(P_solar)):
+            
+            if state == "Flying":
+                state_history.append(1)
+                flying += 1
+                energy_j-= (P_cruise - P_solar.iloc[i])*dt*60
+                if energy_j <= capacity_j*landing_capacity or not is_daytime[i]:
+                    state = "Moored"
+            elif state == "Moored":
+                state_history.append(0)
+                if energy_j <= capacity_j:
+                    energy_j+= (P_solar.iloc[i])*dt*60
+                if energy_j>=takeoff_capacity*capacity_j and is_daytime[i]:
+                    state = "Flying"
+            if energy_j > capacity_j :
+                energy_j = capacity_j
+            energy_history.append(energy_j/capacity_j)
+
+        return flying/np.sum(is_daytime),energy_history,state_history
 
 
         

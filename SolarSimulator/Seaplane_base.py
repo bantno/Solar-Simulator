@@ -296,6 +296,7 @@ class Seaplane:
         energy_history = [energy_j/capacity_j]
 
         # Define the daytime range (e.g., from 7 AM to 7 PM)
+        # TODO: Set daylight hours based on when sun rises and sets, not hard coded
         daytime_start = pd.to_datetime('07:00:00').time()
         daytime_end = pd.to_datetime('19:00:00').time()
         is_daytime = (P_solar.index.time >= daytime_start) & (P_solar.index.time <= daytime_end)
@@ -314,9 +315,10 @@ class Seaplane:
                     energy_j+= (P_solar.iloc[i])*dt*60
                 if energy_j>=takeoff_capacity*capacity_j and is_daytime[i]:
                     state = "Flying"
+                    energy_j -= 1000*30
             if energy_j > capacity_j :
                 energy_j = capacity_j
-            energy_history.append(energy_j/capacity_j)
+            energy_history.append(energy_j/capacity_j*100)
 
         return flying/np.sum(is_daytime),energy_history,state_history
 

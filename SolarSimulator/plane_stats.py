@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import datetime
 from Seaplane_base import Seaplane
 
-def plot_endurance(plane,S,Cd0,weight,rho):
+def plot_endurance(plane,S,Cd0,weight,capacity,rho):
     # Create a figure and two subplots
     fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(10,5))
     ax1.set_title('Endurance vs Forward Flight Speed')
@@ -35,6 +36,7 @@ def plot_endurance(plane,S,Cd0,weight,rho):
                 plane.S = S[i]
                 plane.cd0 = Cd0[i]
                 plane.weight = weight[i]
+                plane.capacity = capacity[i]
                 E.append(plane.get_endurance(v,rho))
                 P_req.append(plane.get_required_power(U=v,rho=rho))
             # Plot endurance
@@ -49,6 +51,9 @@ def plot_endurance(plane,S,Cd0,weight,rho):
     plt.show()
     return
 
+
+
+########################################################
 # Define constant parameters
 lat = 29.02291491363789
 lon = -90.23223029442693
@@ -58,45 +63,88 @@ tz = 'Etc/GMT+6'
 pdc0 = 80
 gamma = -0.0043
 
+# # Airplane params
+# capacity_ah = 10.6
+# voltage = 22.2
+# Cdtot = 0.02616
+# Cd0 = 0.01487
+# S = 0.653
+# weight = 6*9.81
+# cruise_speed = 20
+# rho = 1.1 # air density (dependent on altitude)
+# U = cruise_speed
+
+
+
+# plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,weight=weight,voltage=voltage,capacity=capacity_ah)
+# plane.capacity = 28.8
+# # List Parameters for different wing area values
+# S =      [0.65340, 0.79]
+# Cd0 =    [0.01487, 0.015]
+# Cdtot =  [0.02572, 0.03]
+# weight = [weight, 149.169]
+# capacity = [capacity_ah, 28.8]
+
+# plot_endurance(plane,S,Cd0,weight,capacity,rho)
+
+############################################
+
 # Airplane params
 capacity_ah = 10.6
 voltage = 22.2
-Cdtot = 0.025
-Cd0 = 0.0145
-S = 0.63
+Cdtot = 0.02616
+Cd0 = 0.01487
+S = 0.653
 weight = 6*9.81
 cruise_speed = 20
 rho = 1.1 # air density (dependent on altitude)
-U = 15
+U = cruise_speed
 
 plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,weight=weight,voltage=voltage,capacity=capacity_ah)
-duty = []
 
-for j in range(1,12):
-    for i in range(1,31):
-        times, P_solar = plane.calc_collected_energy((2019,2019),(j,j+1),(i,i+1),24*5,'5min')
-        duty_cycle,e_h,state = plane.simulate_deployment(U,rho,.85,.3,10,P_solar,5)
-        duty.append(duty_cycle)
+# ##########################################
+# duty = []
+# days = 1
+# year = 2019
+# for j in range(1,13):
+#     days_in_month = (datetime.date(year, j % 12 + 1, 1) - datetime.date(year, j, 1)).days
+#     for i in range(1, days_in_month+1):
+#         times, P_solar = plane.calc_collected_energy((year,year),(j,j),(i,i+1),periods=12*24*days,frequency='5min')
+#         duty_cycle,e_h,state = plane.simulate_deployment(U,rho,.85,.3,10,P_solar,5)
+#         duty.append(duty_cycle)
 
-plt.plot(duty)
-plt.show()
+# plt.plot(duty)
+# plt.title('Daily Duty Cycle')
+# plt.xlabel("Day of Year")
+# plt.ylabel("Duty Cycle")
+# plt.show()
 
-# # Plot Results
-# # TODO: Make plotting function for this plot
-# fig, (ax1, ax2, ax3) = plt.subplots(3, 1,figsize=(10,5))
-# # ax1.set_title('')
-# ax1.set_xlabel('Dates')
-# ax1.set_ylabel('Battery Charge [%]')
-# # ax2.set_title('')
-# ax2.set_xlabel('Dates')
-# ax2.set_ylabel('Power [W]')
-# # ax3.set_title('')
-# ax3.set_xlabel('Dates')
-# ax3.set_ylabel('State')
+# ########################################
 
-# ax1.plot(times,e_h[0:-1])
-# ax2.plot(times,P_solar)
-# ax3.plot(times,state[0:-1])
+year = 2019
+month = 1
+day = 1
+days = 365
+times, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
+duty_cycle,e_h,state = plane.simulate_deployment(U,rho,.85,.3,10,P_solar,5)
+print(duty_cycle)
+
+# Plot Results
+# TODO: Make plotting function for this plot
+fig, (ax1, ax2, ax3) = plt.subplots(3, 1,figsize=(10,5))
+ax1.set_title('Battery Charge Level')
+ax1.set_xlabel('Dates')
+ax1.set_ylabel('Battery Charge [%]')
+ax2.set_title('Available Solar Power')
+ax2.set_xlabel('Dates')
+ax2.set_ylabel('Power [W]')
+ax3.set_title('Vehicle State')
+ax3.set_xlabel('Dates')
+ax3.set_ylabel('State')
+
+ax1.plot(times,e_h[0:-1])
+ax2.plot(times,P_solar)
+ax3.plot(times,state[0:-1])
 
 plt.tight_layout() 
 plt.show()
@@ -127,10 +175,10 @@ plt.show()
 
 
 
-# # Endurance and P_req calculations
+# Endurance and P_req calculations
 # plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=0.0145,cs=True,tracking=False,cdtot = 0.025,n_tot=.75,S=0.38,weight=4*9.81,voltage=22.2,capacity=28.82)
 
-# # List Parameters for different wing area values
+# List Parameters for different wing area values
 # S =      [0.65340, 0.79]
 # Cd0 =    [0.01487, 0.015]
 # Cdtot =  [0.02572, 0.03]

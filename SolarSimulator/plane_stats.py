@@ -64,8 +64,8 @@ def battery_sweep(plane: Seaplane,capacities,year=2019,month=6,day=1,days=1):
         plane.capacity = cap
         plane.calculate_weight()
         _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-        duty_cycle,_,_ = plane.simulate_deployment(U,rho,.95,.20,P_solar,5)
-        duty_list.append(duty_cycle*100)
+        duty_cycle,_,_ = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
+        duty_list.append(duty_cycle*50)
 
     return duty_list
 
@@ -107,6 +107,14 @@ def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1):
     ax3.plot(times,state)
 
     plt.tight_layout() 
+    plt.show()
+
+def plot_battery_sweep(cap,duty):
+    plt.plot(cap,duty)
+    plt.xlabel("Battery Capacity [Ah]")
+    plt.ylabel("Duty Cycle [%]")
+    plt.title("Battery Capacity Sweep")
+    plt.tight_layout()
     plt.show()
 
 
@@ -160,15 +168,10 @@ rho = 1.1 # air density (dependent on altitude)
 U = cruise_speed
 
 plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,af_mass=af_mass,voltage=voltage,capacity=capacity_ah)
+cap = np.linspace(1,50,50)
+duty = battery_sweep(plane,cap,month=1,days=1)
+plot_battery_sweep(cap,duty)
 
-cap = np.linspace(1,100,100)
-duty = battery_sweep(plane,cap,month=6,days=7)
-plt.plot(cap,duty)
-plt.xlabel("Battery Capacity [Ah]")
-plt.ylabel("Duty Cycle [%]")
-plt.title("Battery Capacity Sweep")
-plt.tight_layout()
-plt.show()
 
 data = data = {'Capacity': cap,
                 'Duty': duty}
@@ -184,6 +187,8 @@ max_duty_row = df[df['Duty'] == max_duty]
 max_cap= max_duty_row['Capacity'].values[0]
 
 plane.capacity = max_cap
+
+print(plane.get_endurance(U,1.1))
 year = 2019
 month = 6
 day = 1

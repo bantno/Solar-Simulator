@@ -51,6 +51,65 @@ def plot_endurance(plane,S,Cd0,weight,capacity,rho):
     plt.show()
     return
 
+def make_pareto(plane):
+    pass
+
+def calc_objective(plane,capacities):
+    """Evaluate the objective function for determination of a pareto front"""
+    duty_list = battery_sweep(plane,capacities)
+
+def battery_sweep(plane: Seaplane,capacities,year=2019,month=6,day=1,days=1):
+    duty_list = []
+    for cap in capacities:
+        plane.capacity = cap
+        plane.calculate_weight()
+        _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
+        duty_cycle,_,_ = plane.simulate_deployment(U,rho,.95,.20,P_solar,5)
+        duty_list.append(duty_cycle*100)
+
+    return duty_list
+
+def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1):
+    # TODO: Add clearsky vs TMY distinction
+    """Simulates and plots the duty cycle for the given plane and times
+    
+    Parameters:
+    -----------
+    plane: Seaplane
+        Seaplane object which is to be simulated
+    year: int
+        Year in which simulation is to start
+    month: int
+        Month in which simulation is to start
+    day: int
+        Day in which simulation is to start
+    days: int
+        Number of days to simulate
+    """
+    times, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
+    _,e_h,state = plane.simulate_deployment(U,rho,.95,.10,P_solar,5)
+
+    # Plot Results
+    # TODO: Make plotting function for this plot
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1,figsize=(10,5))
+    ax1.set_title('Battery Charge Level')
+    ax1.set_xlabel('Dates')
+    ax1.set_ylabel('Battery Charge [%]')
+    ax2.set_title('Available Solar Power')
+    ax2.set_xlabel('Dates')
+    ax2.set_ylabel('Power [W]')
+    ax3.set_title('Vehicle State')
+    ax3.set_xlabel('Dates')
+    ax3.set_ylabel('State')
+
+    ax1.plot(times,e_h)
+    ax2.plot(times,P_solar)
+    ax3.plot(times,state)
+
+    plt.tight_layout() 
+    plt.show()
+
+
 
 
 ########################################################
@@ -95,59 +154,72 @@ voltage = 22.2
 Cdtot = 0.02616
 Cd0 = 0.01487
 S = 0.653
-weight = 6*9.81
+af_mass = 6 #TODO: Read in AF mass from VSPAero, multiply by safety factor
 cruise_speed = 20
 rho = 1.1 # air density (dependent on altitude)
 U = cruise_speed
 
-plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,weight=weight,voltage=voltage,capacity=capacity_ah)
+plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,af_mass=af_mass,voltage=voltage,capacity=capacity_ah)
+
+cap = np.linspace(1,100,100)
+duty = battery_sweep(plane,cap,month=6,days=7)
+plt.plot(cap,duty)
+plt.xlabel("Battery Capacity [Ah]")
+plt.ylabel("Duty Cycle [%]")
+plt.title("Battery Capacity Sweep")
+plt.tight_layout()
+plt.show()
+
+data = data = {'Capacity': cap,
+                'Duty': duty}
+
+df = pd.DataFrame(data)
+
+max_duty = df['Duty'].max()
+print(max_duty)
+# Locate the row where the maximum duty value occurs
+max_duty_row = df[df['Duty'] == max_duty]
+
+# Get the corresponding value in the 'cap' column
+max_cap= max_duty_row['Capacity'].values[0]
+
+plane.capacity = max_cap
+year = 2019
+month = 6
+day = 1
+days = 7
+plot_simulation(plane,year,month,day,days)
+
 
 # ##########################################
 # duty = []
+# monthly_duty = []
+# daily_duty = []
 # days = 1
 # year = 2019
+# #TODO: Fix failure for December
 # for j in range(1,13):
 #     days_in_month = (datetime.date(year, j % 12 + 1, 1) - datetime.date(year, j, 1)).days
 #     for i in range(1, days_in_month+1):
 #         times, P_solar = plane.calc_collected_energy((year,year),(j,j),(i,i+1),periods=12*24*days,frequency='5min')
-#         duty_cycle,e_h,state = plane.simulate_deployment(U,rho,.85,.3,10,P_solar,5)
+#         duty_cycle,e_h,state = plane.simulate_deployment(U,rho,.95,.3,10,P_solar,5)
 #         duty.append(duty_cycle)
+#         daily_duty.append(duty_cycle)
+#     monthly_duty.append(np.mean(duty))
+#     duty = []
 
-# plt.plot(duty)
-# plt.title('Daily Duty Cycle')
-# plt.xlabel("Day of Year")
+# print(np.mean(daily_duty))
+
+# plt.plot(monthly_duty)
+# plt.title('Monthly Duty Cycle')
+# plt.xlabel("Month of Year")
 # plt.ylabel("Duty Cycle")
 # plt.show()
 
 # ########################################
 
-year = 2019
-month = 1
-day = 1
-days = 365
-times, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-duty_cycle,e_h,state = plane.simulate_deployment(U,rho,.85,.3,10,P_solar,5)
-print(duty_cycle)
 
-# Plot Results
-# TODO: Make plotting function for this plot
-fig, (ax1, ax2, ax3) = plt.subplots(3, 1,figsize=(10,5))
-ax1.set_title('Battery Charge Level')
-ax1.set_xlabel('Dates')
-ax1.set_ylabel('Battery Charge [%]')
-ax2.set_title('Available Solar Power')
-ax2.set_xlabel('Dates')
-ax2.set_ylabel('Power [W]')
-ax3.set_title('Vehicle State')
-ax3.set_xlabel('Dates')
-ax3.set_ylabel('State')
 
-ax1.plot(times,e_h[0:-1])
-ax2.plot(times,P_solar)
-ax3.plot(times,state[0:-1])
-
-plt.tight_layout() 
-plt.show()
 
 
 

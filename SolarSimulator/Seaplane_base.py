@@ -228,10 +228,10 @@ class Seaplane:
 
         #TODO: Create separate function to set these parameters
         if self.cs:
-            # axis_azimuth = np.random.rand(1)*360
-            # wind_speed = np.random.rand(1)*10
-            axis_azimuth = 0
-            wind_speed = 0
+            axis_azimuth = np.random.rand(1)*360
+            wind_speed = np.random.rand(1)*20
+            # axis_azimuth = 0
+            # wind_speed = 0
             temp_air = 30
         else:
             # Set windspeed and azimuth based on TMY data
@@ -298,6 +298,9 @@ class Seaplane:
             Energy stored in battery for each simulated time
 
         """
+        # Ensure weight estimate is accurate
+        self.calculate_weight()
+
         # Get cruise power
         P_cruise = self.get_required_power(U,rho)
 
@@ -305,8 +308,7 @@ class Seaplane:
         flying = 0
         state_history = []
 
-        # TODO: Add correction for energy gained from solar panels
-        capacity_j = self.voltage*self.capacity*dt*60
+        capacity_j = self.voltage*self.capacity*3600
         energy_j = capacity_j
         energy_history = []
 
@@ -315,7 +317,8 @@ class Seaplane:
         daytime_start = pd.to_datetime('08:00:00').time()
         daytime_end = pd.to_datetime('18:00:00').time()
         is_daytime = (P_solar.index.time >= daytime_start) & (P_solar.index.time <= daytime_end)
-        is_daytime = P_solar > 10
+        is_daytime = P_solar > 1
+        min_flight = .75
         
 
         # Define state machine that governs plane behavior
@@ -331,9 +334,9 @@ class Seaplane:
                 state_history.append(0)
                 if energy_j <= capacity_j:
                     energy_j+= (P_solar.iloc[i])*dt*60
-                if energy_j>=takeoff_capacity*capacity_j and is_daytime.iloc[i]:# and energy_j > P_cruise*.5*3600:
+                if energy_j>=takeoff_capacity*capacity_j and is_daytime.iloc[i] and energy_j > P_cruise*60*60*min_flight:
                     state = "Flying"
-                    energy_j -= 2000*30
+                    energy_j -= self.calc_takeoff_penalty()
                     energy_j-= (P_cruise - P_solar.iloc[i])*dt*60
             if energy_j > capacity_j :
                 energy_j = capacity_j
@@ -342,6 +345,6 @@ class Seaplane:
         sum = is_daytime.sum()
         return flying/sum,energy_history,state_history
 
-    def calc_takeoff_penalty(self):
-        pass
+    def calc_takeoff_penalty(self) -> float:
+        return 2000*30
 

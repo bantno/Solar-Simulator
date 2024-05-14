@@ -15,14 +15,14 @@ warnings.filterwarnings(action='ignore', module='pvfactors')
 
 class Seaplane:
     """Class representing a seaplane"""
-    def __init__(self, lat, lon, tz, pdc0,gamma,tracking:bool=False,cs:bool=False,cd0=0.01,cdtot = 0.06,n_tot=.75,S=1,weight=10,voltage=24.4,capacity=150):
+    def __init__(self, lat, lon, tz, pdc0,gamma,tracking:bool=False,cs:bool=False,cd0=0.01,cdtot = 0.06,n_tot=.75,S=1,af_mass=6,voltage=22.2,capacity=150):
         
         # Define solar parameters
         self.lat = lat
         self.lon = lon
         self.tz = tz
         self.tracking = tracking
-        self.location = location.Location(lat, lon, tz=tz, name = 'Gulf of Mexico')
+        self.location = location.Location(lat, lon, tz=tz)
         self.pdc0 = pdc0
         self.gamma = gamma
         self.collected_energy = 0 #kWh
@@ -32,7 +32,8 @@ class Seaplane:
         self.cd0 = cd0
         self.n_tot = n_tot
         self.S = S
-        self.weight = weight
+        self.af_mass = af_mass
+        
         self.voltage = voltage
         self.capacity = capacity
         self.Rt = 1.0
@@ -41,6 +42,18 @@ class Seaplane:
         self.e = 0.8
         self.k = 1.0/(np.pi*self.AR*self.e)
         self.cdtot = cdtot
+        self.calculate_weight()
+
+    def calculate_weight(self,energy_density=150) -> float:
+        """Estimates weight of the aircraft based on fixed airframe mass and variable battery mass.
+        
+        Assumes that the airframe mass will not change but the installed battery capacity will.
+        
+        Parameters:
+        self: Seaplane
+            Requires seaplane object
+        """
+        self.weight = 9.81*(self.af_mass+self.capacity*self.voltage/energy_density)
 
     def convert_to_datetime_index(self, day_number, base_year=2024):
         # Calculate the base date for the given year
@@ -54,7 +67,7 @@ class Seaplane:
         
         return datetime_index
 
-    def get_endurance(self,U,rho):
+    def get_endurance(self,U,rho) -> float:
         """Returns endurance estimate according to Traub
         
         Parameters
@@ -69,7 +82,7 @@ class Seaplane:
         E = self.Rt**(1.0-self.n)*(self.n_tot*self.voltage*self.capacity)/self.get_required_power(U,rho)
         return E
             
-    def get_dynamic_pressure(self,U,rho):
+    def get_dynamic_pressure(self,U,rho) -> float:
         """Returns dynamic pressure
 
         Parameters
@@ -82,7 +95,7 @@ class Seaplane:
         """
         return 0.5*rho*U**2
     
-    def get_required_power(self,U,rho):
+    def get_required_power(self,U,rho) -> float:
         """Returns required cruise power consumption
         
         Parameters
@@ -93,13 +106,13 @@ class Seaplane:
             Air density [kg/m^3]
         
         """
-        q = self.get_dynamic_pressure(U,rho)
-        D = q*self.S*self.cdtot*U
-
-        # return D*U # U in m/s
-        return .5*rho*U**3*self.S*self.cd0 + 2*self.weight**2*self.k/(rho*U*self.S)
+        # q = self.get_dynamic_pressure(U,rho)
+        # D = q*self.S*self.cdtot*U
+        # D = self.cdtot*rho*0.5*self.S*(U**2) # U in m/s
+        D = .5*rho*U**3*self.S*self.cd0 + 2*self.weight**2*self.k/(rho*U*self.S) # From Traub
+        return D
     
-    def get_times(self,year,month,day,tz):
+    def get_times(self,year,month,day,tz) -> pd.DatetimeIndex:
         """Returns hourly daterange for the times between given date and subsequent day"""
         # get times of interest
         start = "{0}-{1}-{2}".format(year,month,day)
@@ -107,7 +120,7 @@ class Seaplane:
         end = "{0}-{1}-{2}".format(year,month,day)
         return pd.date_range(start, end, freq='60min', tz=tz) # Get times for entire study period      
 
-    def get_DateTimeIndex(self,years,months,days,hours,minutes):
+    def get_DateTimeIndex(self,years,months,days,hours,minutes) -> pd.DatetimeIndex:
         """Returns DateTimeIndex for provided dates
 
         Parameters
@@ -215,8 +228,10 @@ class Seaplane:
 
         #TODO: Create separate function to set these parameters
         if self.cs:
-            axis_azimuth = np.random.rand(1)*360
-            wind_speed = np.random.rand(1)*10
+            # axis_azimuth = np.random.rand(1)*360
+            # wind_speed = np.random.rand(1)*10
+            axis_azimuth = 0
+            wind_speed = 0
             temp_air = 30
         else:
             # Set windspeed and azimuth based on TMY data
@@ -255,7 +270,7 @@ class Seaplane:
         
         return times, pdc
 
-    def simulate_deployment(self,U,rho,takeoff_capacity,landing_capacity,period,P_solar,dt):
+    def simulate_deployment(self,U,rho,takeoff_capacity,landing_capacity,P_solar,dt):
         """Determines duty cycle for specified period
         
         Parameters
@@ -288,42 +303,45 @@ class Seaplane:
 
         state = "Moored"
         flying = 0
-        state_history = [0]
+        state_history = []
 
         # TODO: Add correction for energy gained from solar panels
         capacity_j = self.voltage*self.capacity*dt*60
-        energy_j = capacity_j*.8
-        energy_history = [energy_j/capacity_j]
+        energy_j = capacity_j
+        energy_history = []
 
         # Define the daytime range (e.g., from 7 AM to 7 PM)
         # TODO: Set daylight hours based on when sun rises and sets, not hard coded
-        daytime_start = pd.to_datetime('07:00:00').time()
-        daytime_end = pd.to_datetime('19:00:00').time()
+        daytime_start = pd.to_datetime('08:00:00').time()
+        daytime_end = pd.to_datetime('18:00:00').time()
         is_daytime = (P_solar.index.time >= daytime_start) & (P_solar.index.time <= daytime_end)
+        is_daytime = P_solar > 10
         
+
+        # Define state machine that governs plane behavior
         for i in range(0,len(P_solar)):
             
             if state == "Flying":
                 state_history.append(1)
                 flying += 1
                 energy_j-= (P_cruise - P_solar.iloc[i])*dt*60
-                if energy_j <= capacity_j*landing_capacity or not is_daytime[i]:
+                if energy_j <= capacity_j*landing_capacity or not is_daytime.iloc[i]:
                     state = "Moored"
             elif state == "Moored":
                 state_history.append(0)
                 if energy_j <= capacity_j:
                     energy_j+= (P_solar.iloc[i])*dt*60
-                if energy_j>=takeoff_capacity*capacity_j and is_daytime[i]:
+                if energy_j>=takeoff_capacity*capacity_j and is_daytime.iloc[i]:# and energy_j > P_cruise*.5*3600:
                     state = "Flying"
-                    energy_j -= 1000*30
+                    energy_j -= 2000*30
+                    energy_j-= (P_cruise - P_solar.iloc[i])*dt*60
             if energy_j > capacity_j :
                 energy_j = capacity_j
             energy_history.append(energy_j/capacity_j*100)
 
-        return flying/np.sum(is_daytime),energy_history,state_history
+        sum = is_daytime.sum()
+        return flying/sum,energy_history,state_history
 
-
-        
     def calc_takeoff_penalty(self):
         pass
 

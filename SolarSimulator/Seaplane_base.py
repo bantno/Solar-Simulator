@@ -343,8 +343,9 @@ class Seaplane:
             energy_history.append(energy_j/capacity_j*100)
 
         sum = is_daytime.sum()
-        return flying/sum,energy_history,state_history
+        return flying/sum*100,energy_history,state_history
 
     def calc_takeoff_penalty(self) -> float:
+        """Determine energy cost of taking off in Joules"""
         return 2000*30
 

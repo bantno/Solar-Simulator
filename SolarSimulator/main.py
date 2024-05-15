@@ -52,20 +52,59 @@ def plot_endurance(plane,S,Cd0,weight,capacity,rho):
     return
 
 def make_pareto(plane):
-    pass
+    # Define the bounds for each decision variable
+    bounds = [(0, 50), (0, 5)]  # Example bounds for a 2D problem
 
-def calc_objective(plane,capacities):
-    """Evaluate the objective function for determination of a pareto front"""
-    duty_list = battery_sweep(plane,capacities)
+    # Define the objective functions
+    def objective_functions(x,plane):
+        """
+        Define your objective functions here.
+        For example, for a two-objective problem:
+
+        """
+        f1 = battery_sweep(plane,x[0])
+        # TODO: Create an objective function that accounts for the riskiness of taking off
+        f2 = (x[1]-2)**2
+        return [f1, f2]
+
+    # Create an instance of ParetoFront
+    pareto_front = ParetoFront.Pareto(objective_functions, bounds)
+
+    # Number of samples for Latin Hypercube Sampling
+    n_samples = 150
+
+    # Calculate the Pareto front using LHS
+    pf,non_dominated_points = pareto_front.generate_pareto_front(n_samples,plane)
+
+    # Extract the objective values for plotting
+    pf = np.array(pf)
+    non_dominated_points = np.array(non_dominated_points)
+
+    # Plot the Pareto front
+    plt.scatter(pf[:, 0], pf[:, 1], marker='o', color='b', label='Pareto Front (LHS)')
+    plt.scatter(non_dominated_points[:, 0], non_dominated_points[:, 1], marker='o', color='grey', label='Non-dominated Points')
+    plt.xlabel('Duty Cycle [%]')
+    plt.ylabel('Risk')
+    plt.title('Pareto Front using Latin Hypercube Sampling')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 def battery_sweep(plane: Seaplane,capacities,year=2019,month=6,day=1,days=1):
     duty_list = []
-    for cap in capacities:
-        plane.capacity = cap
+    if isinstance(capacities,float):
+        plane.capacity = capacities
         plane.calculate_weight()
         _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
         duty_cycle,_,_ = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
-        duty_list.append(duty_cycle)
+        return duty_cycle
+    else:
+        for cap in capacities:
+            plane.capacity = cap
+            plane.calculate_weight()
+            _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
+            duty_cycle,_,_ = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
+            duty_list.append(duty_cycle)
 
     return duty_list
 
@@ -124,6 +163,8 @@ def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1):
 
 
 ########################################################
+
+
 # Define constant parameters
 lat = 29.02291491363789
 lon = -90.23223029442693
@@ -171,25 +212,32 @@ rho = 1.1 # air density (dependent on altitude)
 U = cruise_speed
 
 plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,af_mass=af_mass,voltage=voltage,capacity=capacity_ah)
-cap = np.linspace(1,50,50)
-duty = battery_sweep(plane,cap,month=1,days=1)
-filename = "BatterySweep_1-50.png"
-plot_battery_sweep(cap,duty,filename)
 
-data = data = {'Capacity': cap, 'Duty': duty}
-df = pd.DataFrame(data)
-max_duty = df['Duty'].max()
-print()
-max_duty_row = df[df['Duty'] == max_duty]
-max_cap= max_duty_row['Capacity'].values[0]
+make_pareto(plane)
 
-# Run simulation for optimal battery size
-plane.capacity = max_cap
-year = 2019
-month = 7
-day = 1
-days = 31
-plot_simulation(plane,year,month,day,days)
+
+
+
+
+# cap = np.linspace(1,50,50)
+# duty = battery_sweep(plane,cap,month=1,days=1)
+# filename = "BatterySweep_1-50.png"
+# plot_battery_sweep(cap,duty,filename)
+
+# data = data = {'Capacity': cap, 'Duty': duty}
+# df = pd.DataFrame(data)
+# max_duty = df['Duty'].max()
+# print()
+# max_duty_row = df[df['Duty'] == max_duty]
+# max_cap= max_duty_row['Capacity'].values[0]
+
+# # Run simulation for optimal battery size
+# plane.capacity = max_cap
+# year = 2019
+# month = 7
+# day = 1
+# days = 31
+# plot_simulation(plane,year,month,day,days)
 
 
 # ##########################################

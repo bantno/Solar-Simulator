@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-class ParetoFront:
+class Pareto:
     def __init__(self, objective_functions, bounds):
         self.objective_functions = objective_functions
         self.bounds = bounds
@@ -26,52 +26,20 @@ class ParetoFront:
             np.random.shuffle(samples[:, i])
         return samples.tolist()
 
-    def generate_pareto_front(self, n_samples):
+    def generate_pareto_front(self, n_samples,plane):
         """
-        Construct Pareto front using LHS.
+        Construct Pareto front and non-dominated points using LHS.
         """
         pareto_front = []
+        non_dominated_points = []
         samples = self.lhs_sampling(n_samples)
         for point in samples:
-            if not self.is_dominated(self.objective_functions(point), pareto_front):
-                pareto_front.append(self.objective_functions(point))
-        return pareto_front
+            obj_point = self.objective_functions(point,plane)
+            if not self.is_dominated(obj_point, pareto_front):
+                pareto_front.append(obj_point)
+            else: 
+                non_dominated_points.append(obj_point)
+        return pareto_front, non_dominated_points
 
-# Example usage:
 
-# Define the bounds for each decision variable
-bounds = [(-5, 5), (-5, 5)]  # Example bounds for a 2D problem
 
-# Define the objective functions
-def objective_functions(x):
-    """
-    Define your objective functions here.
-    For example, for a two-objective problem:
-
-    """
-    f1 = x[0]**2
-    f2 = (x[0]-2)**2
-    return [f1, f2]
-
-# Create an instance of ParetoFront
-pareto_front = ParetoFront(objective_functions, bounds)
-
-# Number of samples for Latin Hypercube Sampling
-n_samples = 100
-
-# Calculate the Pareto front using LHS
-pf = pareto_front.generate_pareto_front(n_samples)
-
-# Extract the objective values for plotting
-pf = np.array(pf)
-
-# Plot the Pareto front
-plt.scatter(pf[:, 0], pf[:, 1], marker='o', color='b', label='Pareto Front (LHS)')
-plt.xlim(-1,5)
-plt.ylim(-1,5)
-plt.xlabel('Objective 1')
-plt.ylabel('Objective 2')
-plt.title('Pareto Front using Latin Hypercube Sampling')
-plt.legend()
-plt.grid(True)
-plt.show()

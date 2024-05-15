@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from Seaplane_base import Seaplane
+from BaseClasses.Seaplane_base import Seaplane
+from Utilities import ParetoFront
 
 def plot_endurance(plane,S,Cd0,weight,capacity,rho):
     # Create a figure and two subplots

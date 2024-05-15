@@ -8,7 +8,7 @@ from pvlib import pvsystem
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
-from Seaplane_base import Seaplane
+from SolarSimulator.BaseClasses.Seaplane_base import Seaplane
 
 # supressing shapely warnings that occur on import of pvfactors
 warnings.filterwarnings(action='ignore', module='pvfactors')

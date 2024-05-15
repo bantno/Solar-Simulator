@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import datetime
 from Seaplane_base import Seaplane
 
 def plot_endurance(plane,S,Cd0,weight,capacity,rho):
@@ -65,9 +64,21 @@ def battery_sweep(plane: Seaplane,capacities,year=2019,month=6,day=1,days=1):
         plane.calculate_weight()
         _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
         duty_cycle,_,_ = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
-        duty_list.append(duty_cycle*50)
+        duty_list.append(duty_cycle)
 
     return duty_list
+
+def plot_battery_sweep(cap,duty,filename=-1):
+    plt.plot(cap,duty)
+    plt.xlabel("Battery Capacity [Ah]")
+    plt.ylabel("Duty Cycle [%]")
+    plt.title("Battery Capacity Sweep")
+    plt.tight_layout()
+    if not filename==-1:
+        plt.savefig(filename)
+    else:
+        plt.show()
+    
 
 def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1):
     # TODO: Add clearsky vs TMY distinction
@@ -87,10 +98,9 @@ def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1):
         Number of days to simulate
     """
     times, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-    _,e_h,state = plane.simulate_deployment(U,rho,.95,.10,P_solar,5)
-
+    _,e_h,state = plane.simulate_deployment(U,rho,1,.10,P_solar,5)
+    
     # Plot Results
-    # TODO: Make plotting function for this plot
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1,figsize=(10,5))
     ax1.set_title('Battery Charge Level')
     ax1.set_xlabel('Dates')
@@ -107,14 +117,6 @@ def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1):
     ax3.plot(times,state)
 
     plt.tight_layout() 
-    plt.show()
-
-def plot_battery_sweep(cap,duty):
-    plt.plot(cap,duty)
-    plt.xlabel("Battery Capacity [Ah]")
-    plt.ylabel("Duty Cycle [%]")
-    plt.title("Battery Capacity Sweep")
-    plt.tight_layout()
     plt.show()
 
 
@@ -170,29 +172,22 @@ U = cruise_speed
 plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,af_mass=af_mass,voltage=voltage,capacity=capacity_ah)
 cap = np.linspace(1,50,50)
 duty = battery_sweep(plane,cap,month=1,days=1)
-plot_battery_sweep(cap,duty)
+filename = "BatterySweep_1-50.png"
+plot_battery_sweep(cap,duty,filename)
 
-
-data = data = {'Capacity': cap,
-                'Duty': duty}
-
+data = data = {'Capacity': cap, 'Duty': duty}
 df = pd.DataFrame(data)
-
 max_duty = df['Duty'].max()
-print(max_duty)
-# Locate the row where the maximum duty value occurs
+print()
 max_duty_row = df[df['Duty'] == max_duty]
-
-# Get the corresponding value in the 'cap' column
 max_cap= max_duty_row['Capacity'].values[0]
 
+# Run simulation for optimal battery size
 plane.capacity = max_cap
-
-print(plane.get_endurance(U,1.1))
 year = 2019
-month = 6
+month = 7
 day = 1
-days = 7
+days = 31
 plot_simulation(plane,year,month,day,days)
 
 

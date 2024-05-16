@@ -2,9 +2,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from BaseClasses.Seaplane_base import Seaplane
+import datetime
 from Utilities import ParetoFront
 
-def plot_endurance(plane,S,Cd0,weight,capacity,rho):
+def plot_endurance(plane,S,Cd0,af_mass,capacity,rho):
     # Create a figure and two subplots
     fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(10,5))
     ax1.set_title('Endurance vs Forward Flight Speed')
@@ -53,7 +54,7 @@ def plot_endurance(plane,S,Cd0,weight,capacity,rho):
 
 def make_pareto(plane):
     # Define the bounds for each decision variable
-    bounds = [(0, 10), (0, 2)]  # Example bounds for a 2D problem
+    bounds = [(3, 25), (0, 1)]  # Example bounds for a 2D problem
 
     # Define the objective functions
     def objective_functions(x,plane):
@@ -62,19 +63,20 @@ def make_pareto(plane):
         For example, for a two-objective problem:
 
         """
-        # f1,num_takeoffs = battery_sweep(plane,x[0],days=7)
+        days=31
+        f1,num_takeoffs = battery_sweep(plane,x[0],days=days,month=6)
         # # TODO: Create an objective function that accounts for the riskiness of taking off
-        # f2 = x[0]
+        f2 = num_takeoffs/days
 
-        f1 = np.sqrt(1+x[0]**2)
-        f2 = np.sqrt((1-x[0])**4)*1.5
-        return [f1, f2]
+        # f1 = np.sqrt(1+x[0]**2)
+        # f2 = np.sqrt((1-x[0])**4)*1.5
+        return [100-f1, f2*(1-x[1])]
 
     # Create an instance of ParetoFront
     pareto_front = ParetoFront.Pareto(objective_functions, bounds)
 
     # Number of samples for Latin Hypercube Sampling
-    n_samples = 1500
+    n_samples = 250
 
     # Calculate the Pareto front using LHS
     pf,non_dominated_points = pareto_front.generate_pareto_front(n_samples,plane)
@@ -86,8 +88,8 @@ def make_pareto(plane):
     # Plot the Pareto front
     plt.scatter(pf[:, 0], pf[:, 1], marker='o', color='b', label='Pareto Front (LHS)')
     plt.scatter(non_dominated_points[:, 0], non_dominated_points[:, 1], marker='o', color='grey', label='Non-dominated Points')
-    plt.xlabel('Duty Cycle [%]')
-    plt.ylabel('Risk')
+    plt.xlabel('Percentage of Daylight Hours on Water [%]')
+    plt.ylabel('Takeoffs Per Day')
     plt.title('Pareto Front using Latin Hypercube Sampling')
     plt.legend()
     plt.grid(True)
@@ -123,7 +125,7 @@ def plot_battery_sweep(cap,duty,filename=-1):
         plt.show()
     
 
-def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1):
+def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1,filename=-1):
     # TODO: Add clearsky vs TMY distinction
     """Simulates and plots the duty cycle for the given plane and times
     
@@ -141,7 +143,7 @@ def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1):
         Number of days to simulate
     """
     times, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-    _,e_h,state = plane.simulate_deployment(U,rho,1,.10,P_solar,5)
+    duty_cycle,e_h,state,_ = plane.simulate_deployment(U,rho,1,.10,P_solar,5)
     
     # Plot Results
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1,figsize=(10,5))
@@ -160,7 +162,12 @@ def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1):
     ax3.plot(times,state)
 
     plt.tight_layout() 
-    plt.show()
+    if not filename==-1:
+        plt.savefig(filename)
+    else:
+        plt.show()
+    return duty_cycle
+
 
 
 
@@ -183,23 +190,21 @@ gamma = -0.0043
 # Cdtot = 0.02616
 # Cd0 = 0.01487
 # S = 0.653
-# weight = 6*9.81
+# af_mass = 6
 # cruise_speed = 20
 # rho = 1.1 # air density (dependent on altitude)
 # U = cruise_speed
+# plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,af_mass=af_mass,voltage=voltage,capacity=capacity_ah)
 
 
-
-# plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,weight=weight,voltage=voltage,capacity=capacity_ah)
-# plane.capacity = 28.8
 # # List Parameters for different wing area values
 # S =      [0.65340, 0.79]
 # Cd0 =    [0.01487, 0.015]
 # Cdtot =  [0.02572, 0.03]
-# weight = [weight, 149.169]
+# af_mass = [af_mass, 149.169/9.81]
 # capacity = [capacity_ah, 28.8]
 
-# plot_endurance(plane,S,Cd0,weight,capacity,rho)
+# plot_endurance(plane,S,Cd0,weight,capacity,rho) # TODO: Fix weight estimation
 
 ############################################
 
@@ -214,47 +219,53 @@ cruise_speed = 20
 rho = 1.1 # air density (dependent on altitude)
 U = cruise_speed
 
-plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,af_mass=af_mass,voltage=voltage,capacity=capacity_ah)
+plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0*1.5,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,af_mass=af_mass,voltage=voltage,capacity=capacity_ah)
 
 make_pareto(plane)
 
+'''
+year = 2019
+month = 1
+day = 1
+days = 1
 
+cap = np.linspace(1,25,50)
+duty,num_takeoffs = battery_sweep(plane,cap,month=month,days=days)
+filename = "BatterySweep_1-25.png"
+plot_battery_sweep(cap,duty,filename)
 
+data = data = {'Capacity': cap, 'Duty': duty}
+df = pd.DataFrame(data)
+max_duty = df['Duty'].max()
+max_duty_row = df[df['Duty'] == max_duty]
+max_cap= max_duty_row['Capacity'].values[0]
+print(max_cap,max_duty)
 
-
-# cap = np.linspace(1,50,50)
-# duty = battery_sweep(plane,cap,month=1,days=1)
-# filename = "BatterySweep_1-50.png"
-# plot_battery_sweep(cap,duty,filename)
-
-# data = data = {'Capacity': cap, 'Duty': duty}
-# df = pd.DataFrame(data)
-# max_duty = df['Duty'].max()
-# print()
-# max_duty_row = df[df['Duty'] == max_duty]
-# max_cap= max_duty_row['Capacity'].values[0]
-
-# # Run simulation for optimal battery size
-# plane.capacity = max_cap
+# Run simulation for optimal battery size
+plane.capacity = max_cap
 # year = 2019
 # month = 7
 # day = 1
-# days = 31
-# plot_simulation(plane,year,month,day,days)
+days = 7
+filename = "MaxSim.png"
+dc = plot_simulation(plane,year,month,day,days,filename)
+print(dc)
 
 
-# ##########################################
+# # YEARLY DUTY CYCLE ##########################################
 # duty = []
 # monthly_duty = []
 # daily_duty = []
 # days = 1
 # year = 2019
-# #TODO: Fix failure for December
 # for j in range(1,13):
-#     days_in_month = (datetime.date(year, j % 12 + 1, 1) - datetime.date(year, j, 1)).days
+#     if j==12:
+#         days_in_month=31
+#     else:
+#         days_in_month = (datetime.date(year, j % 12 + 1, 1) - datetime.date(year, j, 1)).days
 #     for i in range(1, days_in_month+1):
 #         times, P_solar = plane.calc_collected_energy((year,year),(j,j),(i,i+1),periods=12*24*days,frequency='5min')
-#         duty_cycle,e_h,state = plane.simulate_deployment(U,rho,.95,.3,10,P_solar,5)
+#         duty_cycle,e_h,state,_ = plane.simulate_deployment(U,rho,.100,.15,P_solar,5)
 #         duty.append(duty_cycle)
 #         daily_duty.append(duty_cycle)
 #     monthly_duty.append(np.mean(duty))
@@ -262,14 +273,16 @@ make_pareto(plane)
 
 # print(np.mean(daily_duty))
 
-# plt.plot(monthly_duty)
-# plt.title('Monthly Duty Cycle')
-# plt.xlabel("Month of Year")
+# plt.clf()
+# plt.plot(daily_duty)
+# plt.title('Daily Duty Cycle')
+# plt.xlabel("Day of Year")
 # plt.ylabel("Duty Cycle")
-# plt.show()
+# plt.savefig("YearlyDutyCycle.png")
+# # plt.show()
 
 # ########################################
-
+'''
 
 
 

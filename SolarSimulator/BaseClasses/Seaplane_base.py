@@ -55,17 +55,6 @@ class Seaplane:
         """
         self.weight = 9.81*(self.af_mass+self.capacity*self.voltage/energy_density)
 
-    def convert_to_datetime_index(self, day_number, base_year=2024):
-        # Calculate the base date for the given year
-        base_date = datetime(base_year, 1, 1)
-        
-        # Add the day_number - 1 to the base date (since day_number starts from 1)
-        target_date = base_date + timedelta(days=day_number - 1)
-        
-        # Convert the target date to a Pandas datetime index
-        datetime_index = pd.to_datetime(target_date)
-        
-        return datetime_index
 
     def get_endurance(self,U,rho) -> float:
         """Returns endurance estimate according to Traub
@@ -312,13 +301,15 @@ class Seaplane:
         energy_j = capacity_j
         energy_history = []
 
+        num_takeoff = 0
+
         # Define the daytime range (e.g., from 7 AM to 7 PM)
         # TODO: Set daylight hours based on when sun rises and sets, not hard coded
         daytime_start = pd.to_datetime('08:00:00').time()
         daytime_end = pd.to_datetime('18:00:00').time()
         is_daytime = (P_solar.index.time >= daytime_start) & (P_solar.index.time <= daytime_end)
         is_daytime = P_solar > 1
-        min_flight = .75
+        min_flight = 1
         
 
         # Define state machine that governs plane behavior
@@ -338,12 +329,13 @@ class Seaplane:
                     state = "Flying"
                     energy_j -= self.calc_takeoff_penalty()
                     energy_j-= (P_cruise - P_solar.iloc[i])*dt*60
+                    num_takeoff += 1
             if energy_j > capacity_j :
                 energy_j = capacity_j
             energy_history.append(energy_j/capacity_j*100)
 
         sum = is_daytime.sum()
-        return flying/sum*100,energy_history,state_history
+        return flying/sum*100,energy_history,state_history,num_takeoff
 
     def calc_takeoff_penalty(self) -> float:
         """Determine energy cost of taking off in Joules"""

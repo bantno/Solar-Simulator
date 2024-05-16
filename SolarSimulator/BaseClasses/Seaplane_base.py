@@ -217,10 +217,10 @@ class Seaplane:
 
         #TODO: Create separate function to set these parameters
         if self.cs:
-            axis_azimuth = np.random.rand(1)*360
-            wind_speed = np.random.rand(1)*20
-            # axis_azimuth = 0
-            # wind_speed = 0
+            # axis_azimuth = np.random.rand(1)*360
+            # wind_speed = np.random.rand(1)*20
+            axis_azimuth = 0
+            wind_speed = 0
             temp_air = 30
         else:
             # Set windspeed and azimuth based on TMY data

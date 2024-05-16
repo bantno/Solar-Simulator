@@ -53,7 +53,7 @@ def plot_endurance(plane,S,Cd0,weight,capacity,rho):
 
 def make_pareto(plane):
     # Define the bounds for each decision variable
-    bounds = [(0, 50), (0, 5)]  # Example bounds for a 2D problem
+    bounds = [(0, 10), (0, 2)]  # Example bounds for a 2D problem
 
     # Define the objective functions
     def objective_functions(x,plane):
@@ -62,16 +62,19 @@ def make_pareto(plane):
         For example, for a two-objective problem:
 
         """
-        f1 = battery_sweep(plane,x[0])
-        # TODO: Create an objective function that accounts for the riskiness of taking off
-        f2 = (x[1]-2)**2
+        # f1,num_takeoffs = battery_sweep(plane,x[0],days=7)
+        # # TODO: Create an objective function that accounts for the riskiness of taking off
+        # f2 = x[0]
+
+        f1 = np.sqrt(1+x[0]**2)
+        f2 = np.sqrt((1-x[0])**4)*1.5
         return [f1, f2]
 
     # Create an instance of ParetoFront
     pareto_front = ParetoFront.Pareto(objective_functions, bounds)
 
     # Number of samples for Latin Hypercube Sampling
-    n_samples = 150
+    n_samples = 1500
 
     # Calculate the Pareto front using LHS
     pf,non_dominated_points = pareto_front.generate_pareto_front(n_samples,plane)
@@ -96,17 +99,17 @@ def battery_sweep(plane: Seaplane,capacities,year=2019,month=6,day=1,days=1):
         plane.capacity = capacities
         plane.calculate_weight()
         _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-        duty_cycle,_,_ = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
-        return duty_cycle
+        duty_cycle,_,_,num_takeoffs = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
+        return duty_cycle,num_takeoffs
     else:
         for cap in capacities:
             plane.capacity = cap
             plane.calculate_weight()
             _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-            duty_cycle,_,_ = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
+            duty_cycle,_,_,num_takeoffs = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
             duty_list.append(duty_cycle)
 
-    return duty_list
+    return duty_list,num_takeoffs
 
 def plot_battery_sweep(cap,duty,filename=-1):
     plt.plot(cap,duty)

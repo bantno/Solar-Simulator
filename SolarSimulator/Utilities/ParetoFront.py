@@ -1,5 +1,7 @@
 import numpy as np
-import matplotlib.pyplot as plt
+import pandas as pd
+from tqdm import tqdm
+from paretoset import paretoset
 
 class Pareto:
     def __init__(self, objective_functions, bounds):
@@ -30,16 +32,17 @@ class Pareto:
         """
         Construct Pareto front and non-dominated points using LHS.
         """
-        pareto_front = []
-        non_dominated_points = []
+        values = []
         samples = self.lhs_sampling(n_samples)
-        for point in samples:
+
+        for point in tqdm(samples):
             obj_point = self.objective_functions(point,plane)
-            if not self.is_dominated(obj_point, pareto_front):
-                pareto_front.append(obj_point)
-            else: 
-                non_dominated_points.append(obj_point)
-        return pareto_front, non_dominated_points
+            values.append(obj_point)
+        samples = pd.DataFrame(samples)
+        values = pd.DataFrame(values)
+
+        mask = paretoset(values, sense=["max", "min"])
+        return samples, values[mask], values
 
 
 

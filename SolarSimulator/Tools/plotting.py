@@ -1,12 +1,16 @@
 import pandas as pd
 import numpy as np
+
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+
 from BaseClasses.Seaplane_base import Seaplane
 import datetime
 from Utilities import ParetoFront
 import os
 
 def plot_endurance(plane,S,Cd0,af_mass,capacity,rho):
+    # TODO: Remove weight attribute
     # Create a figure and two subplots
     fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(10,5))
     ax1.set_title('Endurance vs Forward Flight Speed')
@@ -127,8 +131,8 @@ def plot_battery_sweep(cap,duty,filename=-1):
         plt.show()
     
 
-def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1,filename=-1,U=20,rho=1.1):
-    # TODO: Add clearsky vs TMY distinction
+def run_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1,U=20,rho=1.1):
+    # TODO: Add ability to plot multiple runs on same figure
     """Simulates and plots the duty cycle for the given plane and times
     
     Parameters:
@@ -146,27 +150,38 @@ def plot_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1,filename=-1,
     """
     times, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
     duty_cycle,e_h,state,_ = plane.simulate_deployment(U,rho,1,.10,P_solar,5)
-    
-    # Plot Results
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1,figsize=(10,5))
-    ax1.set_title('Battery Charge Level')
-    ax1.set_xlabel('Dates')
-    ax1.set_ylabel('Battery Charge [%]')
-    ax2.set_title('Available Solar Power')
-    ax2.set_xlabel('Dates')
-    ax2.set_ylabel('Power [W]')
-    ax3.set_title('Vehicle State')
-    ax3.set_xlabel('Dates')
-    ax3.set_ylabel('State')
+    return times,e_h,P_solar,state,duty_cycle
 
-    ax1.plot(times,e_h)
-    ax2.plot(times,P_solar)
-    ax3.plot(times,state)
+    
+def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1):
+    """Plot results of simulation"""
+    if fig == -1:
+        fig, axes = plt.subplots(3, 1,figsize=(12,6))
+    if isinstance(fig,Figure):
+        axes = fig.axes
+    titles = ["Battery Charge Level", "Available Solar Power", "Vehicle State"]
+    xlabel = "Dates"
+    ylabels = ["Battery Charge [%]", "Power [W/m$^2$]", "State"]
+    data = [e_h,P_solar,state]
+    for i in range(len(axes)):
+        label = "{0} Ah".format('%.2f'%plane.capacity)
+        plot_data(axes[i],times,data[i],titles[i],xlabel,ylabels[i],label)
 
     plt.tight_layout() 
+
     if not filename==-1:
         plot_path = os.path.join("Figures", f"{filename}.png")
         plt.savefig(plot_path)
+        
     else:
         plt.show()
-    return duty_cycle
+    return fig
+    
+def plot_data(ax,x_data,y_data, title:str="", xlabel:str="X Data", ylabel:str="Y Data",label:str=""):
+    ax.plot(x_data,y_data,label=label)
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if not label == "":
+        ax.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+    ax.grid(True)

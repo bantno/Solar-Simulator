@@ -60,13 +60,13 @@ plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0*1.5,cs=True ,tracking=False,cd
 
 
 year = 2019
-month = 1
+month = 6
 day = 1
-days = 1
+days = 7
 
 cap = np.linspace(1,25,50)
 duty,num_takeoffs = plotting.battery_sweep(plane,cap,month=month,days=days)
-filename = "BatterySweep_1-25"
+filename = "BatterySweep_{0}_{1}_{2}-{3}".format(year,month,day,days)
 plotting.plot_battery_sweep(cap,duty,filename)
 
 data = data = {'Capacity': cap, 'Duty': duty}
@@ -74,17 +74,32 @@ df = pd.DataFrame(data)
 max_duty = df['Duty'].max()
 max_duty_row = df[df['Duty'] == max_duty]
 max_cap= max_duty_row['Capacity'].values[0]
-print(max_cap,max_duty)
+print("Capacity for max duty cycle: {0}".format('%.2f'%max_cap))
+print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
 
-# Run simulation for optimal battery size
-plane.capacity = max_cap
+# Run simulation for optimal battery size(s)
+
+# capacities = np.linspace(1,18,3).tolist()
+# capacities.append(max_cap)
+capacities = [10, 17.5]
+fig = -1
+duty_cycle = []
+
 # year = 2019
 # month = 7
 # day = 1
 days = 7
-filename = "MaxSim"
-dc = plotting.plot_simulation(plane,year,month,day,days,filename)
-print(dc)
+filename = "BatterySweep_{0}_{1}_{2}-{3}".format(year,month,day,days)
+for cap in capacities:
+    plane.capacity = cap
+
+    times,e_h,P_solar,states,dc = plotting.run_simulation(plane,year,month,day,days)
+    fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig)
+    duty_cycle.append(dc)
+
+print(duty_cycle)
+
+
 
 
 # # YEARLY DUTY CYCLE ##########################################

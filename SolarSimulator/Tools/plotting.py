@@ -7,6 +7,7 @@ from matplotlib.figure import Figure
 from BaseClasses.Seaplane_base import Seaplane
 import datetime
 from Utilities import ParetoFront
+from tqdm import tqdm
 import os
 
 def plot_endurance(plane,S,Cd0,af_mass,capacity,rho):
@@ -109,7 +110,7 @@ def battery_sweep(plane: Seaplane,capacities,year=2019,month=6,day=1,days=1,U=20
         duty_cycle,_,_,num_takeoffs = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
         return duty_cycle,num_takeoffs
     else:
-        for cap in capacities:
+        for cap in tqdm(capacities):
             plane.capacity = cap
             plane.calculate_weight()
             _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
@@ -120,11 +121,12 @@ def battery_sweep(plane: Seaplane,capacities,year=2019,month=6,day=1,days=1,U=20
 
 def plot_battery_sweep(cap,duty,filename=-1):
     plot_path = os.path.join("Figures", f"{filename}.png")
-    plt.plot(cap,duty)
+    plt.scatter(cap,duty)
     plt.xlabel("Battery Capacity [Ah]")
     plt.ylabel("Duty Cycle [%]")
     plt.title("Battery Capacity Sweep")
     plt.tight_layout()
+    plt.grid(True)
     if not filename==-1:
         plt.savefig(plot_path)
     else:
@@ -153,7 +155,7 @@ def run_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1,U=20,rho=1.1)
     return times,e_h,P_solar,state,duty_cycle
 
     
-def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1):
+def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1, label=""):
     """Plot results of simulation"""
     if fig == -1:
         fig, axes = plt.subplots(3, 1,figsize=(12,6))
@@ -164,7 +166,6 @@ def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1):
     ylabels = ["Battery Charge [%]", "Power [W/m$^2$]", "State"]
     data = [e_h,P_solar,state]
     for i in range(len(axes)):
-        label = "{0} Ah".format('%.2f'%plane.capacity)
         plot_data(axes[i],times,data[i],titles[i],xlabel,ylabels[i],label)
 
     plt.tight_layout() 

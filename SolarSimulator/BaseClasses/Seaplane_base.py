@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import warnings
 from datetime import datetime, timedelta
+from tqdm import tqdm
 
 # supressing shapely warnings that occur on import of pvfactors
 warnings.filterwarnings(action='ignore', module='pvfactors')

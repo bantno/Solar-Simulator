@@ -5,6 +5,7 @@ from BaseClasses.Seaplane_base import Seaplane
 import datetime
 from Utilities import ParetoFront
 from Tools import plotting
+from tqdm import tqdm
 import os
 
 ########################################################
@@ -60,9 +61,9 @@ plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0*1.5,cs=True ,tracking=False,cd
 
 
 year = 2019
-month = 6
+month = 1
 day = 1
-days = 7
+days = 31
 
 cap = np.linspace(1,25,50)
 duty,num_takeoffs = plotting.battery_sweep(plane,cap,month=month,days=days)
@@ -77,61 +78,90 @@ max_cap= max_duty_row['Capacity'].values[0]
 print("Capacity for max duty cycle: {0}".format('%.2f'%max_cap))
 print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
 
-# Run simulation for optimal battery size(s)
 
-# capacities = np.linspace(1,18,3).tolist()
-# capacities.append(max_cap)
-capacities = [10, 17.5]
+# # TODO: Make Function
+# # Run simulation for optimal battery size(s)
+# # capacities = np.linspace(1,18,3).tolist()
+# # capacities.append(max_cap)
+# capacities = [max_cap]
+# fig = -1
+# duty_cycle = []
+
+# # year = 2019
+# month = 6
+# # day = 1
+# days = 7
+# filename = "SimResults_{0}_{1}_{2}-{3}".format(year,month,day,days)
+# for cap in capacities:
+#     plane.capacity = cap
+#     label = "{0} Ah".format(plane.capacity)
+#     times,e_h,P_solar,states,dc = plotting.run_simulation(plane,year,month,day,days)
+#     fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig)
+#     duty_cycle.append(dc)
+# print(duty_cycle)
+
+# TODO: Make Function
+# Run simulation for optimal battery size(s)
+capacities = np.linspace(1,18,3).tolist()
+capacities.append(max_cap)
+cap = max_cap
+months = [4,6]
 fig = -1
 duty_cycle = []
 
 # year = 2019
 # month = 7
-# day = 1
-days = 7
-filename = "BatterySweep_{0}_{1}_{2}-{3}".format(year,month,day,days)
-for cap in capacities:
+day = 10
+days = 2
+filename = "SimResults_{0}_{1}-{2}_{3}-{4}".format(year,months[0],months[1],day,days)
+for i in range(len(months)):
     plane.capacity = cap
-
+    month = months[i]
+    label = "Month: {0}".format(month)
     times,e_h,P_solar,states,dc = plotting.run_simulation(plane,year,month,day,days)
-    fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig)
+    times = np.linspace(1,days+1,len(e_h))
+    fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig,label=label)
     duty_cycle.append(dc)
-
 print(duty_cycle)
 
 
 
+# TODO: Make Function
+# YEARLY DUTY CYCLE ##########################################
+duty = []
+monthly_duty = []
+daily_duty = []
+days = 1
+year = 2019
+plane.capacity = max_cap
+for j in tqdm(range(1,13)):
+    if j==12:
+        days_in_month=31
+    else:
+        days_in_month = (datetime.date(year, j % 12 + 1, 1) - datetime.date(year, j, 1)).days
+    for i in range(1, days_in_month+1):
+        times, P_solar = plane.calc_collected_energy((year,year),(j,j),(i,i),periods=12*24*days,frequency='5min')
+        duty_cycle,e_h,state,_ = plane.simulate_deployment(U,rho,.100,.15,P_solar,5)
+        duty.append(duty_cycle)
+        daily_duty.append(duty_cycle)
+    monthly_duty.append(np.mean(duty))
+    duty = []
 
-# # YEARLY DUTY CYCLE ##########################################
-# duty = []
-# monthly_duty = []
-# daily_duty = []
-# days = 1
-# year = 2019
-# for j in range(1,13):
-#     if j==12:
-#         days_in_month=31
-#     else:
-#         days_in_month = (datetime.date(year, j % 12 + 1, 1) - datetime.date(year, j, 1)).days
-#     for i in range(1, days_in_month+1):
-#         times, P_solar = plane.calc_collected_energy((year,year),(j,j),(i,i+1),periods=12*24*days,frequency='5min')
-#         duty_cycle,e_h,state,_ = plane.simulate_deployment(U,rho,.100,.15,P_solar,5)
-#         duty.append(duty_cycle)
-#         daily_duty.append(duty_cycle)
-#     monthly_duty.append(np.mean(duty))
-#     duty = []
+print("Plane Capacity: {0}, Average Duty Cycle: {1}".format(plane.capacity,np.mean(daily_duty)))
 
-# print(np.mean(daily_duty))
 
+# Pretty sure this method of doing this is wack
 # plt.clf()
 # plt.plot(daily_duty)
 # plt.title('Daily Duty Cycle')
 # plt.xlabel("Day of Year")
 # plt.ylabel("Duty Cycle")
 # plt.savefig("YearlyDutyCycle.png")
-# # plt.show()
+# filename = "YearSweep"
+# plot_path = os.path.join("Figures", f"{filename}.png")
+# plt.savefig(plot_path)
 
-# ########################################
+########################################
 
 
 

@@ -8,15 +8,6 @@ class Pareto:
         self.objective_functions = objective_functions
         self.bounds = bounds
 
-    def is_dominated(self, point, population):
-        """
-        Check if a point is dominated by any point in the population.
-        """
-        for p in population:
-            if all(p[i] <= point[i] for i in range(len(point))) and any(p[j] < point[j] for j in range(len(point))):
-                return True
-        return False
-
     def lhs_sampling(self, n_samples):
         """
         Latin Hypercube Sampling for Pareto Front.

@@ -146,9 +146,9 @@ def plot_data(ax,x_data,y_data, title:str="", xlabel:str="X Data", ylabel:str="Y
         ax.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
     ax.grid(True)
 
-def make_pareto(plane,filename:str = "Pareto"):
+def make_pareto(plane: Seaplane,filename:str = "Pareto"):
     # Define the bounds for each decision variable
-    bounds = [(3, 25), (0, 1)]  # Example bounds for a 2D problem
+    bounds = [(3, 25), (1, 1)]  # Example bounds for a 2D problem
 
     # Define the objective functions
     def objective_functions(x,plane):
@@ -180,18 +180,77 @@ def make_pareto(plane,filename:str = "Pareto"):
     non_dominated_points = np.array(non_dominated_points)
 
     # Plot the Pareto front
-    fig, (ax1,ax2) = plt.subplots(1, 2,figsize=(12,6))
-    ax1.scatter(samples.iloc[:,0],samples.iloc[:,1])
-    ax1.set_title("Samples")
+    # fig, (ax1,ax2) = plt.subplots(1, 2,figsize=(12,6))
+    # ax1.scatter(samples.iloc[:,0],samples.iloc[:,1])
+    # ax1.set_xlabel("Battery Capacity [Ah]")
+    # ax1.set_title("Samples")
     
-    ax2.scatter(non_dominated_points[:, 0], non_dominated_points[:, 1], marker='o', color='grey', label='Non-dominated Points')
-    ax2.scatter(pf[:, 0], pf[:, 1], marker='o', color='b', label='Pareto Front (LHS)')
-    ax2.set_xlabel('Percentage of Daylight Hours on Water [%]')
-    ax2.set_ylabel('Takeoffs Per Day')
-    ax2.set_title('Pareto Front using Latin Hypercube Sampling')
+    # ax2.scatter(non_dominated_points[:, 0], non_dominated_points[:, 1], marker='o', color='grey', label='Non-dominated Points')
+    # ax2.scatter(pf[:, 0], pf[:, 1], marker='o', color='b', label='Pareto Front (LHS)')
+    # ax2.set_xlabel('Percentage of Daylight Hours on Water [%]')
+    # ax2.set_ylabel('Takeoffs Per Day')
+    # ax2.set_title('Pareto Front using Latin Hypercube Sampling')
+
+    plt.scatter(non_dominated_points[:, 0], non_dominated_points[:, 1], marker='o', color='grey', label='Non-dominated Points')
+    plt.scatter(pf[:, 0], pf[:, 1], marker='o', color='b', label='Pareto Front (LHS)')
+    plt.xlabel('Percentage of Daylight Hours on Water [%]')
+    plt.ylabel('Takeoffs Per Day')
+    plt.title('Pareto Front using Latin Hypercube Sampling')
+
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
     plot_path = os.path.join("Figures", f"{filename}.png")
     plt.savefig(plot_path)
+
+def make_pareto_classic(plane: Seaplane,bounds,n_samples: int,filename: str = "ParetoFront"):
+    n_w = 5
+    values = np.zeros((n_w, n_samples))
+    samples = np.random.uniform(low=bounds[0], high=bounds[1], size=n_samples)
+    i = 0
+    
+    for  w in tqdm(np.linspace(0,1,n_w)):
+        j = 0
+        for sample in tqdm(samples):
+            f1,f2 = func(sample,plane)
+            F = f1*w+f2*(1-w)
+            values[i,j] = F
+            j+=1
+        plt.scatter(samples,values[i,:], label = f'W = {w}')
+        i+=1
+
+        
+    
+    # Add a legend
+    plt.legend()
+
+    # Add labels and title
+    plt.xlabel('Battery Capacity')
+    plt.ylabel('Objective Function Value (F)')
+    plt.title('F = DutyCycle*w+NumTakeoff*(1-w)')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.grid(True)
+
+    # Show the plot
+    plot_path = os.path.join("Figures", f"{filename}.png")
+    plt.savefig(plot_path)
+
+    return values
+        
+
+
+def func(x,plane):
+    """
+    Define objective functions here.
+
+    """
+    days=31
+    f1,num_takeoffs = battery_sweep(plane,x,days=days,month=6)
+    # # TODO: Create an objective function that accounts for the riskiness of taking off
+    f2 = num_takeoffs/days
+
+    # f1 = np.sqrt(1+x[0]**2)
+    # f2 = np.sqrt((1-x[0])**4)*1.5
+    return f1, f2
     

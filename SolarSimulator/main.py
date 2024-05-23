@@ -57,7 +57,8 @@ U = cruise_speed
 
 plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0*1.5,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,af_mass=af_mass,voltage=voltage,capacity=capacity_ah)
 
-plotting.make_pareto(plane)
+plotting.make_pareto_classic(plane,(1,25),250)
+# plotting.make_pareto(plane)
 
 
 # year = 2019

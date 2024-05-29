@@ -237,8 +237,6 @@ def make_pareto_classic(plane: Seaplane,bounds,n_samples: int,filename: str = "P
     plt.savefig(plot_path)
 
     return values
-        
-
 
 def func(x,plane):
     """
@@ -253,4 +251,33 @@ def func(x,plane):
     # f1 = np.sqrt(1+x[0]**2)
     # f2 = np.sqrt((1-x[0])**4)*1.5
     return f1, f2
-    
+
+def plot_yearly_dc(plane: Seaplane,
+                   year: int,
+                   month: int,
+                   day: int,
+                   days : int,
+                   ):
+    label = "{0} Ah".format(plane.capacity)
+    times,e_h,P_solar,states,dc = run_simulation(plane,year,month,day,days)
+    df = pd.DataFrame(e_h,index=times,columns=['battery'])
+    df['P_solar'] = P_solar
+    df['states'] = states
+    df['duty cycle'] = dc
+
+    df_daylight_hours = df.between_time('08:00', '18:00')
+    daily_avg = df_daylight_hours['states'].resample('D').sum()/120.0*100
+
+    print("Plane Capacity: {0}, Average Duty Cycle: {1}".format(plane.capacity,np.mean(dc)))
+
+    plt.clf()
+    plt.plot(range(0,days),daily_avg)
+    plt.scatter(range(0,days),daily_avg,s=7)
+    plt.title('Daily Duty Cycle')
+    plt.xlabel("Day of Year")
+    plt.ylabel("Duty Cycle [%]")
+    plt.tight_layout()
+    plt.savefig("YearlyDutyCycle.png")
+    filename = "YearSweep"
+    plot_path = os.path.join("Figures", f"{filename}.png")
+    plt.savefig(plot_path)

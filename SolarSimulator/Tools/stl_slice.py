@@ -1,24 +1,24 @@
+from shapely.geometry import Polygon, MultiPolygon
+from shapely.ops import unary_union
 import numpy as np
 import trimesh
 import matplotlib.pyplot as plt
-from shapely.geometry import Polygon, MultiPolygon
-from shapely.ops import unary_union
 
 # Load the STL file
-file_path = r'C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\SampleData\STL\test.stl'  # Adjust the path if necessary
+file_path = r'SampleData\STL\WhalePlane.stl'  # Adjust the path if necessary
 mesh = trimesh.load(file_path)
 
 # Define the plane for the cross-section
-plane_origin = [0, 0, 0]  # Origin of the plane
-plane_normal = [0, 1, 0]  # Normal to the plane (XY plane)
+plane_origin = [0.4, 0.0, 0.1]  # Origin of the plane
+plane_normal = [0.0, 0.0, 1.0]  # Normal to the plane (XY plane)
 
 # Get the cross-section
 cross_section = mesh.section(plane_origin=plane_origin, plane_normal=plane_normal)
 
-def get_enclosed_area(cross_section):
+def merge_polygons(cross_section):
     if cross_section is None:
         print("No cross section found at the given plane.")
-        return 0
+        return 0, None
 
     slice_2D, to_3D = cross_section.to_planar()
 
@@ -33,32 +33,47 @@ def get_enclosed_area(cross_section):
     # Use unary_union to merge overlapping polygons and avoid double counting
     merged_polygons = unary_union(polygons)
 
-    # Calculate the total enclosed area
-    total_area = merged_polygons.area
-    return total_area
+    return merged_polygons, polygons
 
-total_enclosed_area = get_enclosed_area(cross_section)
-print(f"Total enclosed area: {total_enclosed_area}")
-
-# Plot the cross-section for visualization
-def plot_cross_section(cross_section):
-    if cross_section is None:
-        print("No cross section found at the given plane.")
-        return
-
-    slice_2D, to_3D = cross_section.to_planar()
-
+# Plot the merged geometry
+def plot_merged_geometry(merged_polygon):
     fig, ax = plt.subplots()
-    for path in slice_2D.entities:
-        if hasattr(path, 'discrete'):
-            vertices = slice_2D.vertices
-            ax.plot(*path.discrete(vertices).T)
+
+    if isinstance(merged_polygon,Polygon):
+        x, y = merged_polygon.exterior.xy
+        ax.plot(y, x)
+    elif isinstance(merged_polygon,MultiPolygon):
+        for i, polygon in enumerate(merged_polygon.geoms):  # Use .geoms to iterate over MultiPolygon
+            x, y = polygon.exterior.xy  # Extract the exterior coordinates
+            ax.plot(y, x, label=f'Polygon {i + 1}')
 
     ax.set_aspect('equal', adjustable='box')
     plt.xlabel('X-axis')
     plt.ylabel('Y-axis')
-    plt.title('Cross Section of STL File')
+    plt.title('Merged Cross Section Geometry')
     plt.grid(True)
     plt.show()
 
-plot_cross_section(cross_section)
+def plot_geometry(polygons):
+    fig, ax = plt.subplots()
+    i = 0
+    for polygon in polygons:
+        x, y = polygon.exterior.xy
+        # x = [xi * -1 for xi in x]
+        ax.plot(y, x, label = i)
+        i+=1
+
+    ax.set_aspect('equal', adjustable='box')
+    plt.xlabel('X-axis')
+    plt.ylabel('Y-axis')
+    plt.title('Cross Section Geometry')
+    plt.grid(True)
+    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.tight_layout()
+    plt.show()
+
+# Example Usage
+merged_polygon, polygons = merge_polygons(cross_section)
+print(f"Total enclosed area: {merged_polygon.area}")
+plot_geometry(polygons)
+plot_merged_geometry(merged_polygon)

@@ -120,9 +120,9 @@ def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1, label="
         fig, axes = plt.subplots(3, 1,figsize=(12,6))
     if isinstance(fig,Figure):
         axes = fig.axes
-    titles = ["Battery Charge Level", "Available Solar Power", "Vehicle State"]
+    titles = ["Battery Charge Level", "Collected Solar Power", "Vehicle State"]
     xlabel = "Dates"
-    ylabels = ["Battery Charge [%]", "Power [W/m$^2$]", "State"]
+    ylabels = ["Battery Charge [%]", "Power [W]", "State"]
     data = [e_h,P_solar,state]
     for i in range(len(axes)):
         plot_data(axes[i],times,data[i],titles[i],xlabel,ylabels[i],label)

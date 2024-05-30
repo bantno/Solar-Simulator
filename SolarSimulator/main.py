@@ -11,10 +11,8 @@ import os
 # Define constant parameters
 lat = 29.02291491363789
 lon = -90.23223029442693
-# lat = 44.3655
-# lon = -68.0818
 tz = 'Etc/GMT+6'
-pdc0 = 180
+pdc0 = 80
 gamma = -0.0043
 
 # plot_endurance(plane,S,Cd0,weight,capacity,rho) # TODO: Fix weight estimation
@@ -32,21 +30,30 @@ cruise_speed = 20
 rho = 1.1 # air density (dependent on altitude)
 U = cruise_speed
 
+# Create plane
 plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0*1.5,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,af_mass=af_mass,voltage=voltage,capacity=capacity_ah)
 
+# Create Pareto Plots
 # plotting.make_pareto_classic(plane,(1,25),250)
 # plotting.make_pareto(plane)
 
+# Set date for simulation
 year = 2019
 month = 1
 day = 1
 days = 31
 
+# Define capacities to investigate
 cap = np.linspace(1,25,50)
+
+# Run battery sweep
 duty,num_takeoffs = plotting.battery_sweep(plane,cap,month=month,days=days)
+
+# Create battery sweep plot
 filename = "BatterySweep_{0}_{1}_{2}-{3}".format(year,month,day,days)
 plotting.plot_battery_sweep(cap,duty,filename)
 
+# Print optimal battery capacity
 data = data = {'Capacity': cap, 'Duty': duty}
 df = pd.DataFrame(data)
 max_duty = df['Duty'].max()

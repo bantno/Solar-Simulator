@@ -5,17 +5,6 @@ import numpy as np
 import trimesh
 import matplotlib.pyplot as plt
 
-# Load the STL file
-file_path = r'SampleData\STL\WhalePlane.stl'  # Adjust the path if necessary
-mesh = trimesh.load(file_path)
-
-# Define the plane for the cross-section
-plane_origin = [0.4, 0.0, 0.0]  # Origin of the plane
-plane_normal = [1.0, 0.0, 0.0]  # Normal to the plane (XY plane)
-
-# Get the cross-section
-cross_section = mesh.section(plane_origin=plane_origin, plane_normal=plane_normal)
-
 def merge_polygons(cross_section):
     if cross_section is None:
         print("No cross section found at the given plane.")
@@ -143,7 +132,7 @@ def cut_polygon_at_x(polygon, x_cutoff, cut_direction):
     else:
         return MultiPolygon(remaining_polygons)
 
-def cut_at_plane(geometry, x_cutoff, cut_direction):
+def cut_at_plane(geometry: Polygon | MultiPolygon, x_cutoff, cut_direction):
     if isinstance(geometry, Polygon):
         return cut_polygon_at_x(geometry, x_cutoff, cut_direction)
     elif isinstance(geometry, MultiPolygon):
@@ -154,33 +143,55 @@ def cut_at_plane(geometry, x_cutoff, cut_direction):
         if len(remaining_parts) == 1:
             return remaining_parts[0]
         else:
-            return MultiPolygon(remaining_parts)
+            return remaining_parts
     else:
         raise TypeError("Input must be a Polygon or MultiPolygon")
     
-def plot_polygon(polygon, ax, **kwargs):
-    if polygon.is_empty:
-        return
+def plot_polygon(polygon: Polygon | MultiPolygon, ax, **kwargs):
     if isinstance(polygon, Polygon):
         x, y = polygon.exterior.xy
         ax.plot(x, y, **kwargs)
+        ax.set_aspect('equal', adjustable='box')
 
     elif isinstance(polygon, MultiPolygon):
-        for poly in polygon:
+        for poly in polygon.geoms:
             x, y = poly.exterior.xy
             ax.plot(x, y, **kwargs)
-    ax.set_aspect('equal', adjustable='box')
+        ax.set_aspect('equal', adjustable='box')
 
+def plot_xsec(polygon: list | Polygon | MultiPolygon, ax, **kwargs):
+    if isinstance(polygon, list):
+        for poly in polygon:
+            plot_polygon(poly, ax, **kwargs)
+    if polygon.is_empty:
+        return
+    if isinstance(polygon, Polygon) or isinstance(polygon,MultiPolygon):
+        plot_polygon(polygon, ax,**kwargs)
+
+def calculate_centroid(polgon: Polygon | MultiPolygon):
+    if isinstance(polgon,polgon):
+        polgon.c
+
+# Load the STL file
+file_path = r'SampleData\STL\WhalePlane.stl'  # Adjust the path if necessary
+mesh = trimesh.load(file_path)
+
+# Define the plane for the cross-section
+plane_origin = [0.4, 0.0, 0.0]  # Origin of the plane
+plane_normal = [1.0, 0.0, 0.0]  # Normal to the plane (XY plane)
+
+# Get the cross-section
+cross_section = mesh.section(plane_origin=plane_origin, plane_normal=plane_normal)
 
 # Example Usage
 merged_polygon, polygons = merge_polygons(cross_section)
-print(second_moment_of_area(merged_polygon))
-print(f"Total enclosed area: {merged_polygon.area}")
+# print(second_moment_of_area(merged_polygon))
+# print(f"Total enclosed area: {merged_polygon.area}")
 plot_geometry(polygons)
 plot_merged_geometry(merged_polygon)
 
 x_cutoff = 0.0
-cut_direction = "right"
+cut_direction = "left"
 result = cut_at_plane(merged_polygon, x_cutoff, cut_direction)
 
 fig, ax = plt.subplots()
@@ -193,3 +204,5 @@ ax.set_ylabel('Y')
 ax.set_title('Polygon Cut Example')
 ax.legend(loc='upper right')
 plt.show()
+
+plot_merged_geometry(result)

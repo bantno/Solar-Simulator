@@ -167,13 +167,14 @@ def plot_xsec(polygon: list | Polygon | MultiPolygon, ax, **kwargs):
         return
     if isinstance(polygon, Polygon) or isinstance(polygon,MultiPolygon):
         plot_polygon(polygon, ax,**kwargs)
+ 
+def calculate_mc(Izz: float, W: float, h_cb: float, rho_w: float):
+    return (rho_w*Izz/W)-h_cb
 
-def calculate_centroid(polgon: Polygon | MultiPolygon):
-    if isinstance(polgon,polgon):
-        polgon.c
+
 
 # Load the STL file
-file_path = r'SampleData\STL\WhalePlane.stl'  # Adjust the path if necessary
+file_path = r'SampleData\STL\C3-2.stl'  # Adjust the path if necessary
 mesh = trimesh.load(file_path)
 
 # Define the plane for the cross-section
@@ -185,8 +186,6 @@ cross_section = mesh.section(plane_origin=plane_origin, plane_normal=plane_norma
 
 # Example Usage
 merged_polygon, polygons = merge_polygons(cross_section)
-# print(second_moment_of_area(merged_polygon))
-# print(f"Total enclosed area: {merged_polygon.area}")
 plot_geometry(polygons)
 plot_merged_geometry(merged_polygon)
 
@@ -206,3 +205,11 @@ ax.legend(loc='upper right')
 plt.show()
 
 plot_merged_geometry(result)
+print("Second Moment of Area: {0}".format(second_moment_of_area(result)))
+Izz = np.max(second_moment_of_area(result))
+
+weight = 8*9.81
+h_cb = result.centroid.x
+h_mc = calculate_mc(Izz,weight,h_cb,1020)
+
+print(h_cb,h_mc)

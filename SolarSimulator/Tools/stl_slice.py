@@ -1,8 +1,12 @@
 from shapely.geometry import Polygon, MultiPolygon, LineString
+from shapely.affinity import translate
 from shapely.ops import split
 from shapely.ops import unary_union
+
 import numpy as np
+
 import trimesh
+
 import matplotlib.pyplot as plt
 
 def merge_polygons(cross_section):
@@ -107,21 +111,34 @@ def second_moment_of_area(polygon):
     
     return ix_total, iy_total, ixy_total
 
-def cut_polygon_at_x(polygon, x_cutoff, cut_direction):
-    # Create a vertical line at the x_cutoff
+def cut_polygon(polygon, cutoff, plane, cut_direction):
+    # Create a cutting line based on the specified plane and cutoff
     min_x, min_y, max_x, max_y = polygon.bounds
-    cutting_line = LineString([(x_cutoff, min_y), (x_cutoff, max_y)])
+    if plane == 'x':
+        cutting_line = LineString([(cutoff, min_y), (cutoff, max_y)])
+    elif plane == 'y':
+        cutting_line = LineString([(min_x, cutoff), (max_x, cutoff)])
+    else:
+        raise ValueError("plane must be 'x' or 'y'")
     
     # Split the polygon with the cutting line
     split_polygons = split(polygon, cutting_line)
     
-    # Filter the parts based on the cut direction
-    if cut_direction == "left":
-        remaining_polygons = [poly for poly in split_polygons.geoms if poly.bounds[0] < x_cutoff]
-    elif cut_direction == "right":
-        remaining_polygons = [poly for poly in split_polygons.geoms if poly.bounds[2] > x_cutoff]
-    else:
-        raise ValueError("cut_direction must be 'left' or 'right'")
+    # Filter the parts based on the cut direction and plane
+    if plane == 'x':
+        if cut_direction == "left":
+            remaining_polygons = [poly for poly in split_polygons.geoms if poly.bounds[0] < cutoff]
+        elif cut_direction == "right":
+            remaining_polygons = [poly for poly in split_polygons.geoms if poly.bounds[2] > cutoff]
+        else:
+            raise ValueError("cut_direction must be 'left' or 'right'")
+    elif plane == 'y':
+        if cut_direction == "below":
+            remaining_polygons = [poly for poly in split_polygons.geoms if poly.bounds[1] < cutoff]
+        elif cut_direction == "above":
+            remaining_polygons = [poly for poly in split_polygons.geoms if poly.bounds[3] > cutoff]
+        else:
+            raise ValueError("cut_direction must be 'below' or 'above'")
     
     if not remaining_polygons:
         return None  # Return None if nothing remains
@@ -132,18 +149,18 @@ def cut_polygon_at_x(polygon, x_cutoff, cut_direction):
     else:
         return MultiPolygon(remaining_polygons)
 
-def cut_at_plane(geometry: Polygon | MultiPolygon, x_cutoff, cut_direction):
+def cut_at_plane(geometry, cutoff, plane, cut_direction):
     if isinstance(geometry, Polygon):
-        return cut_polygon_at_x(geometry, x_cutoff, cut_direction)
+        return cut_polygon(geometry, cutoff, plane, cut_direction)
     elif isinstance(geometry, MultiPolygon):
-        remaining_parts = [cut_polygon_at_x(poly, x_cutoff, cut_direction) for poly in geometry.geoms]
+        remaining_parts = [cut_polygon(poly, cutoff, plane, cut_direction) for poly in geometry.geoms]
         remaining_parts = [part for part in remaining_parts if part is not None]
         if not remaining_parts:
             return None  # Return None if nothing remains
         if len(remaining_parts) == 1:
             return remaining_parts[0]
         else:
-            return remaining_parts
+            return MultiPolygon(remaining_parts)
     else:
         raise TypeError("Input must be a Polygon or MultiPolygon")
     
@@ -167,9 +184,30 @@ def plot_xsec(polygon: list | Polygon | MultiPolygon, ax, **kwargs):
         return
     if isinstance(polygon, Polygon) or isinstance(polygon,MultiPolygon):
         plot_polygon(polygon, ax,**kwargs)
- 
+
+def set_new_origin(polygon, new_origin_x, new_origin_y):
+    """
+    Shift the origin of a Shapely polygon to a new origin (new_origin_x, new_origin_y).
+
+    Parameters:
+    polygon (Polygon): The original Shapely polygon.
+    new_origin_x (float): The x-coordinate of the new origin.
+    new_origin_y (float): The y-coordinate of the new origin.
+
+    Returns:
+    Polygon: A new polygon with the origin shifted to (0, 0).
+    """
+    # Calculate the offsets to shift the new origin to (0, 0)
+    x_shift = -new_origin_x
+    y_shift = -new_origin_y
+
+    # Translate the polygon
+    shifted_polygon = translate(polygon, xoff=x_shift, yoff=y_shift)
+
+    return shifted_polygon
+
 def calculate_mc(Izz: float, W: float, h_cb: float, rho_w: float):
-    return (rho_w*Izz/W)-h_cb
+    return rho_w*(Izz/W)-h_cb
 
 
 
@@ -186,18 +224,20 @@ cross_section = mesh.section(plane_origin=plane_origin, plane_normal=plane_norma
 
 # Example Usage
 merged_polygon, polygons = merge_polygons(cross_section)
-plot_geometry(polygons)
-plot_merged_geometry(merged_polygon)
+# plot_geometry(polygons)
+# plot_merged_geometry(merged_polygon)
 
-x_cutoff = 0.0
-cut_direction = "left"
-result = cut_at_plane(merged_polygon, x_cutoff, cut_direction)
+cutoff = -0.3048/2+0.1328928
+
+plane = "y"  # or "y"
+cut_direction = "below" # or "right" for plane "x", "below" or "above" for plane "y"
+result = cut_at_plane(merged_polygon, cutoff, plane, cut_direction)
 
 fig, ax = plt.subplots()
 plot_polygon(merged_polygon, ax, label='Original', color='blue')
 if result:
     plot_polygon(result, ax, label='Cut', color='red')
-ax.axvline(x=x_cutoff, color='gray', linestyle='--', label='Cutting line')
+# ax.axvline(x=cutoff, color='gray', linestyle='--', label='Cutting line')
 ax.set_xlabel('X')
 ax.set_ylabel('Y')
 ax.set_title('Polygon Cut Example')
@@ -205,11 +245,19 @@ ax.legend(loc='upper right')
 plt.show()
 
 plot_merged_geometry(result)
-print("Second Moment of Area: {0}".format(second_moment_of_area(result)))
-Izz = np.max(second_moment_of_area(result))
+submerged = set_new_origin(result,result.centroid.x,result.centroid.y)
 
-weight = 8*9.81
-h_cb = result.centroid.x
-h_mc = calculate_mc(Izz,weight,h_cb,1020)
+# print("Second Moment of Area: \n{0}\n{1}".format({second_moment_of_area(result)},{second_moment_of_area(submerged)}))
+Izz = np.max(second_moment_of_area(submerged))
+print("Izz: {0}".format(Izz))
 
-print(h_cb,h_mc)
+
+weight = 1334.47/9.81 # for metric this is mass in kg
+rho_w = 1001.15 # density of water [kg/m^3]
+# h_cb = 0.2286-0.13289/2 #h_cg-0.066 # needs to be the vertical distance between the CG and the CB
+h_cg = (0.3048)/4 # height of center of gravity
+h_cb = h_cg - result.centroid.y
+h_mc = calculate_mc(Izz,weight,h_cb,rho_w)*3.281
+
+print("Center of Buoyancy: {0}".format(h_cb))
+print("Height of Metacenter: {0}".format(h_mc))

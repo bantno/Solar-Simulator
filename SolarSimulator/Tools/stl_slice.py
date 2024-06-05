@@ -10,10 +10,37 @@ import trimesh
 import matplotlib.pyplot as plt
 
 def merge_polygons(cross_section):
+    """
+    Merge overlapping polygons from a given cross section.
+
+    This function takes a cross section, converts it to a 2D planar representation, 
+    and then extracts and merges polygons that do not overlap. It uses the unary_union 
+    operation from the Shapely library to merge any overlapping polygons to avoid 
+    double counting.
+
+    Parameters:
+    cross_section (CrossSection): An object representing the cross section of a 
+                                   3D object. This object must have a `to_planar` 
+                                   method that converts the cross section to a 2D 
+                                   planar representation.
+
+    Returns:
+    tuple: A tuple containing:
+        - merged_polygons (Polygon or MultiPolygon): A Shapely polygon or 
+          multipolygon resulting from merging the individual polygons in the 
+          cross section.
+        - polygons (list of Polygon): A list of individual Shapely polygons 
+          before merging.
+
+    Notes:
+    - If the cross_section is None, the function will print a message and return 
+      (0, None).
+    """
+
     if cross_section is None:
         print("No cross section found at the given plane.")
         return 0, None
-
+    
     slice_2D, to_3D = cross_section.to_planar()
 
     polygons = []
@@ -31,6 +58,19 @@ def merge_polygons(cross_section):
 
 # Plot the merged geometry
 def plot_merged_geometry(merged_polygon):
+    """
+    Plot a merged polygon or multipolygon using Matplotlib.
+
+    This function takes a Shapely polygon or multipolygon resulting from a 
+    cross-sectional merge operation and plots it using Matplotlib. It 
+    distinguishes between single polygons and multipolygons and plots them 
+    accordingly.
+
+    Parameters:
+    merged_polygon (Polygon or MultiPolygon): A Shapely polygon or multipolygon 
+                                              representing the merged geometry 
+                                              of a cross section.
+    """
     fig, ax = plt.subplots()
 
     if isinstance(merged_polygon,Polygon):
@@ -49,6 +89,12 @@ def plot_merged_geometry(merged_polygon):
     plt.show()
 
 def plot_geometry(polygons):
+    """
+    Plot a Shapely polygon using Matplotlub
+
+    Parameters:
+    polygons (polygon or multipolygon): A Shapely polygon representing a cross section
+    """
     fig, ax = plt.subplots()
     i = 0
     for polygon in polygons:
@@ -129,7 +175,8 @@ def cut_polygon(polygon, cutoff, plane, cut_direction):
     polygon (Polygon): The polygon to be cut.
     cutoff (float): The coordinate along the plane at which to cut.
     plane (str): The plane along which to cut ('x' or 'y').
-    cut_direction (str): The direction to keep ('left' or 'right' for plane 'x', 'below' or 'above' for plane 'y').
+    cut_direction (str): The direction to keep ('left' or 'right' for plane 'x',
+                         'below' or 'above' for plane 'y').
 
     Returns:
     Polygon or MultiPolygon: The remaining part of the polygon after the cut.
@@ -174,6 +221,19 @@ def cut_polygon(polygon, cutoff, plane, cut_direction):
         return MultiPolygon(remaining_polygons)
 
 def cut_at_plane(geometry, cutoff, plane, cut_direction):
+    """
+    Cuts a geometry (polygon or multipolygon) along a specified plane (x or y) at a given cutoff coordinate.
+
+    Parameters:
+    geometry (Polygon or MultiPolygon): The geometry to be cut.
+    cutoff (float): The coordinate along the plane at which to cut.
+    plane (str): The plane along which to cut ('x' or 'y').
+    cut_direction (str): The direction to keep ('left' or 'right' for plane 'x', 'below' or 'above' for plane 'y').
+
+    Returns:
+    Polygon or MultiPolygon: The remaining part of the geometry after the cut.
+    None: If no part remains after the cut.
+    """
     if isinstance(geometry, Polygon):
         return cut_polygon(geometry, cutoff, plane, cut_direction)
     elif isinstance(geometry, MultiPolygon):
@@ -189,6 +249,14 @@ def cut_at_plane(geometry, cutoff, plane, cut_direction):
         raise TypeError("Input must be a Polygon or MultiPolygon")
     
 def plot_polygon(polygon: Polygon | MultiPolygon, ax, **kwargs):
+    """
+    Plots a polygon or multipolygon on the given axes.
+
+    Parameters:
+    polygon (Polygon or MultiPolygon): The polygon to plot.
+    ax (matplotlib.axes.Axes): The axes on which to plot the polygon.
+    **kwargs: Additional keyword arguments to pass to the plot function.
+    """
     if isinstance(polygon, Polygon):
         y, x = polygon.exterior.xy
         ax.plot(x, y, **kwargs)
@@ -201,6 +269,14 @@ def plot_polygon(polygon: Polygon | MultiPolygon, ax, **kwargs):
         ax.set_aspect('equal', adjustable='box')
 
 def plot_xsec(polygon: list | Polygon | MultiPolygon, ax, **kwargs):
+    """
+    Plots a cross section on the given axes.
+
+    Parameters:
+    polygon (list, Polygon or MultiPolygon): The polygon(s) to plot.
+    ax (matplotlib.axes.Axes): The axes on which to plot the polygon.
+    **kwargs: Additional keyword arguments to pass to the plot function.
+    """
     if isinstance(polygon, list):
         for poly in polygon:
             plot_polygon(poly, ax, **kwargs)
@@ -231,9 +307,29 @@ def set_new_origin(polygon, new_origin_x, new_origin_y):
     return shifted_polygon
 
 def calculate_mc(Izz: float, W: float, h_cb: float, rho_w: float):
-    return rho_w*(Izz/W)-h_cb
+    """
+    Calculate metacenter as per Equation XX in Gudmundsson
+
+    Parameters:
+    Izz (float): Second moment of area.
+    W (float): Mass or weight of object. [kg or lbf]
+    h_cb (float): Distance between center of buoyancy and center of gravity.
+    rho_w (float): Density of fluid. [kg/m^3 or lbf/ft^3]
+    
+    Returns:
+    mc (float): Metacenter height. [m or ft]
+
+    """
+    mc = rho_w*(Izz/W)-h_cb
+    return mc
 
 def calculate_draft(weight: float):
+    """
+    Calculate the draft of the object
+
+    Parameters:
+    weight (float): Weight of the object.
+    """
     pass
 
 def calculate_hstab(file_path, plane_origin, plane_normal,cutoff,plane,cut_direction):

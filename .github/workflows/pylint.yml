@@ -4,10 +4,10 @@ on: [push]
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11.9"]
+        python-version: ["3.8", "3.9", "3.10"]
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
@@ -16,9 +16,8 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
-        C:\Miniconda\condabin\conda.bat env update --file environment.yml --name base
-        C:\Miniconda\condabin\conda.bat init powershell
-
+        python -m pip install --upgrade pip
+        pip install pylint
     - name: Analysing the code with pylint
       run: |
         pylint $(git ls-files '*.py')

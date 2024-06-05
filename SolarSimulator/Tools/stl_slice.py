@@ -303,22 +303,28 @@ def calculate_draft(w: float):
     """
     pass
 
-def plot_mesh(mesh):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-
-    # Plot the vertices
-    ax.scatter(mesh.vertices[:, 0], mesh.vertices[:, 1])
-
-    # Set labels
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    ax.set_aspect('equal')
-    plt.show()
-    return ax
-
 def calculate_hstab(filename, origin,normal,cutoff,plane,cut_direction,weight,cg,rho_w = 1001.15):
+    """
+    Calculates the height of the hydrostatic stabilizer for a given 3D model.
+
+    Parameters:
+    filename (str): Path to the 3D model file.
+    origin (array_like): Origin point of the plane section.
+    normal (array_like): Normal vector of the plane section.
+    cutoff (float): Cutoff value for the plane section.
+    plane (str): Plane type ('xz', 'xy', or 'yz').
+    cut_direction (str): Direction of the cut ('positive' or 'negative').
+    weight (float): Weight of the object.
+    cg (array_like): Center of gravity coordinates.
+    rho_w (float, optional): Density of water. Default is 1001.15 kg/m^3.
+
+    Returns:
+    None: Prints the height of the center of buoyancy and the height of the metacenter.
+
+    Raises:
+    NotImplementedError: If the plane type is not supported.
+    """
+
     # Get the cross-section
     mesh = trimesh.load(filename)
     # Find the vertex with the smallest x value
@@ -351,7 +357,7 @@ def calculate_hstab(filename, origin,normal,cutoff,plane,cut_direction,weight,cg
     # ax.legend(loc='upper right')
 
     i_zz = np.max(second_moment_of_area(result))
-    print("Izz: {0}".format(i_zz))
+    print(f"Izz: {i_zz}")
     cb = (result.centroid.x,result.centroid.y)
     if plane_normal[0] == 1.0:
         h_cb = cg[2] - cb[1]
@@ -367,8 +373,8 @@ def calculate_hstab(filename, origin,normal,cutoff,plane,cut_direction,weight,cg
     plt.show()
 
 
-    print("Center of Buoyancy [m]: {0}".format(h_cb))
-    print("Height of Metacenter [ft]: {0}".format(h_mc*3.281))
+    print(f"Center of Buoyancy [m]: {h_cb}")
+    print(f"Height of Metacenter [ft]: {h_mc*3.281}")
 
 
 

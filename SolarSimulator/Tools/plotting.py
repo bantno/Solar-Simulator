@@ -1,21 +1,23 @@
+import os
+import datetime
+
 import pandas as pd
 import numpy as np
-
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+from tqdm import tqdm
 
 from paretoset import paretoset
 
 from BaseClasses.Seaplane_base import Seaplane
-import datetime
 from Utilities import ParetoFront
-from tqdm import tqdm
-import os
+
+
 
 def plot_endurance(plane,S,Cd0,af_mass,capacity,rho):
     # TODO: Remove weight attribute
     # Create a figure and two subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(10,5))
+    _, (ax1, ax2) = plt.subplots(1, 2,figsize=(10,5))
     ax1.set_title('Endurance vs Forward Flight Speed')
     ax1.set_xlabel('Forward Flight Speed [m/s]')
     ax1.set_ylabel('Endurance [H]')
@@ -44,7 +46,7 @@ def plot_endurance(plane,S,Cd0,af_mass,capacity,rho):
             for v in U:
                 plane.S = S[i]
                 plane.cd0 = Cd0[i]
-                plane.weight = weight[i]
+                plane.weight = af_mass[i]
                 plane.capacity = capacity[i]
                 E.append(plane.get_endurance(v,rho))
                 P_req.append(plane.get_required_power(U=v,rho=rho))

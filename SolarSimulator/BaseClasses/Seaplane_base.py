@@ -1,3 +1,6 @@
+import warnings
+
+import numpy as np
 import pandas as pd
 
 from pvlib import location
@@ -5,19 +8,17 @@ from pvlib import tracking
 from pvlib.bifacial.pvfactors import pvfactors_timeseries
 from pvlib import temperature
 from pvlib import pvsystem
-import numpy as np
-import matplotlib.pyplot as plt
-import warnings
-from datetime import datetime, timedelta
-from tqdm import tqdm
+
+
 
 # supressing shapely warnings that occur on import of pvfactors
 warnings.filterwarnings(action='ignore', module='pvfactors')
 
 class Seaplane:
     """Class representing a seaplane"""
-    def __init__(self, lat, lon, tz, pdc0,gamma,tracking:bool=False,cs:bool=False,cd0=0.01,cdtot = 0.06,n_tot=.75,S=1,af_mass=6,voltage=22.2,capacity=150):
-        
+    def __init__(self, lat, lon, tz, pdc0,gamma,tracking:bool=False,cs:bool=False,
+                 cd0=0.01,cdtot = 0.06,n_tot=.75,S=1,af_mass=6,voltage=22.2,capacity=150):
+
         # Define solar parameters
         self.lat = lat
         self.lon = lon
@@ -34,7 +35,7 @@ class Seaplane:
         self.n_tot = n_tot
         self.S = S
         self.af_mass = af_mass
-        
+
         self.voltage = voltage
         self.capacity = capacity
         self.Rt = 1.0
@@ -57,7 +58,7 @@ class Seaplane:
         self.weight = 9.81*(self.af_mass+self.capacity*self.voltage/energy_density)
 
 
-    def get_endurance(self,U,rho) -> float:
+    def get_endurance(self,u,rho) -> float:
         """Returns endurance estimate according to Traub
         
         Parameters
@@ -68,10 +69,10 @@ class Seaplane:
             Air density [kg/m^3]
         
         """
-        
-        E = self.Rt**(1.0-self.n)*(self.n_tot*self.voltage*self.capacity)/self.get_required_power(U,rho)
-        return E
-            
+        p_req = self.get_required_power(u,rho)
+        e=self.Rt**(1.-self.n)*(self.n_tot*self.voltage*self.capacity)/p_req
+        return e
+
     def get_dynamic_pressure(self,U,rho) -> float:
         """Returns dynamic pressure
 
@@ -84,7 +85,7 @@ class Seaplane:
         
         """
         return 0.5*rho*U**2
-    
+
     def get_required_power(self,U,rho) -> float:
         """Returns required cruise power consumption
         
@@ -101,14 +102,14 @@ class Seaplane:
         # D = self.cdtot*rho*0.5*self.S*(U**2) # U in m/s
         D = .5*rho*U**3*self.S*self.cd0 + 2*self.weight**2*self.k/(rho*U*self.S) # From Traub
         return D
-    
+
     def get_times(self,year,month,day,tz) -> pd.DatetimeIndex:
         """Returns hourly daterange for the times between given date and subsequent day"""
         # get times of interest
-        start = "{0}-{1}-{2}".format(year,month,day)
+        start = f"{year}-{month}-{day}"
         day = day + 1
-        end = "{0}-{1}-{2}".format(year,month,day)
-        return pd.date_range(start, end, freq='60min', tz=tz) # Get times for entire study period      
+        end = f"{year}-{month}-{day}"
+        return pd.date_range(start, end, freq='60min', tz=tz) # Get times for entire study period
 
     def get_DateTimeIndex(self,years,months,days,hours,minutes) -> pd.DatetimeIndex:
         """Returns DateTimeIndex for provided dates
@@ -129,10 +130,10 @@ class Seaplane:
         """
         dates=[]
         for year, month, day, hour, minute in zip(years, months, days, hours, minutes):
-            date = pd.to_datetime(f"{year}-{month}-{day} {hour}:{minute:02d}:00") 
-            dates.append(date)        
+            date = pd.to_datetime(f"{year}-{month}-{day} {hour}:{minute:02d}:00")
+            dates.append(date)
         return pd.DatetimeIndex(dates)
-    
+
     def get_weather(self,cs:bool,times = -1):
         """Retrieve clearsky or TMY weather data
         
@@ -152,7 +153,8 @@ class Seaplane:
             # TODO: throw error if times is -1
             wthr = self.location.get_clearsky(times)
         else :
-            wthr = pd.read_csv(r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\Solar Sim\2019TMY.csv")
+            wthr = pd.read_csv(r"C:\Users\brian\OneDrive\Documents\
+                               Georgia Tech\Research\Whale Plane\Solar Sim\2019TMY.csv")
             times = self.get_DateTimeIndex(wthr['Year'],
                                         wthr['Month'],
                                         wthr['Day'],
@@ -181,7 +183,7 @@ class Seaplane:
     
         """
         if self.cs:
-            start = "{0}-{1}-{2}".format(year[0],month[0],day[0])
+            start = f"{year[0]}-{month[0]}-{day[0]}"
             times = pd.date_range(start, periods=periods, freq=frequency, tz=self.tz)
             wthr = self.get_weather(self.cs,times)
         else:
@@ -225,7 +227,8 @@ class Seaplane:
             temp_air = 30
         else:
             # Set windspeed and azimuth based on TMY data
-            axis_azimuth = np.mod(wthr['wind_direction']+90,360) #tilt axis is 90 degrees offset from wind direction
+            #tilt axis is 90 degrees offset from wind direction
+            axis_azimuth = np.mod(wthr['wind_direction']+90,360)
             wind_speed = wthr['wind_speed'] # m/s
             temp_air = wthr['temp_air']
 
@@ -250,14 +253,14 @@ class Seaplane:
         irrad = pd.concat(irrad, axis=1)
         effective_irrad_mono = irrad['total_abs_front']
         temp_cell = temperature.faiman(effective_irrad_mono, temp_air=temp_air,
-                                    wind_speed=wind_speed) 
+                                    wind_speed=wind_speed)
         # Create pvsystem using pvwatts model for single face solar cell
         pdc = pvsystem.pvwatts_dc(effective_irrad_mono,
                                     temp_cell,
                                     self.pdc0,
                                     gamma_pdc=self.gamma
                                     ).fillna(0)
-        
+
         return times, pdc
 
     def simulate_deployment(self,U,rho,takeoff_capacity,landing_capacity,P_solar,dt):
@@ -311,11 +314,11 @@ class Seaplane:
         is_daytime = (P_solar.index.time >= daytime_start) & (P_solar.index.time <= daytime_end)
         is_daytime = P_solar > 1
         min_flight = 1
-        
+
 
         # Define state machine that governs plane behavior
         for i in range(0,len(P_solar)):
-            
+
             if state == "Flying":
                 state_history.append(1)
                 flying += 1
@@ -326,19 +329,19 @@ class Seaplane:
                 state_history.append(0)
                 if energy_j <= capacity_j:
                     energy_j+= (P_solar.iloc[i])*dt*60
-                if energy_j>=takeoff_capacity*capacity_j and is_daytime.iloc[i] and energy_j > P_cruise*60*60*min_flight:
-                    state = "Flying"
-                    energy_j -= self.calc_takeoff_penalty()
-                    energy_j-= (P_cruise - P_solar.iloc[i])*dt*60
-                    num_takeoff += 1
+                if energy_j>=takeoff_capacity*capacity_j and is_daytime.iloc[i]:
+                    if energy_j > P_cruise*60*60*min_flight:
+                        state = "Flying"
+                        energy_j -= self.calc_takeoff_penalty()
+                        energy_j-= (P_cruise - P_solar.iloc[i])*dt*60
+                        num_takeoff += 1
             if energy_j > capacity_j :
                 energy_j = capacity_j
             energy_history.append(energy_j/capacity_j*100)
 
-        sum = is_daytime.sum()
-        return flying/sum*100,energy_history,state_history,num_takeoff
+        total = is_daytime.sum()
+        return flying/total*100,energy_history,state_history,num_takeoff
 
     def calc_takeoff_penalty(self) -> float:
         """Determine energy cost of taking off in Joules"""
         return 2000*30
-

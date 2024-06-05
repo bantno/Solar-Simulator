@@ -34,16 +34,16 @@ def plot_merged_geometry(merged_polygon):
     fig, ax = plt.subplots()
 
     if isinstance(merged_polygon,Polygon):
-        x, y = merged_polygon.exterior.xy
+        y, x = merged_polygon.exterior.xy
         ax.plot(x, y)
     elif isinstance(merged_polygon,MultiPolygon):
         for i, polygon in enumerate(merged_polygon.geoms):  # Use .geoms to iterate over MultiPolygon
-            x, y = polygon.exterior.xy  # Extract the exterior coordinates
+            y, x = polygon.exterior.xy  # Extract the exterior coordinates
             ax.plot(x, y, label=f'Polygon {i + 1}')
 
     ax.set_aspect('equal', adjustable='box')
-    plt.xlabel('X-axis')
-    plt.ylabel('Y-axis')
+    plt.xlabel('Y-axis')
+    plt.ylabel('X-axis')
     plt.title('Merged Cross Section Geometry')
     plt.grid(True)
     plt.show()
@@ -52,7 +52,7 @@ def plot_geometry(polygons):
     fig, ax = plt.subplots()
     i = 0
     for polygon in polygons:
-        x, y = polygon.exterior.xy
+        y, x = polygon.exterior.xy
         ax.plot(x, y, label = i)
         i+=1
 
@@ -66,6 +66,16 @@ def plot_geometry(polygons):
     plt.show()
 
 def second_moment_of_area(polygon):
+    """Determine second moment of area of a polygon
+    
+    Parameters:
+    polygon (Polygon): The original Shapely polygon.
+
+    Returns:
+    tuple: The second moments of area (Ixx, Iyy, Ixy).
+    
+    """
+
     if isinstance(polygon, Polygon):
         polygons = [polygon]
     elif isinstance(polygon, MultiPolygon):
@@ -112,6 +122,20 @@ def second_moment_of_area(polygon):
     return ix_total, iy_total, ixy_total
 
 def cut_polygon(polygon, cutoff, plane, cut_direction):
+    """
+    Cuts a polygon along a specified plane (x or y) at a given cutoff coordinate.
+
+    Parameters:
+    polygon (Polygon): The polygon to be cut.
+    cutoff (float): The coordinate along the plane at which to cut.
+    plane (str): The plane along which to cut ('x' or 'y').
+    cut_direction (str): The direction to keep ('left' or 'right' for plane 'x', 'below' or 'above' for plane 'y').
+
+    Returns:
+    Polygon or MultiPolygon: The remaining part of the polygon after the cut.
+    None: If no part remains after the cut.
+    """
+    
     # Create a cutting line based on the specified plane and cutoff
     min_x, min_y, max_x, max_y = polygon.bounds
     if plane == 'x':
@@ -166,13 +190,13 @@ def cut_at_plane(geometry, cutoff, plane, cut_direction):
     
 def plot_polygon(polygon: Polygon | MultiPolygon, ax, **kwargs):
     if isinstance(polygon, Polygon):
-        x, y = polygon.exterior.xy
+        y, x = polygon.exterior.xy
         ax.plot(x, y, **kwargs)
         ax.set_aspect('equal', adjustable='box')
 
     elif isinstance(polygon, MultiPolygon):
         for poly in polygon.geoms:
-            x, y = poly.exterior.xy
+            y, x = poly.exterior.xy
             ax.plot(x, y, **kwargs)
         ax.set_aspect('equal', adjustable='box')
 
@@ -209,55 +233,76 @@ def set_new_origin(polygon, new_origin_x, new_origin_y):
 def calculate_mc(Izz: float, W: float, h_cb: float, rho_w: float):
     return rho_w*(Izz/W)-h_cb
 
+def calculate_draft(weight: float):
+    pass
 
+def calculate_hstab(file_path, plane_origin, plane_normal,cutoff,plane,cut_direction):
+    # Get the cross-section
+    cross_section = mesh.section(plane_origin=plane_origin, plane_normal=plane_normal)
+    merged_polygon, polygons = merge_polygons(cross_section)
+    # plot_geometry(polygons)
+    # plot_merged_geometry(merged_polygon)
+    result = cut_at_plane(merged_polygon, cutoff, plane, cut_direction)
+
+    fig, ax = plt.subplots()
+    plot_polygon(merged_polygon, ax, label='Original', color='blue')
+    if result:
+        plot_polygon(result, ax, label='Cut', color='red')
+    # ax.axvline(x=cutoff, color='gray', linestyle='--', label='Cutting line')
+    ax.set_xlabel('Y')
+    ax.set_ylabel('X')
+    ax.set_title('Polygon Cut Example')
+    # ax.legend(loc='upper right')
+
+
+    # plot_merged_geometry(result)
+    submerged = set_new_origin(result,result.centroid.x,result.centroid.y)
+
+    # print("Second Moment of Area: \n{0}\n{1}".format({second_moment_of_area(result)},{second_moment_of_area(submerged)}))
+    Izz = np.max(second_moment_of_area(submerged))
+    print("Izz: {0}".format(Izz))
+
+
+    # weight = 1334.47/9.81 # for metric this is mass in kg
+    weight = 8
+    rho_w = 1001.15 # density of water [kg/m^3]
+    # h_cb = 0.2286-0.13289/2 #h_cg-0.066 # needs to be the vertical distance between the CG and the CB
+    # h_cg = (0.3048)/4 # height of center of gravity
+    cg = 0.0
+    cb = result.centroid.x
+    h_cb = cg - cb
+    h_mc = calculate_mc(Izz,weight,h_cb,rho_w)
+    ax.plot(0,cg,color='red',marker = 'o')
+    ax.plot(0,cb,color='green',marker='o')
+    fig.tight_layout()
+    plt.show()
+
+
+    print("Center of Buoyancy [m]: {0}".format(h_cb))
+    print("Height of Metacenter [ft]: {0}".format(h_mc*3.281))
+
+
+
+# Example
 
 # Load the STL file
-file_path = r'SampleData\STL\C3-2.stl'  # Adjust the path if necessary
+file_path = r'SampleData\STL\WhalePlane.stl'  # Adjust the path if necessary
 mesh = trimesh.load(file_path)
 
 # Define the plane for the cross-section
 plane_origin = [0.4, 0.0, 0.0]  # Origin of the plane
 plane_normal = [1.0, 0.0, 0.0]  # Normal to the plane (XY plane)
 
-# Get the cross-section
-cross_section = mesh.section(plane_origin=plane_origin, plane_normal=plane_normal)
+# TODO: write function to determine waterline (cuttoff value)
+# cutoff = -0.3048/2+0.1328928 
+cutoff = -0.07
+plane = "x"  # or "y"
+cut_direction = "left" # or "right" for plane "x", "below" or "above" for plane "y"
 
-# Example Usage
-merged_polygon, polygons = merge_polygons(cross_section)
-# plot_geometry(polygons)
-# plot_merged_geometry(merged_polygon)
-
-cutoff = -0.3048/2+0.1328928
-
-plane = "y"  # or "y"
-cut_direction = "below" # or "right" for plane "x", "below" or "above" for plane "y"
-result = cut_at_plane(merged_polygon, cutoff, plane, cut_direction)
-
-fig, ax = plt.subplots()
-plot_polygon(merged_polygon, ax, label='Original', color='blue')
-if result:
-    plot_polygon(result, ax, label='Cut', color='red')
-# ax.axvline(x=cutoff, color='gray', linestyle='--', label='Cutting line')
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_title('Polygon Cut Example')
-ax.legend(loc='upper right')
-plt.show()
-
-plot_merged_geometry(result)
-submerged = set_new_origin(result,result.centroid.x,result.centroid.y)
-
-# print("Second Moment of Area: \n{0}\n{1}".format({second_moment_of_area(result)},{second_moment_of_area(submerged)}))
-Izz = np.max(second_moment_of_area(submerged))
-print("Izz: {0}".format(Izz))
+calculate_hstab(file_path,plane_origin,plane_normal,cutoff,plane,cut_direction)
 
 
-weight = 1334.47/9.81 # for metric this is mass in kg
-rho_w = 1001.15 # density of water [kg/m^3]
-# h_cb = 0.2286-0.13289/2 #h_cg-0.066 # needs to be the vertical distance between the CG and the CB
-h_cg = (0.3048)/4 # height of center of gravity
-h_cb = h_cg - result.centroid.y
-h_mc = calculate_mc(Izz,weight,h_cb,rho_w)*3.281
+# Define the plane for the cross-section
+plane_normal = [0.0, 1.0, 0.0]  # Normal to the plane (XY plane)
 
-print("Center of Buoyancy: {0}".format(h_cb))
-print("Height of Metacenter: {0}".format(h_mc))
+calculate_hstab(file_path,plane_origin,plane_normal,cutoff,plane,cut_direction)

@@ -112,7 +112,7 @@ def plot_geometry(polygons):
     plt.show()
 
 def second_moment_of_area(polygon):
-    """Determine second moment of area of a polygon
+    """Determine second moment of area of a polygon.
     
     Parameters:
     polygon (Polygon): The original Shapely polygon.

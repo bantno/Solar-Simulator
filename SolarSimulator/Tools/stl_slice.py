@@ -279,27 +279,6 @@ def plot_xsec(polygon: list | Polygon | MultiPolygon, ax, **kwargs):
     if isinstance(polygon, Polygon) or isinstance(polygon,MultiPolygon):
         plot_polygon(polygon, ax,**kwargs)
 
-def set_new_origin(polygon, new_origin_x, new_origin_y):
-    """
-    Shift the origin of a Shapely polygon to a new origin (new_origin_x, new_origin_y).
-
-    Parameters:
-    polygon (Polygon): The original Shapely polygon.
-    new_origin_x (float): The x-coordinate of the new origin.
-    new_origin_y (float): The y-coordinate of the new origin.
-
-    Returns:
-    Polygon: A new polygon with the origin shifted to (0, 0).
-    """
-    # Calculate the offsets to shift the new origin to (0, 0)
-    x_shift = -new_origin_x
-    y_shift = -new_origin_y
-
-    # Translate the polygon
-    shifted_polygon = translate(polygon, xoff=x_shift, yoff=y_shift)
-
-    return shifted_polygon
-
 def calculate_mc(Izz: float, W: float, h_cb: float, rho_w: float):
     """
     Calculate metacenter as per Equation XX in Gudmundsson

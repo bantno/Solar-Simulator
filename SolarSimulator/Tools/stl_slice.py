@@ -148,14 +148,13 @@ def second_moment_of_area(polygon):
             xi = x[i]
             yi = y[i]
             xi1 = x[i + 1]
-            yi1 = y[i + 1]
-            
+            yi1 = y[i + 1]            
             ai = xi * yi1 - xi1 * yi
             a += ai
             ix += (yi**2 + yi * yi1 + yi1**2) * ai
             iy += (xi**2 + xi * xi1 + xi1**2) * ai
             ixy += (xi * yi1 + 2 * xi * yi + 2 * xi1 * yi1 + xi1 * yi) * ai
-        
+
         a /= 2
         ix = abs(ix) / 12
         iy = abs(iy) / 12
@@ -258,13 +257,13 @@ def plot_polygon(polygon: Polygon | MultiPolygon, ax, **kwargs):
     **kwargs: Additional keyword arguments to pass to the plot function.
     """
     if isinstance(polygon, Polygon):
-        y, x = polygon.exterior.xy
+        x, y = polygon.exterior.xy
         ax.plot(x, y, **kwargs)
         ax.set_aspect('equal', adjustable='box')
 
     elif isinstance(polygon, MultiPolygon):
         for poly in polygon.geoms:
-            y, x = poly.exterior.xy
+            x, y = poly.exterior.xy
             ax.plot(x, y, **kwargs)
         ax.set_aspect('equal', adjustable='box')
 
@@ -332,12 +331,44 @@ def calculate_draft(weight: float):
     """
     pass
 
-def calculate_hstab(file_path, plane_origin, plane_normal,cutoff,plane,cut_direction):
+def plot_mesh(mesh):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Plot the vertices
+    ax.scatter(mesh.vertices[:, 0], mesh.vertices[:, 1], mesh.vertices[:, 2])
+
+    # Set labels
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_aspect('equal')
+    
+
+    plt.show()
+
+def calculate_hstab(file_path, plane_origin, plane_normal,cutoff,plane,cut_direction,weight,cg,rho_w = 1001.15):
     # Get the cross-section
+    mesh = trimesh.load(file_path)
+    # Find the vertex with the smallest x value
+    min_x_vertex = mesh.vertices[mesh.vertices[:, 0].argmin()]
+
+    # Calculate the translation vector needed to move this vertex to the origin
+    translation_vector = -min_x_vertex
+
+    # Apply the translation to the mesh
+    mesh.apply_translation(translation_vector)
+    # plot_mesh(mesh)
+
+
+
     cross_section = mesh.section(plane_origin=plane_origin, plane_normal=plane_normal)
+    plot_mesh(cross_section)
     merged_polygon, polygons = merge_polygons(cross_section)
+
+    # merged_polygon = set_new_origin(merged_polygon,0,0.8)
     # plot_geometry(polygons)
-    # plot_merged_geometry(merged_polygon)
+    plot_merged_geometry(merged_polygon)
     result = cut_at_plane(merged_polygon, cutoff, plane, cut_direction)
 
     fig, ax = plt.subplots()
@@ -349,28 +380,23 @@ def calculate_hstab(file_path, plane_origin, plane_normal,cutoff,plane,cut_direc
     ax.set_ylabel('X')
     ax.set_title('Polygon Cut Example')
     # ax.legend(loc='upper right')
-
-
-    # plot_merged_geometry(result)
     submerged = set_new_origin(result,result.centroid.x,result.centroid.y)
 
     # print("Second Moment of Area: \n{0}\n{1}".format({second_moment_of_area(result)},{second_moment_of_area(submerged)}))
     Izz = np.max(second_moment_of_area(submerged))
     print("Izz: {0}".format(Izz))
-
-
-    # weight = 1334.47/9.81 # for metric this is mass in kg
-    weight = 8
-    rho_w = 1001.15 # density of water [kg/m^3]
-    # h_cb = 0.2286-0.13289/2 #h_cg-0.066 # needs to be the vertical distance between the CG and the CB
-    # h_cg = (0.3048)/4 # height of center of gravity
-    cg = 0.0
-    cb = result.centroid.x
-    h_cb = cg - cb
+    cb = (result.centroid.x,result.centroid.y)
+    if plane_normal[0] == 1.0:
+        h_cb = cg[2] - cb[0]
+        ax.plot(cg[2],cg[1],color='red',marker = 'o')
+    elif plane_normal[1] == 1.0:
+        h_cb = cg[2] - cb[0]
+        ax.plot(cg[2],cg[0],color='red',marker = 'o')
+    
     h_mc = calculate_mc(Izz,weight,h_cb,rho_w)
-    ax.plot(0,cg,color='red',marker = 'o')
-    ax.plot(0,cb,color='green',marker='o')
-    fig.tight_layout()
+    
+    ax.plot(cb[0],cb[1],color='green',marker='o')
+    plt.tight_layout()
     plt.show()
 
 
@@ -382,23 +408,38 @@ def calculate_hstab(file_path, plane_origin, plane_normal,cutoff,plane,cut_direc
 # Example
 
 # Load the STL file
-file_path = r'SampleData\STL\WhalePlane.stl'  # Adjust the path if necessary
-mesh = trimesh.load(file_path)
+file_path = r'SampleData\STL\WhalePlane2.stl'  # Adjust the path if necessary
 
+
+
+# Transverse Stability
 # Define the plane for the cross-section
-plane_origin = [0.4, 0.0, 0.0]  # Origin of the plane
+plane_origin = [0.45, 0.0, 0.0]  # Origin of the plane
 plane_normal = [1.0, 0.0, 0.0]  # Normal to the plane (XY plane)
 
 # TODO: write function to determine waterline (cuttoff value)
 # cutoff = -0.3048/2+0.1328928 
-cutoff = -0.07
+cutoff = 0.05
 plane = "x"  # or "y"
 cut_direction = "left" # or "right" for plane "x", "below" or "above" for plane "y"
 
-calculate_hstab(file_path,plane_origin,plane_normal,cutoff,plane,cut_direction)
+# weight = 1334.47/9.81 # for metric this is mass in kg
+weight = 8 # [kg]
+rho_w = 1001.15 # density of water [kg/m^3]
+# h_cb = 0.2286-0.13289/2 #h_cg-0.066 # needs to be the vertical distance between the CG and the CB
+# h_cg = (0.3048)/4 # height of center of gravity
+cg = (0.337,0.000,0.053)
 
 
+calculate_hstab(file_path,plane_origin,plane_normal,cutoff,plane,cut_direction,weight,cg)
+
+
+# Longitudinal Stability
 # Define the plane for the cross-section
+plane_origin = [0.0, 0.0, 0.0]  # Origin of the plane
 plane_normal = [0.0, 1.0, 0.0]  # Normal to the plane (XY plane)
 
-calculate_hstab(file_path,plane_origin,plane_normal,cutoff,plane,cut_direction)
+plane = "x"  # or "y"
+cut_direction = "left" # or "right" for plane "x", "below" or "above" for plane "y"
+
+calculate_hstab(file_path,plane_origin,plane_normal,cutoff,plane,cut_direction,weight,cg)

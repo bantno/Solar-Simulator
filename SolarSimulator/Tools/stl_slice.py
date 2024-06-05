@@ -1,7 +1,6 @@
 from shapely.geometry import Polygon, MultiPolygon, LineString
 from shapely.affinity import translate
-from shapely.ops import split
-from shapely.ops import unary_union
+from shapely.ops import split, transform, unary_union
 
 import numpy as np
 
@@ -40,18 +39,14 @@ def merge_polygons(cross_section):
     if cross_section is None:
         print("No cross section found at the given plane.")
         return 0, None
+    to_2D = trimesh.geometry.align_vectors(plane_normal, [0,0,-1])
+    slice_2D, to_3D = cross_section.to_planar(to_2D=to_2D)
     
-    slice_2D, to_3D = cross_section.to_planar()
-
     polygons = []
-    for path in slice_2D.entities:
-        if hasattr(path, 'discrete'):
-            vertices = slice_2D.vertices
-            polygon = Polygon(path.discrete(vertices))
-            if polygon.is_valid:
-                polygons.append(polygon)
+    for poly in slice_2D.polygons_closed:
+        polygons.append(transform(lambda x, y: (y, x), poly))
 
-    # Use unary_union to merge overlapping polygons and avoid double counting
+    # # Use unary_union to merge overlapping polygons and avoid double counting
     merged_polygons = unary_union(polygons)
 
     return merged_polygons, polygons
@@ -74,16 +69,16 @@ def plot_merged_geometry(merged_polygon):
     fig, ax = plt.subplots()
 
     if isinstance(merged_polygon,Polygon):
-        y, x = merged_polygon.exterior.xy
+        x, y = merged_polygon.exterior.xy
         ax.plot(x, y)
     elif isinstance(merged_polygon,MultiPolygon):
         for i, polygon in enumerate(merged_polygon.geoms):  # Use .geoms to iterate over MultiPolygon
-            y, x = polygon.exterior.xy  # Extract the exterior coordinates
+            x, y = polygon.exterior.xy  # Extract the exterior coordinates
             ax.plot(x, y, label=f'Polygon {i + 1}')
 
     ax.set_aspect('equal', adjustable='box')
-    plt.xlabel('Y-axis')
-    plt.ylabel('X-axis')
+    plt.xlabel('X-axis')
+    plt.ylabel('Y-axis')
     plt.title('Merged Cross Section Geometry')
     plt.grid(True)
     plt.show()
@@ -98,7 +93,7 @@ def plot_geometry(polygons):
     fig, ax = plt.subplots()
     i = 0
     for polygon in polygons:
-        y, x = polygon.exterior.xy
+        x, y = polygon.exterior.xy
         ax.plot(x, y, label = i)
         i+=1
 
@@ -336,16 +331,16 @@ def plot_mesh(mesh):
     ax = fig.add_subplot(111, projection='3d')
 
     # Plot the vertices
-    ax.scatter(mesh.vertices[:, 0], mesh.vertices[:, 1], mesh.vertices[:, 2])
+    ax.scatter(mesh.vertices[:, 0], mesh.vertices[:, 1])
 
     # Set labels
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     ax.set_aspect('equal')
-    
-
     plt.show()
+    
+    return ax
 
 def calculate_hstab(file_path, plane_origin, plane_normal,cutoff,plane,cut_direction,weight,cg,rho_w = 1001.15):
     # Get the cross-section
@@ -363,12 +358,10 @@ def calculate_hstab(file_path, plane_origin, plane_normal,cutoff,plane,cut_direc
 
 
     cross_section = mesh.section(plane_origin=plane_origin, plane_normal=plane_normal)
-    plot_mesh(cross_section)
     merged_polygon, polygons = merge_polygons(cross_section)
 
-    # merged_polygon = set_new_origin(merged_polygon,0,0.8)
     # plot_geometry(polygons)
-    plot_merged_geometry(merged_polygon)
+    # plot_merged_geometry(merged_polygon)
     result = cut_at_plane(merged_polygon, cutoff, plane, cut_direction)
 
     fig, ax = plt.subplots()
@@ -376,9 +369,9 @@ def calculate_hstab(file_path, plane_origin, plane_normal,cutoff,plane,cut_direc
     if result:
         plot_polygon(result, ax, label='Cut', color='red')
     # ax.axvline(x=cutoff, color='gray', linestyle='--', label='Cutting line')
-    ax.set_xlabel('Y')
-    ax.set_ylabel('X')
-    ax.set_title('Polygon Cut Example')
+    ax.set_xlabel('X-Axis [m]')
+    ax.set_ylabel('Y-Axis [m]')
+    ax.set_title('Submerged Plane')
     # ax.legend(loc='upper right')
     submerged = set_new_origin(result,result.centroid.x,result.centroid.y)
 
@@ -387,11 +380,11 @@ def calculate_hstab(file_path, plane_origin, plane_normal,cutoff,plane,cut_direc
     print("Izz: {0}".format(Izz))
     cb = (result.centroid.x,result.centroid.y)
     if plane_normal[0] == 1.0:
-        h_cb = cg[2] - cb[0]
-        ax.plot(cg[2],cg[1],color='red',marker = 'o')
+        h_cb = cg[2] - cb[1]
+        ax.plot(cg[1],cg[2],color='red',marker = 'o')
     elif plane_normal[1] == 1.0:
-        h_cb = cg[2] - cb[0]
-        ax.plot(cg[2],cg[0],color='red',marker = 'o')
+        h_cb = cg[2] - cb[1]
+        ax.plot(-cg[0],cg[2],color='red',marker = 'o')
     
     h_mc = calculate_mc(Izz,weight,h_cb,rho_w)
     
@@ -413,15 +406,16 @@ file_path = r'SampleData\STL\WhalePlane2.stl'  # Adjust the path if necessary
 
 
 # Transverse Stability
-# Define the plane for the cross-section
+# Define the plane 
+# for the cross-section
 plane_origin = [0.45, 0.0, 0.0]  # Origin of the plane
 plane_normal = [1.0, 0.0, 0.0]  # Normal to the plane (XY plane)
 
 # TODO: write function to determine waterline (cuttoff value)
 # cutoff = -0.3048/2+0.1328928 
-cutoff = 0.05
-plane = "x"  # or "y"
-cut_direction = "left" # or "right" for plane "x", "below" or "above" for plane "y"
+cutoff = 0.00
+plane = "y"  # or "y"
+cut_direction = "below" # or "right" for plane "x", "below" or "above" for plane "y"
 
 # weight = 1334.47/9.81 # for metric this is mass in kg
 weight = 8 # [kg]
@@ -438,8 +432,5 @@ calculate_hstab(file_path,plane_origin,plane_normal,cutoff,plane,cut_direction,w
 # Define the plane for the cross-section
 plane_origin = [0.0, 0.0, 0.0]  # Origin of the plane
 plane_normal = [0.0, 1.0, 0.0]  # Normal to the plane (XY plane)
-
-plane = "x"  # or "y"
-cut_direction = "left" # or "right" for plane "x", "below" or "above" for plane "y"
 
 calculate_hstab(file_path,plane_origin,plane_normal,cutoff,plane,cut_direction,weight,cg)

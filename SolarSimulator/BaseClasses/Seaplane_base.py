@@ -46,6 +46,10 @@ class Seaplane:
         self.cdtot = cdtot
         self.calculate_weight()
 
+    def update_location(self,lat):
+        self.lat = lat
+        self.location = location.Location(self.lat, self.lon, tz=self.tz)
+
     def calculate_weight(self,energy_density=150) -> float:
         """Estimates weight of the aircraft based on fixed airframe mass and variable battery mass.
         
@@ -340,7 +344,11 @@ class Seaplane:
             energy_history.append(energy_j/capacity_j*100)
 
         total = is_daytime.sum()
-        return flying/total*100,energy_history,state_history,num_takeoff
+        if total == 0.0:
+            dc = 0
+        else:
+            dc = flying/total*100
+        return dc,energy_history,state_history,num_takeoff
 
     def calc_takeoff_penalty(self) -> float:
         """Determine energy cost of taking off in Joules"""

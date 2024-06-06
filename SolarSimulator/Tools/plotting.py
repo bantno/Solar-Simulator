@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from paretoset import paretoset
 
-from BaseClasses.Seaplane_base import Seaplane
+from BaseClasses.seaplane_base import Seaplane
 from Utilities import ParetoFront
 
 
@@ -39,19 +39,19 @@ def plot_endurance(plane,S,Cd0,af_mass,capacity,rho):
         # Plot Required Power
         ax2.plot(U, P_req,label=label_1)
     else:
-        for i in range(0,len(S)):
+        for i,s in enumerate(S):
             E = []
             P_req = []
             U = range(5,40)
             for v in U:
-                plane.S = S[i]
+                plane.S = s
                 plane.cd0 = Cd0[i]
-                plane.weight = af_mass[i]
+                plane.af_mass = af_mass[i]
                 plane.capacity = capacity[i]
                 E.append(plane.get_endurance(v,rho))
                 P_req.append(plane.get_required_power(U=v,rho=rho))
             # Plot endurance
-            label_1 = "S = {0}".format(plane.S)
+            label_1 = f"S = {plane.S}"
             ax1.plot(U, E,label=label_1)
             # Plot Required Power
             ax2.plot(U, P_req,label=label_1)
@@ -260,7 +260,7 @@ def plot_yearly_dc(plane: Seaplane,
                    day: int,
                    days : int,
                    ):
-    label = "{0} Ah".format(plane.capacity)
+    label = f"{plane.capacity} Ah"
     times,e_h,P_solar,states,dc = run_simulation(plane,year,month,day,days)
     df = pd.DataFrame(e_h,index=times,columns=['battery'])
     df['P_solar'] = P_solar

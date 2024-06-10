@@ -1,5 +1,5 @@
 import os
-import datetime
+from datetime import datetime, timedelta
 
 import pandas as pd
 import numpy as np
@@ -12,7 +12,16 @@ from paretoset import paretoset
 from BaseClasses.seaplane_base import Seaplane
 from Utilities import ParetoFront
 
-
+def day_to_month_day(day_number, year):
+    day_number = int(day_number)
+    # Create a datetime object for the given year and day number
+    date_obj = datetime(year, 1, 1) + timedelta(day_number - 1)
+    
+    # Extract month and day from the datetime object as numbers
+    month = date_obj.month
+    day = date_obj.day
+    
+    return month, day
 
 def plot_endurance(plane,S,Cd0,af_mass,capacity,rho):
     # TODO: Remove weight attribute

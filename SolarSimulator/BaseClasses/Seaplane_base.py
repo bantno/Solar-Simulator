@@ -25,7 +25,7 @@ class Seaplane:
         self.tz = tz
         self.tracking = tracking
         self.location = location.Location(lat, lon, tz=tz)
-        self.pdc0 = pdc0
+        
         self.gamma = gamma
         self.collected_energy = 0 #kWh
         self.cs = cs
@@ -44,11 +44,23 @@ class Seaplane:
         self.e = 0.8
         self.k = 1.0/(np.pi*self.AR*self.e)
         self.cdtot = cdtot
+        # self.pdc0 = pdc0
+        
+        self.calculate_pdc0()
+        self.calculate_weight()
+        
+
+        
+    def update_plane(self):
+        self.calculate_pdc0()
         self.calculate_weight()
 
     def update_location(self,lat):
         self.lat = lat
         self.location = location.Location(self.lat, self.lon, tz=self.tz)
+
+    def calculate_pdc0(self):
+        self.pdc0 = self.S*3.3/.034
 
     def calculate_weight(self,energy_density=150) -> float:
         """Estimates weight of the aircraft based on fixed airframe mass and variable battery mass.
@@ -59,7 +71,10 @@ class Seaplane:
         self: Seaplane
             Requires seaplane object
         """
-        self.weight = 9.81*(self.af_mass+self.capacity*self.voltage/energy_density)
+
+        battery_mass = self.capacity*self.voltage/energy_density
+        pv_mass = self.S*.0039/.034
+        self.weight = 9.81*(self.af_mass+pv_mass+battery_mass)
 
 
     def get_endurance(self,u,rho) -> float:
@@ -218,17 +233,17 @@ class Seaplane:
 
         # set axis_azimuth, albedo, pvrow width and height, and use
         # the pvfactors engine for absorbed irradiance
-        pvrow_height = 1
-        pvrow_width = 1
+        pvrow_height = 10
+        pvrow_width = 10
         albedo = 0.06
 
-        #TODO: Create separate function to set these parameters
+        #TODO: Create function to set windspeed and direction based on historical data for given location
         if self.cs:
             # axis_azimuth = np.random.rand(1)*360
             # wind_speed = np.random.rand(1)*20
             axis_azimuth = 0
             wind_speed = 0
-            temp_air = 30
+            temp_air = 25
         else:
             # Set windspeed and azimuth based on TMY data
             #tilt axis is 90 degrees offset from wind direction

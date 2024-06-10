@@ -14,22 +14,35 @@ from tqdm import tqdm
 lat = 29.02291491363789
 lon = -90.23223029442693
 tz = 'Etc/GMT+6'
-pdc0 = 80
-gamma = -0.0043
+pdc0 = 0 # nameplate power rating [W]
+gamma = -0.0047 # Temperature coefficient of power [1/deg Celsius]
 
 # Airplane params
-capacity_ah = 10.6
-voltage = 22.2
+capacity_ah = 0.0
+voltage = 11.1
 Cdtot = 0.02616
 Cd0 = 0.01487
 S = 0.653
 af_mass = 6 #TODO: Read in AF mass from VSPAero, multiply by safety factor
-cruise_speed = 20
+cruise_speed = 20.0
 rho = 1.1 # air density (dependent on altitude)
 U = cruise_speed
 
 # Create plane
-plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=Cd0*1.5,cs=True ,tracking=False,cdtot = Cdtot,n_tot=.75,S=S,af_mass=af_mass,voltage=voltage,capacity=capacity_ah)
+plane = Seaplane(lat,
+                 lon,
+                 tz,
+                 pdc0,
+                 gamma,
+                 cd0=Cd0*1.5,
+                 cs=True,
+                 tracking=False,
+                 cdtot = Cdtot,
+                 n_tot=.75,
+                 S=S,
+                 af_mass=af_mass,
+                 voltage=voltage,
+                 capacity=capacity_ah)
 
 # Create Pareto Plots
 # plotting.make_pareto_classic(plane,(1,25),250)
@@ -42,7 +55,7 @@ DAY = 1
 DAYS = 31
 
 # Define capacities to investigate
-cap = np.linspace(1,15,25)
+cap = np.linspace(3,15,50)
 
 # Run battery sweep
 duty,num_takeoffs = plotting.battery_sweep(plane,cap,month=MONTH,days=DAYS)
@@ -139,73 +152,59 @@ print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
 # plotting.plot_yearly_dc(plane,year,month,day,days)
 
 
-# # Endurance and P_req calculations
-# plane = Seaplane(lat,lon,tz,pdc0,gamma,cd0=0.0145,cs=True,tracking=False,cdtot = 0.025,n_tot=.75,S=0.38,af_mass=6,voltage=22.2,capacity=28.82)
+# Endurance and P_req calculations
+plane = Seaplane(lat,lon,tz,pdc0,gamma,cd0=0.0145,cs=True,tracking=False,cdtot = 0.025,n_tot=.75,S=0.38,af_mass=6,voltage=22.2,capacity=28.82)
 
-# # List Parameters for different wing area values
-# S =          [0.65340, 0.79]
-# Cd0 =        [0.01487, 0.015]
-# Cdtot =      [0.02572, 0.03]
-# af_mass =    [6.0    , 6.0 ]
-# capacities = [28.82, 28.82]
-# rho = 1.1
+# List Parameters for different wing area values
+S =          [0.65, 0.79, 0.95]
+Cd0 =        [0.01487, 0.015, 0.0151]
+Cdtot =      [0.02572, 0.03, 0.032]
+af_mass =    [6.0    , 6.0 , 6.0] # TODO: Update airframe mass calculation
+capacities = [max_cap, max_cap, max_cap]
+rho = 1.1
 
-# plotting.plot_endurance(plane,S,Cd0,af_mass,capacities,rho)
-
-
-from datetime import datetime, timedelta
-
-def day_to_month_day(day_number, year):
-    day_number = int(day_number)
-    # Create a datetime object for the given year and day number
-    date_obj = datetime(year, 1, 1) + timedelta(day_number - 1)
-    
-    # Extract month and day from the datetime object as numbers
-    month = date_obj.month
-    day = date_obj.day
-    
-    return month, day
+plotting.plot_endurance(plane,S,Cd0,af_mass,capacities,rho,filename="Endurance")
 
 
-# TODO: Make function
-# lat = [26.0857 , 29.1615 , 32.9148 , 35.3777 , 39.7020 , 42.07658 , 44.66028]
-# lon = [-80.0695, -80.8963, -79.7388, -75.4398, -74.0343, -69.81796, -66.9243]
-# plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=0.0145,cs=True,tracking=False,cdtot = 0.025,n_tot=.75,S=0.38,af_mass=6,voltage=15.2,capacity=20.3)
-rho = 1.225
-U = 20
-days = 7
+# # TODO: Make function
+# # lat = [26.0857 , 29.1615 , 32.9148 , 35.3777 , 39.7020 , 42.07658 , 44.66028]
+# # lon = [-80.0695, -80.8963, -79.7388, -75.4398, -74.0343, -69.81796, -66.9243]
+# # plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=0.0145,cs=True,tracking=False,cdtot = 0.025,n_tot=.75,S=0.38,af_mass=6,voltage=15.2,capacity=20.3)
+# rho = 1.225
+# U = 20
+# days = 7
 
-N_LAT = 20
-N_DAYS = 73
+# N_LAT = 30
+# N_DAYS = 73
 
 
-lat = np.linspace(-70,70,N_LAT)
-day = np.linspace(1, 365, N_DAYS).astype(int)
-duty_cycle = np.zeros((N_LAT,N_DAYS))
-plane.capacity = max_cap
+# lat = np.linspace(-70,70,N_LAT)
+# day = np.linspace(1, 365, N_DAYS).astype(int)
+# duty_cycle = np.zeros((N_LAT,N_DAYS))
+# plane.capacity = max_cap
 
-# Create a meshgrid from the data
-X, Y = np.meshgrid(day, lat)
+# # Create a meshgrid from the data
+# X, Y = np.meshgrid(day, lat)
 
-for i in tqdm(range(X.shape[0])):
-    for j in range(X.shape[1]):
-        plane.update_location(Y[i, j])
-        month,day = day_to_month_day(X[i,j],YEAR)
-        _,_,_,_,dc = plotting.run_simulation(plane,YEAR,month,day,days)
-        duty_cycle[i, j] = dc
+# for i in tqdm(range(X.shape[0])):
+#     for j in range(X.shape[1]):
+#         plane.update_location(Y[i, j])
+#         month,day = plotting.day_to_month_day(X[i,j],YEAR)
+#         _,_,_,_,dc = plotting.run_simulation(plane,YEAR,month,day,days)
+#         duty_cycle[i, j] = dc
 
-# Plot the contour
-plt.figure(figsize=(10, 6))
-levels = np.linspace(0, 59, 20)
-contour = plt.contourf(X, Y, duty_cycle, levels=levels, cmap='viridis')
-plt.colorbar(contour, label='Duty Cycle [%]')
+# # Plot the contour
+# plt.figure(figsize=(10, 6))
+# levels = np.linspace(0, 59, 20)
+# contour = plt.contourf(X, Y, duty_cycle, levels=levels, cmap='viridis')
+# plt.colorbar(contour, label='Duty Cycle [%]')
 
-# Add labels and title
-plt.xlabel('Days of the Year')
-plt.ylabel('Latitude')
-plt.title('Duty Cycle Contour Plot')
+# # Add labels and title
+# plt.xlabel('Days of the Year')
+# plt.ylabel('Latitude')
+# plt.title('Duty Cycle Contour Plot')
 
-# Show plot
-filename = "dc_contour_plot"
-plot_path = os.path.join("Figures", f"{filename}.png")
-plt.savefig(plot_path)
+# # Show plot
+# filename = "dc_contour_plot"
+# plot_path = os.path.join("Figures", f"{filename}.png")
+# plt.savefig(plot_path)

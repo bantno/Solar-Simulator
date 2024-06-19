@@ -23,7 +23,7 @@ def day_to_month_day(day_number, year):
     
     return month, day
 
-def plot_endurance(plane,S,Cd0,af_mass,capacity,rho):
+def plot_endurance(plane,S,Cd0,af_mass,capacity,rho,filename=-1):
     # TODO: Remove weight attribute
     # Create a figure and two subplots
     _, (ax1, ax2) = plt.subplots(1, 2,figsize=(10,5))
@@ -39,13 +39,12 @@ def plot_endurance(plane,S,Cd0,af_mass,capacity,rho):
     if isinstance(S,float):
         E = []
         P_req = []
-        U = range(5,40)    
+        U = range(10,30)    
         for v in U:
             E.append(plane.get_endurance(v,rho))
             P_req.append(plane.get_required_power(U=v,rho=rho))
-        label_1 = "S = {0}".format(plane.S)
+        label_1 = f"S = {plane.S}"
         ax1.plot(U, E,label=label_1)
-        # Plot Required Power
         ax2.plot(U, P_req,label=label_1)
     else:
         for i,s in enumerate(S):
@@ -57,6 +56,7 @@ def plot_endurance(plane,S,Cd0,af_mass,capacity,rho):
                 plane.cd0 = Cd0[i]
                 plane.af_mass = af_mass[i]
                 plane.capacity = capacity[i]
+                plane.update_plane()
                 E.append(plane.get_endurance(v,rho))
                 P_req.append(plane.get_required_power(U=v,rho=rho))
             # Plot endurance
@@ -68,39 +68,51 @@ def plot_endurance(plane,S,Cd0,af_mass,capacity,rho):
     # Display the plots
     ax1.legend()
     ax2.legend()
-    plt.show()
+    if not filename==-1:
+        plot_path = os.path.join("Figures", f"{filename}.png")
+        plt.savefig(plot_path)
+    else:
+        plt.show()
     return
 
 def battery_sweep(plane: Seaplane,capacities,year=2019,month=6,day=1,days=1,U=20,rho=1.1):
     duty_list = []
     if isinstance(capacities,float):
         plane.capacity = capacities
-        plane.calculate_weight()
+        plane.update_plane()
         _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-        duty_cycle,_,_,num_takeoffs = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
+        duty_cycle,_,_,num_takeoffs = plane.simulate_deployment(U,rho,1,.1,P_solar,5)
         return duty_cycle,num_takeoffs
     else:
         for cap in tqdm(capacities):
             plane.capacity = cap
-            plane.calculate_weight()
+            plane.update_plane()
             _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-            duty_cycle,_,_,num_takeoffs = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
+            duty_cycle,_,_,num_takeoffs = plane.simulate_deployment(U,rho,1,.1,P_solar,5)
             duty_list.append(duty_cycle)
 
     return duty_list,num_takeoffs
 
-def plot_battery_sweep(cap,duty,filename=-1):
+def plot_battery_sweep(cap,duty,label = "",filename=-1,fig = -1):
     plot_path = os.path.join("Figures", f"{filename}.png")
-    plt.scatter(cap,duty)
+    DOT_SIZE = 20
+    if fig == -1:
+        plt.scatter(cap,duty,label=label,s=DOT_SIZE)    
+    if isinstance(fig,Figure):
+        fig = fig.scatter(cap,duty,label=label,s=DOT_SIZE)
+    
     plt.xlabel("Battery Capacity [Ah]")
     plt.ylabel("Duty Cycle [%]")
-    plt.title("Battery Capacity Sweep")
+    plt.title("Battery Capacity Sweep at 22.2V")
     plt.tight_layout()
     plt.grid(True)
+    plt.legend(loc='best')
     if not filename==-1:
         plt.savefig(plot_path)
     else:
         plt.show()
+    
+    return fig
     
 
 def run_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1,U=20,rho=1.1):
@@ -120,22 +132,24 @@ def run_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1,U=20,rho=1.1)
     days: int
         Number of days to simulate
     """
+    plane.update_plane()
     times, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-    duty_cycle,e_h,state,_ = plane.simulate_deployment(U,rho,1,.10,P_solar,5)
+    duty_cycle,e_h,state,_ = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
     return times,e_h,P_solar,state,duty_cycle
 
     
 def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1, label=""):
     """Plot results of simulation"""
+    num_plots = 3
     if fig == -1:
-        fig, axes = plt.subplots(3, 1,figsize=(12,6))
+        fig, axes = plt.subplots(num_plots, 1,figsize=(12,6))
     if isinstance(fig,Figure):
         axes = fig.axes
     titles = ["Battery Charge Level", "Collected Solar Power", "Vehicle State"]
     xlabel = "Dates"
     ylabels = ["Battery Charge [%]", "Power [W]", "State"]
     data = [e_h,P_solar,state]
-    for i in range(len(axes)):
+    for i in range(np.min([len(axes),num_plots])):
         plot_data(axes[i],times,data[i],titles[i],xlabel,ylabels[i],label)
 
     plt.tight_layout() 
@@ -213,6 +227,7 @@ def make_pareto(plane: Seaplane,filename:str = "Pareto"):
     plt.tight_layout()
     plot_path = os.path.join("Figures", f"{filename}.png")
     plt.savefig(plot_path)
+    plt.close()
 
 def make_pareto_classic(plane: Seaplane,bounds,n_samples: int,filename: str = "ParetoFront"):
     n_w = 5
@@ -288,7 +303,6 @@ def plot_yearly_dc(plane: Seaplane,
     plt.xlabel("Day of Year")
     plt.ylabel("Duty Cycle [%]")
     plt.tight_layout()
-    plt.savefig("YearlyDutyCycle.png")
     filename = "YearSweep"
     plot_path = os.path.join("Figures", f"{filename}.png")
     plt.savefig(plot_path)

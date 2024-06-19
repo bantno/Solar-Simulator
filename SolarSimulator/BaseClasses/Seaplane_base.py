@@ -271,6 +271,7 @@ class Seaplane:
         # turn into pandas DataFrame
         irrad = pd.concat(irrad, axis=1)
         effective_irrad_mono = irrad['total_abs_front']
+        
         temp_cell = temperature.faiman(effective_irrad_mono, temp_air=temp_air,
                                     wind_speed=wind_speed)
         # Create pvsystem using pvwatts model for single face solar cell
@@ -323,16 +324,9 @@ class Seaplane:
         capacity_j = self.voltage*self.capacity*3600
         energy_j = capacity_j
         energy_history = []
-
         num_takeoff = 0
-
-        # Define the daytime range (e.g., from 7 AM to 7 PM)
-        # TODO: Set daylight hours based on when sun rises and sets, not hard coded
-        daytime_start = pd.to_datetime('08:00:00').time()
-        daytime_end = pd.to_datetime('18:00:00').time()
-        is_daytime = (P_solar.index.time >= daytime_start) & (P_solar.index.time <= daytime_end)
         is_daytime = P_solar > 1
-        min_flight = 1
+        min_flight_hr = 1
 
 
         # Define state machine that governs plane behavior
@@ -349,7 +343,7 @@ class Seaplane:
                 if energy_j <= capacity_j:
                     energy_j+= (P_solar.iloc[i])*dt*60
                 if energy_j>=takeoff_capacity*capacity_j and is_daytime.iloc[i]:
-                    if energy_j > P_cruise*60*60*min_flight:
+                    if energy_j > P_cruise*60*60*min_flight_hr:
                         state = "Flying"
                         energy_j -= self.calc_takeoff_penalty()
                         energy_j-= (P_cruise - P_solar.iloc[i])*dt*60

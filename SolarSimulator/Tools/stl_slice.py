@@ -1,3 +1,5 @@
+import os
+
 from shapely.geometry import Polygon, MultiPolygon, LineString
 from shapely.ops import split, transform, unary_union
 
@@ -7,7 +9,7 @@ import trimesh
 
 import matplotlib.pyplot as plt
 
-def merge_polygons(cross_section):
+def merge_polygons(cross_section,normal):
     """
     Merge overlapping polygons from a given cross section.
 
@@ -38,7 +40,7 @@ def merge_polygons(cross_section):
     if cross_section is None:
         print("No cross section found at the given plane.")
         return 0, None
-    planar = trimesh.geometry.align_vectors(plane_normal, [0,0,-1])
+    planar = trimesh.geometry.align_vectors(normal, [0,0,-1])
     slice_, _ = cross_section.to_planar(to_2D=planar)
     polygons = []
     for poly in slice_.polygons_closed:
@@ -255,8 +257,11 @@ def plot_polygon(polygon: Polygon | MultiPolygon, ax, **kwargs):
         ax.set_aspect('equal', adjustable='box')
 
     elif isinstance(polygon, MultiPolygon):
-        for poly in polygon.geoms:
+        for i,poly in enumerate(polygon.geoms):
             x, y = poly.exterior.xy
+            if i == 0:
+                ax.plot(x, y, **kwargs)
+                kwargs.pop('label', None)
             ax.plot(x, y, **kwargs)
         ax.set_aspect('equal', adjustable='box')
 
@@ -294,16 +299,38 @@ def calculate_mc(inertia: float, w: float, h_cb: float, rho: float):
     mc = rho*(inertia/w)-h_cb
     return mc
 
-def calculate_draft(w: float):
+def calculate_draft(m_kg: float,file_path):
     """
     Calculate the draft of the object
 
     Parameters:
-    weight (float): Weight of the object.
+    m_kg (float): mass of the object.
     """
-    pass
+    done = False
+    mesh = trimesh.load(file_path)
 
-def calculate_hstab(filename, origin,normal,cutoff,plane,cut_direction,weight,cg,rho_w = 1001.15):
+    plane_origin = [0.0, 0.0, 0.0]
+    plane_normal = trimesh.unitize([0.0, 0.0, -1.0])
+    m_tol = 0.1
+
+    while not done:
+        submerged = mesh.slice_plane(plane_origin, plane_normal)
+        displaced_mass = submerged.volume*1000
+        if displaced_mass > m_kg-m_tol and displaced_mass < m_kg+m_tol:
+            done = True
+        elif displaced_mass > m_kg:
+            plane_origin[2] -= 0.001
+        elif displaced_mass < m_kg:
+            plane_origin[2] += 0.001
+    
+    waterline = plane_origin[2]
+    min_ind = mesh.vertices[:, 2].argmin()
+    draft = waterline - mesh.vertices[min_ind,2]
+    return draft, waterline
+
+
+
+def calculate_hstab(file_path,filename, origin,normal,cutoff,plane,cut_direction,weight,cg,rho_w = 1001.15):
     """
     Calculates the height of the hydrostatic stabilizer for a given 3D model.
 
@@ -326,7 +353,7 @@ def calculate_hstab(filename, origin,normal,cutoff,plane,cut_direction,weight,cg
     """
 
     # Get the cross-section
-    mesh = trimesh.load(filename)
+    mesh = trimesh.load(file_path)
     # Find the vertex with the smallest x value
     min_x_vertex = mesh.vertices[mesh.vertices[:, 0].argmin()]
 
@@ -340,89 +367,42 @@ def calculate_hstab(filename, origin,normal,cutoff,plane,cut_direction,weight,cg
 
 
     cross_section = mesh.section(plane_origin=origin, plane_normal=normal)
-    merged_polygon, polygons = merge_polygons(cross_section)
+    merged_polygon, polygons = merge_polygons(cross_section,normal)
 
-    # plot_geometry(polygons)
-    # plot_merged_geometry(merged_polygon)
     result = cut_at_plane(merged_polygon, cutoff, plane, cut_direction)
 
-    _, ax = plt.subplots()
-    plot_polygon(merged_polygon, ax, label='Original', color='blue')
+    fig, ax = plt.subplots()
+    plot_polygon(merged_polygon, ax, color='blue')
     if result:
-        plot_polygon(result, ax, label='Cut', color='red')
-    # ax.axvline(x=cutoff, color='gray', linestyle='--', label='Cutting line')
-    ax.set_xlabel('X-Axis [m]')
-    ax.set_ylabel('Y-Axis [m]')
-    ax.set_title('Submerged Plane')
-    # ax.legend(loc='upper right')
+        plot_polygon(result, ax, color='red',label='Submerged')
+
 
     i_zz = np.max(second_moment_of_area(result))
     print(f"Izz: {i_zz}")
     cb = (result.centroid.x,result.centroid.y)
-    if plane_normal[0] == 1.0:
+    if normal[0] == 1.0:
         h_cb = cg[2] - cb[1]
-        ax.plot(cg[1],cg[2],color='red',marker = 'o')
-    elif plane_normal[1] == 1.0:
+        ax.plot(cg[1],cg[2],color='red',marker = 'o',label='Center of Gravity')
+        ax.set_title('Lateral Hydrostatic Stability')
+        ax.set_xlabel('Y-Axis [m]')
+        ax.set_ylabel('Z-Axis [m]')
+    elif normal[1] == 1.0:
         h_cb = cg[2] - cb[1]
-        ax.plot(-cg[0],cg[2],color='red',marker = 'o')
+        ax.plot(-cg[0],cg[2],color='red',marker = 'o',label='Center of Gravity')
+        ax.set_title('Longitudinal Hydrostatic Stability')
+        ax.set_xlabel('X-Axis [m]')
+        ax.set_ylabel('Z-Axis [m]')
 
     h_mc = calculate_mc(i_zz,weight,h_cb,rho_w)
 
-    ax.plot(cb[0],cb[1],color='green',marker='o')
-    plt.tight_layout()
-    plt.show()
+    ax.plot(cb[0],cb[1],color='green',marker='o',label='Center of Buoyancy')
+    # ax.plot(cb[0],cb[1]+h_mc,color='purple',marker='o',label='Metacenter')
+    ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    
+    plot_path = os.path.join("Figures", f"{filename}.png")
+    plt.savefig(plot_path,bbox_inches='tight')
+    plt.close(fig)
 
 
     print(f"Center of Buoyancy [m]: {h_cb}")
     print(f"Height of Metacenter [ft]: {h_mc*3.281}")
-
-
-
-# Example
-
-# Load the STL file
-FILE_PATH = r'SampleData\STL\WhalePlane2.stl'  # Adjust the path if necessary
-
-
-
-# Transverse Stability
-# Define the plane for the cross-section
-plane_origin = [0.45, 0.0, 0.0]  # Origin of the plane
-plane_normal = [1.0, 0.0, 0.0]  # Normal to the plane (XY plane)
-
-# TODO: write function to determine waterline
-WATERLINE = 0.00 # = -0.3048/2+0.1328928
-PLANE_DIRECTION = "y"  # or "y"
-CUT_DIRECTION = "below" # or "right" for plane "x", "below" or "above" for plane "y"
-WEIGHT = 8 # [kg] = 1334.47/9.81 # for metric this is mass in kg
-RHO_W = 1001.15 # density of water [kg/m^3]
-# h_cb = 0.2286-0.13289/2 #h_cg-0.066 # needs to be the vertical distance between the CG and the CB
-# h_cg = (0.3048)/4 # height of center of gravity
-CG = (0.337,0.000,0.053)
-
-
-calculate_hstab(FILE_PATH,
-                plane_origin,
-                plane_normal,
-                WATERLINE,
-                PLANE_DIRECTION,
-                CUT_DIRECTION,
-                WEIGHT,
-                CG,
-                )
-
-
-# Longitudinal Stability
-# Define the plane for the cross-section
-plane_origin = [0.0, 0.0, 0.0]  # Origin of the plane
-plane_normal = [0.0, 1.0, 0.0]  # Normal to the plane (XY plane)
-
-calculate_hstab(FILE_PATH,
-                plane_origin,
-                plane_normal,
-                WATERLINE,
-                PLANE_DIRECTION,
-                CUT_DIRECTION,
-                WEIGHT,
-                CG,
-                )

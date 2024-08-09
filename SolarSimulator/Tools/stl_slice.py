@@ -79,7 +79,7 @@ def plot_merged_geometry(merged_polygon):
     ax.set_aspect('equal', adjustable='box')
     plt.xlabel('X-axis')
     plt.ylabel('Y-axis')
-    plt.title('Merged Cross Section Geometry')
+    # plt.title('Merged Cross Section Geometry')
     plt.grid(True)
     plt.show()
 
@@ -100,7 +100,7 @@ def plot_geometry(polygons):
     ax.set_aspect('equal', adjustable='box')
     plt.xlabel('X-axis')
     plt.ylabel('Y-axis')
-    plt.title('Cross Section Geometry')
+    # plt.title('Cross Section Geometry')
     plt.grid(True)
     plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     plt.tight_layout()
@@ -383,13 +383,13 @@ def calculate_hstab(file_path,filename, origin,normal,cutoff,plane,cut_direction
     if normal[0] == 1.0:
         h_cb = cg[2] - cb[1]
         ax.plot(cg[1],cg[2],color='red',marker = 'o',label='Center of Gravity')
-        ax.set_title('Lateral Hydrostatic Stability')
+        # ax.set_title('Lateral Hydrostatic Stability')
         ax.set_xlabel('Y-Axis [m]')
         ax.set_ylabel('Z-Axis [m]')
     elif normal[1] == 1.0:
         h_cb = cg[2] - cb[1]
         ax.plot(-cg[0],cg[2],color='red',marker = 'o',label='Center of Gravity')
-        ax.set_title('Longitudinal Hydrostatic Stability')
+        # ax.set_title('Longitudinal Hydrostatic Stability')
         ax.set_xlabel('X-Axis [m]')
         ax.set_ylabel('Z-Axis [m]')
 

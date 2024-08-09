@@ -39,12 +39,11 @@ class Seaplane:
         self.voltage = voltage
         self.capacity = capacity
         self.Rt = 1.0
-        self.n = 1.0
+        self.n = 1.3
         self.AR = 6.0 #remove hardcode
         self.e = 0.8
         self.k = 1.0/(np.pi*self.AR*self.e)
         self.cdtot = cdtot
-        # self.pdc0 = pdc0
         
         self.calculate_pdc0()
         self.calculate_weight()
@@ -60,7 +59,7 @@ class Seaplane:
         self.location = location.Location(self.lat, self.lon, tz=self.tz)
 
     def calculate_pdc0(self):
-        self.pdc0 = self.S*3.3/.034
+        self.pdc0 = self.S*3.3/.034 # based on ascent solar bare module - mid scale
 
     def calculate_weight(self,energy_density=150) -> float:
         """Estimates weight of the aircraft based on fixed airframe mass and variable battery mass.
@@ -73,8 +72,15 @@ class Seaplane:
         """
 
         battery_mass = self.capacity*self.voltage/energy_density
+        payload_mass = 1.35
         pv_mass = self.S*.0039/.034
-        self.weight = 9.81*(self.af_mass+pv_mass+battery_mass)
+        fcs_mass = 0.2
+        propulsion_mass = 0.0002*4000 # k_ps*P_ps
+        k_str = 0.6
+
+        mass = (payload_mass + pv_mass  + fcs_mass + propulsion_mass)/(1-k_str) + battery_mass
+        mass = self.af_mass
+        self.weight = 9.81*(mass)
 
 
     def get_endurance(self,u,rho) -> float:
@@ -357,8 +363,10 @@ class Seaplane:
             dc = 0
         else:
             dc = flying/total*100
+
+        
         return dc,energy_history,state_history,num_takeoff
 
     def calc_takeoff_penalty(self) -> float:
         """Determine energy cost of taking off in Joules"""
-        return 2000*30
+        return 4000*15

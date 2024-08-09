@@ -23,16 +23,47 @@ def day_to_month_day(day_number, year):
     
     return month, day
 
+def plot_solar(plane: Seaplane,year: int,month: int,day:int,days: int,filename=""):
+    periods = 12*24*days
+    freq = '5min'
+    times, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=periods,frequency=freq)
+    start = f"{year}-{month}-{day}"
+    times = pd.date_range(start, periods=periods, freq=freq, tz=plane.tz)
+    wthr = plane.get_weather(plane.cs,times)
+    ghi = wthr['ghi']*plane.S # need to multiply by S
+
+    plot_path = os.path.join("Figures", f"{filename}.png")
+    
+    fig, ax = plt.subplots(figsize=(10,4))
+    ax.plot(times,P_solar,label="Collected solar power")
+    ax.plot(times,ghi, label = "Available solar power")
+
+    # plt.title("Solar Energy")
+    plt.xlabel("Time")
+    plt.ylabel("Power [W]")
+    ax.legend(loc='best')
+    plt.tight_layout()
+    plt.grid(True)
+    
+    
+    if not filename==-1:
+        plt.savefig(plot_path)
+    else:
+        plt.show()
+    
+    return fig
+
+
 def plot_endurance(plane,S,Cd0,af_mass,capacity,rho,filename=-1):
     # TODO: Remove weight attribute
     # Create a figure and two subplots
-    _, (ax1, ax2) = plt.subplots(1, 2,figsize=(10,5))
-    ax1.set_title('Endurance vs Forward Flight Speed')
-    ax1.set_xlabel('Forward Flight Speed [m/s]')
-    ax1.set_ylabel('Endurance [H]')
-    ax2.set_title('Required Power vs Forward Flight Speed')
-    ax2.set_xlabel("Forward Flight Speed [m/s]")
-    ax2.set_ylabel('Required Power [W]')
+    _, (ax1, ax2) = plt.subplots(1, 2,figsize=(18,5))
+    # ax1.set_title('Endurance vs Forward Flight Speed')
+    ax1.set_xlabel('Forward Flight Speed [meters/second]')
+    ax1.set_ylabel('Endurance [Hours]')
+    # ax2.set_title('Required Power vs Forward Flight Speed')
+    ax2.set_xlabel("Forward Flight Speed [meters/second]")
+    ax2.set_ylabel('Required Power [Watts]')
 
     # Get endurance and required power
 
@@ -50,13 +81,14 @@ def plot_endurance(plane,S,Cd0,af_mass,capacity,rho,filename=-1):
         for i,s in enumerate(S):
             E = []
             P_req = []
-            U = range(5,40)
+            U = range(5,30)
             for v in U:
                 plane.S = s
                 plane.cd0 = Cd0[i]
                 plane.af_mass = af_mass[i]
                 plane.capacity = capacity[i]
                 plane.update_plane()
+                # plane.weight = af_mass[i]*9.81
                 E.append(plane.get_endurance(v,rho))
                 P_req.append(plane.get_required_power(U=v,rho=rho))
             # Plot endurance
@@ -68,6 +100,8 @@ def plot_endurance(plane,S,Cd0,af_mass,capacity,rho,filename=-1):
     # Display the plots
     ax1.legend()
     ax2.legend()
+    ax1.grid(True)
+    ax2.grid(True)
     if not filename==-1:
         plot_path = os.path.join("Figures", f"{filename}.png")
         plt.savefig(plot_path)
@@ -93,20 +127,27 @@ def battery_sweep(plane: Seaplane,capacities,year=2019,month=6,day=1,days=1,U=20
 
     return duty_list,num_takeoffs
 
-def plot_battery_sweep(cap,duty,label = "",filename=-1,fig = -1):
+def plot_battery_sweep(cap,duty,label = "",filename=-1,fig = -1,title=""):
     plot_path = os.path.join("Figures", f"{filename}.png")
     DOT_SIZE = 20
     if fig == -1:
-        plt.scatter(cap,duty,label=label,s=DOT_SIZE)    
-    if isinstance(fig,Figure):
-        fig = fig.scatter(cap,duty,label=label,s=DOT_SIZE)
+        fig, ax = plt.subplots(figsize=(8,4))
+        ax.scatter(cap,duty,label=label,s=DOT_SIZE)
+    elif isinstance(fig,Figure):
+        fig.axes[0].scatter(cap,duty,label=label,s=DOT_SIZE)
     
     plt.xlabel("Battery Capacity [Ah]")
     plt.ylabel("Duty Cycle [%]")
-    plt.title("Battery Capacity Sweep at 22.2V")
+
+    # if title == "":
+    #     plt.title("Battery Capacity Sweep at 22.2V")
+    # else:
+    #     plt.title(title)
+
     plt.tight_layout()
     plt.grid(True)
-    plt.legend(loc='best')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
     if not filename==-1:
         plt.savefig(plot_path)
     else:
@@ -140,7 +181,7 @@ def run_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1,U=20,rho=1.1)
     
 def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1, label=""):
     """Plot results of simulation"""
-    num_plots = 3
+    num_plots = 2
     if fig == -1:
         fig, axes = plt.subplots(num_plots, 1,figsize=(12,6))
     if isinstance(fig,Figure):
@@ -160,11 +201,12 @@ def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1, label="
         
     else:
         plt.show()
+
     return fig
     
 def plot_data(ax,x_data,y_data, title:str="", xlabel:str="X Data", ylabel:str="Y Data",label:str=""):
     ax.plot(x_data,y_data,label=label)
-    ax.set_title(title)
+    # ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     if not label == "":
@@ -220,7 +262,10 @@ def make_pareto(plane: Seaplane,filename:str = "Pareto"):
     plt.scatter(pf[:, 0], pf[:, 1], marker='o', color='b', label='Pareto Front (LHS)')
     plt.xlabel('Percentage of Daylight Hours on Water [%]')
     plt.ylabel('Takeoffs Per Day')
-    plt.title('Pareto Front using Latin Hypercube Sampling')
+    plt.title('Pareto Front using Latin Hypercube Sampling')\
+
+
+        
 
     plt.legend()
     plt.grid(True)

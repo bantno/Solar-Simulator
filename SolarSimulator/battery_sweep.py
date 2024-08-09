@@ -1,5 +1,6 @@
 import os
 import datetime
+import calendar
 
 import pandas as pd
 import numpy as np
@@ -56,11 +57,11 @@ plane_AIAA = plane
 year = 2019
 month = 6
 day = 1
-days_list = [1,3,7,30]
+days_list = [1,3,7,30,365]
 
 # Define capacities to investigate
 cap = np.linspace(5,30,50)
-
+title = "Battery Capacity Sweep for Various Mission Durations"
 fig = -1
 for i,days in enumerate(days_list):
     # Run battery sweep
@@ -70,7 +71,7 @@ for i,days in enumerate(days_list):
     FILENAME = f"BatterySweep_{year}_{month}_{day}-combined"
     label = f"Sim Length = {days}"
 
-    fig = plotting.plot_battery_sweep(cap,duty,label,FILENAME,fig)
+    fig = plotting.plot_battery_sweep(cap,duty,label,FILENAME,fig,title)
     
     # Print optimal battery capacity
     data = data = {'Capacity': cap, 'Duty': duty}
@@ -90,11 +91,11 @@ plt.close()
 year = 2019
 months_list = [1,3,6,9]
 day = 1
-days = 7
+days = 30
 
 # Define capacities to investigate
 cap = np.linspace(5,30,50)
-
+title = "Battery Capacity Sweep for Various Months"
 fig = -1
 for i,month in enumerate(months_list):
     # Run battery sweep
@@ -102,8 +103,8 @@ for i,month in enumerate(months_list):
 
     # Create battery sweep plot
     FILENAME = f"BatterySweep_{year}_combined_{day}-{days}"
-    label = f"Month = {month}"
-    fig = plotting.plot_battery_sweep(cap,duty,label,FILENAME,fig)
+    label = calendar.month_abbr[month]
+    fig = plotting.plot_battery_sweep(cap,duty,label,FILENAME,fig,title)
     
     # Print optimal battery capacity
     data = data = {'Capacity': cap, 'Duty': duty}
@@ -131,6 +132,7 @@ plane.lon = 14.5
 cap = np.linspace(5,30,50)
 
 fig = -1
+title = "Battery Capacity Sweep for Various Lattitudes"
 for i,lat in enumerate(lat_list):
     
     # Update plane location
@@ -140,8 +142,8 @@ for i,lat in enumerate(lat_list):
 
     # Create battery sweep plot
     FILENAME = f"BatterySweep_{year}_{month}_{day}-{days}_lat-combined"
-    label = f"Lattitude = {lat}\u00B0"
-    fig = plotting.plot_battery_sweep(cap,duty,label,FILENAME,fig)
+    label = f"{lat}\u00B0 Lattitude"
+    fig = plotting.plot_battery_sweep(cap,duty,label,FILENAME,fig,title)
     
     # Print optimal battery capacity
     data = data = {'Capacity': cap, 'Duty': duty}
@@ -152,3 +154,4 @@ for i,lat in enumerate(lat_list):
     print("Capacity for max duty cycle: {0}".format('%.2f'%max_cap))
     print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
 
+plt.close()

@@ -56,7 +56,7 @@ plane_AIAA = plane
 YEAR = 2019
 MONTH = 6
 DAY = 1
-DAYS = 3
+DAYS = 30
 
 # Define capacities to investigate
 cap = np.linspace(5,30,50)
@@ -66,7 +66,6 @@ duty,num_takeoffs = plotting.battery_sweep(plane,cap,month=MONTH,days=DAYS)
 
 # Create battery sweep plot
 FILENAME = f"BatterySweep_{YEAR}_{MONTH}_{DAY}-{DAYS}"
-plotting.plot_battery_sweep(cap,duty,FILENAME)
 
 # Print optimal battery capacity
 data = data = {'Capacity': cap, 'Duty': duty}
@@ -82,41 +81,28 @@ print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
 # Run simulation for optimal battery size(s)
 # capacities = np.linspace(1,18,3).tolist()
 # capacities.append(max_cap)
-capacities = [9,11,13,17,26,max_cap]
-fig = -1
-duty_cycle = []
+plt.close()
+# capacities = [17,20,max_cap]
+# fig = -1
+# duty_cycle = []
 
-year = 2019
-month = 6
-day = 1
-days = 3
-filename = "SimResults_{0}_{1}_{2}-{3}".format(year,month,day,days)
-for cap in capacities:
-    plane.capacity = cap
-    label = f"{plane.capacity:.2f} Ah"
-    times,e_h,P_solar,states,dc = plotting.run_simulation(plane,year,month,day,days)
-    fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig,label=label)
-    duty_cycle.append(dc)
-print(duty_cycle)
+# year = 2019
+# month = 6
+# day = 1
+# days = 30
+# filename = "SimResults_{0}_{1}_{2}-{3}".format(year,month,day,days)
 
-# Step 2: Extract the data from all lines on the first axis using the figure object
-first_ax = fig.axes[0]  # Get the first axis from the figure
-lines = first_ax.get_lines()  # Get all line objects
+# for cap in capacities:
+#     plane.capacity = cap
+#     label = f"{plane.capacity:.2f} Ah"
+#     times,e_h,P_solar,states,dc = plotting.run_simulation(plane,year,month,day,days)
+#     fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig,label=label)
+#     duty_cycle.append(dc)
+# print(duty_cycle)
 
-# Collect the data for each line
-data = [(line.get_xdata(), line.get_ydata(), line.get_label()) for line in lines]
-
-# Step 3: Create a new figure and plot the extracted data
-fig_new, ax_new = plt.subplots()
-
-for x_data, y_data, label in data:
-    ax_new.scatter(x_data, y_data, label=label, s=0.2)
-ax_new.set_title("Battery Charge Level")
-ax_new.set_xlabel("Dates")
-ax_new.set_ylabel("State of Charge [%]")
-ax_new.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plot_path = os.path.join("Figures", f"{filename}.png")
+# plt.savefig(plot_path)
 
 
 
@@ -124,12 +110,12 @@ plt.show()
 # # Run simulation for optimal battery size(s)
 # cap = max_cap
 # # months = list(range(1,13))
-# months = [6]
+# months = [1,6]
 # fig = -1
 # duty_cycle = []
 # year = 2019
 # day = 1
-# days = 3
+# days = 30
 
 # filename = f"SimResults_{YEAR}_{months[0]}-{months[-1]}_{day}-{days}"
 # for i in tqdm(range(len(months))):
@@ -177,11 +163,11 @@ plt.show()
 plane = Seaplane(lat,lon,tz,pdc0,gamma,cd0=0.0145,cs=True,tracking=False,cdtot = 0.025,n_tot=.75,S=0.38,af_mass=6,voltage=22.2,capacity=28.82)
 
 # List Parameters for different wing area values
-S =          [0.5,  0.65   , 0.79  , 0.95]
-Cd0 =        [0.025,   0.025  , 0.025 , 0.0251]
-Cdtot =      [0.025, 0.02572, 0.03  , 0.032]
-af_mass =    [6.0,   6.0    , 6.0   , 6.0] # TODO: Update airframe mass calculation
-capacities = [max_cap, max_cap, max_cap, max_cap]
+S =          [0.4, 0.5,  0.65   , 0.79  , 0.95]
+Cd0 =        [0.030, 0.027,   0.024  , 0.021 , 0.020]
+Cdtot =      [0.025, 0.025, 0.02572, 0.03  , 0.032]
+af_mass =    [9.71, 9.86,   10.09    , 10.30   , 10.54] # TODO: Update airframe mass calculation
+capacities = [10, 10, 10, 10, 10]
 rho = 1.1
 
 plotting.plot_endurance(plane,S,Cd0,af_mass,capacities,rho,filename="Endurance")
@@ -198,12 +184,13 @@ plotting.plot_endurance(plane,S,Cd0,af_mass,capacities,rho,filename="Endurance")
 
 # rho = 1.19
 # U = 20
-# days = 7
+# days = 30
 
 # plane = plane_AIAA
+# print("Contour Plane Cap: {plane.capacity}")
 # N_LAT = 30
 # N_DAYS = 50
-# N_LEVELS = 11
+# N_LEVELS = 19
 
 
 # lat = np.linspace(-60,60,N_LAT)
@@ -223,14 +210,14 @@ plotting.plot_endurance(plane,S,Cd0,af_mass,capacities,rho,filename="Endurance")
 
 # # Plot the contour
 # plt.figure(figsize=(10, 6))
-# levels = np.linspace(0, 20, N_LEVELS)
+# levels = np.linspace(0, np.max(duty_cycle), N_LEVELS)
 # contour = plt.contourf(X, Y, duty_cycle, levels=levels, cmap='viridis')
 # plt.colorbar(contour, label='Duty Cycle [%]')
 
 # # Add labels and title
-# plt.xlabel('Days of the Year')
+# plt.xlabel('Day of the Year')
 # plt.ylabel('Latitude')
-# plt.title('Duty Cycle Contour Plot')
+# # plt.title('Duty Cycle Contour Plot')
 
 # # Show plot
 # filename = "dc_contour_plot"
@@ -257,8 +244,8 @@ plane_normal = [1.0, 0.0, 0.0]  # Normal to the plane (XY plane)
 # WATERLINE = 0.00 # = -0.3048/2+0.1328928
 PLANE_DIRECTION = "y"  # or "y"
 CUT_DIRECTION = "below" # or "right" for plane "x", "below" or "above" for plane "y"
-WEIGHT = 8.8 # [kg] = 1334.47/9.81 # for metric this is mass in kg
-RHO_W = 1001.15 # density of water [kg/m^3]
+WEIGHT = 8.8 # [kg]
+RHO_W = 1020 # density of water [kg/m^3]
 # h_cb = 0.2286-0.13289/2 #h_cg-0.066 # needs to be the vertical distance between the CG and the CB
 # h_cg = (0.3048)/4 # height of center of gravity
 CG = (0.49,0.000,0.046)

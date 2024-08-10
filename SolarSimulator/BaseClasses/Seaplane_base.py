@@ -34,7 +34,7 @@ class Seaplane:
         self.cd0 = cd0
         self.n_tot = n_tot
         self.S = S
-        self.af_mass = af_mass
+        self.af_mass = self.read_af_mass()
 
         self.voltage = voltage
         self.capacity = capacity
@@ -48,7 +48,8 @@ class Seaplane:
         self.calculate_pdc0()
         self.calculate_weight()
         
-
+    def read_af_mass(self,filename) -> float:
+        return 0.0
         
     def update_plane(self):
         self.calculate_pdc0()

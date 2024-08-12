@@ -1,16 +1,4 @@
 
-import warnings
-
-import numpy as np
-import pandas as pd
-
-from pvlib import location
-from pvlib import tracking
-from pvlib.bifacial.pvfactors import pvfactors_timeseries
-from pvlib import temperature
-from pvlib import pvsystem
-
-
 class Autonomy:
     """Class representing a the autonomy module for a seaplane"""
     def __init__(self):
@@ -38,7 +26,7 @@ class Autonomy:
             state_history (list): A list representing the state history over time, where 1 indicates flying and 0 indicates moored.
             num_takeoff (int): The number of takeoffs performed by the plane.
         """
-        state = "Flying"
+        state = "Moored"
         energy_j = capacity_j
         state_history = []
         energy_history = []
@@ -72,5 +60,5 @@ class Autonomy:
         else:
             dc = flying / total * 100
 
-        return dc, energy_history, state_history, num_takeoff
+        return dc, energy_history, state_history
 

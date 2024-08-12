@@ -1,3 +1,4 @@
+import os
 import warnings
 
 import numpy as np
@@ -34,7 +35,9 @@ class Seaplane:
         self.cd0 = cd0
         self.n_tot = n_tot
         self.S = S
-        self.af_mass = self.read_af_mass()
+
+        path = r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data"
+        self.af_mass = self.get_total_mass(path)
 
         self.voltage = voltage
         self.capacity = capacity
@@ -48,8 +51,18 @@ class Seaplane:
         self.calculate_pdc0()
         self.calculate_weight()
         
-    def read_af_mass(self,filename) -> float:
-        return 0.0
+
+    def get_total_mass(self,directory):
+        # Search for a file with 'mass' in its name in the given directory
+        for filename in os.listdir(directory):
+            if 'mass' in filename.lower():
+                file_path = os.path.join(directory, filename)
+                with open(file_path, 'r') as file:
+                    for line in file:
+                        if 'Total Mass' in line:
+                            total_mass = float(line.split()[0])
+                            return total_mass
+        return None
         
     def update_plane(self):
         self.calculate_pdc0()

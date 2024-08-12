@@ -10,6 +10,7 @@ from pvlib import temperature
 from pvlib import pvsystem
 
 from Seaplane_base import Seaplane
+from autonomy_base import Autonomy
 
 class Simulation:
     def __init__(self,plane:Seaplane,lat,lon,tz,cs:bool=False) -> None:
@@ -229,50 +230,10 @@ class Simulation:
         """
         # Ensure weight estimate is accurate
         self.plane.calculate_weight()
-
-        # Get cruise power
+        
         P_cruise = self.plane.get_required_power(U,rho)
-
-        state = "Moored"
-        flying = 0
-        state_history = []
-
         capacity_j = self.plane.voltage*self.plane.capacity*3600
-        energy_j = capacity_j
-        energy_history = []
-        num_takeoff = 0
         is_daytime = P_solar > 1
         min_flight_hr = 1
-
-
-        # Define state machine that governs plane behavior
-        for i in range(0,len(P_solar)):
-
-            if state == "Flying":
-                state_history.append(1)
-                flying += 1
-                energy_j-= (P_cruise - P_solar.iloc[i])*dt*60
-                if energy_j <= capacity_j*landing_capacity or not is_daytime.iloc[i]:
-                    state = "Moored"
-            elif state == "Moored":
-                state_history.append(0)
-                if energy_j <= capacity_j:
-                    energy_j+= (P_solar.iloc[i])*dt*60
-                if energy_j>=takeoff_capacity*capacity_j and is_daytime.iloc[i]:
-                    if energy_j > P_cruise*60*60*min_flight_hr:
-                        state = "Flying"
-                        energy_j -= self.plane.calc_takeoff_penalty()
-                        energy_j-= (P_cruise - P_solar.iloc[i])*dt*60
-                        num_takeoff += 1
-            if energy_j > capacity_j :
-                energy_j = capacity_j
-            energy_history.append(energy_j/capacity_j*100)
-
-        total = is_daytime.sum()
-        if total == 0.0:
-            dc = 0
-        else:
-            dc = flying/total*100
-
         
-        return dc,energy_history,state_history,num_takeoff
+        return Autonomy.simple_plane_behavior(self, P_solar, is_daytime, P_cruise, capacity_j, landing_capacity, takeoff_capacity, dt, min_flight_hr, self.plane.calc_takeoff_penalty)

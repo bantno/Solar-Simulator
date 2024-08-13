@@ -118,40 +118,40 @@ print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
 
 
 # TODO: Make Function
-# Run simulation for optimal battery size(s)
-cap = max_cap
-# months = list(range(1,13))
-months = [1,6]
-fig = -1
-duty_cycle = []
-year = 2019
-day = 1
-days = 30
+# # Run simulation for optimal battery size(s)
+# cap = max_cap
+# # months = list(range(1,13))
+# months = [1,6]
+# fig = -1
+# duty_cycle = []
+# year = 2019
+# day = 1
+# days = 30
 
-filename = f"SimResults_{YEAR}_{months[0]}-{months[-1]}_{day}-{days}"
-for i in tqdm(range(len(months))):
-    plane.capacity = cap
-    month = months[i]
-    label = f"Month: {month}"
-    times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days)
-    times = np.linspace(1,days+1,len(e_h))
-    fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig,label=label)
-    duty_cycle.append(dc)
+# filename = f"SimResults_{YEAR}_{months[0]}-{months[-1]}_{day}-{days}"
+# for i in tqdm(range(len(months))):
+#     plane.capacity = cap
+#     month = months[i]
+#     label = f"Month: {month}"
+#     times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days)
+#     times = np.linspace(1,days+1,len(e_h))
+#     fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig,label=label)
+#     duty_cycle.append(dc)
 
-first_ax = fig.axes[0]
-lines = first_ax.get_lines()
-data = [(line.get_xdata(), line.get_ydata(), line.get_label()) for line in lines]
-fig_new, ax_new = plt.subplots()
+# first_ax = fig.axes[0]
+# lines = first_ax.get_lines()
+# data = [(line.get_xdata(), line.get_ydata(), line.get_label()) for line in lines]
+# fig_new, ax_new = plt.subplots()
 
-for x_data, y_data, label in data:
-    ax_new.scatter(x_data, y_data, label=label, s=0.2)
-ax_new.set_title("Battery Charge Level")
-ax_new.set_xlabel("Dates")
-ax_new.set_ylabel("State of Charge [%]")
-ax_new.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+# for x_data, y_data, label in data:
+#     ax_new.scatter(x_data, y_data, label=label, s=0.2)
+# ax_new.set_title("Battery Charge Level")
+# ax_new.set_xlabel("Dates")
+# ax_new.set_ylabel("State of Charge [%]")
+# ax_new.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
 
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
 
 
 # #-------------------------------------
@@ -185,49 +185,48 @@ plotting.plot_endurance(plane,S,Cd0,af_mass,capacities,rho,filename="Endurance")
 
 
 
-# # CONTOUR PLOT
+# CONTOUR PLOT
+rho = 1.19
+U = 20
+days = 30
 
-# rho = 1.19
-# U = 20
-# days = 30
-
-# plane = plane_AIAA
-# print("Contour Plane Cap: {plane.capacity}")
-# N_LAT = 30
-# N_DAYS = 50
-# N_LEVELS = 19
+plane = plane_AIAA
+print("Contour Plane Cap: {plane.capacity}")
+N_LAT = 30
+N_DAYS = 50
+N_LEVELS = 19
 
 
-# lat = np.linspace(-60,60,N_LAT)
-# day = np.linspace(1, 365, N_DAYS).astype(int)
-# duty_cycle = np.zeros((N_LAT,N_DAYS))
-# plane.capacity = max_cap
+lat = np.linspace(-60,60,N_LAT)
+day = np.linspace(1, 365, N_DAYS).astype(int)
+duty_cycle = np.zeros((N_LAT,N_DAYS))
+plane.capacity = max_cap
 
-# # Create a meshgrid from the data
-# X, Y = np.meshgrid(day, lat)
+# Create a meshgrid from the data
+X, Y = np.meshgrid(day, lat)
 
-# for i in tqdm(range(X.shape[0])):
-#     for j in range(X.shape[1]):
-#         plane.update_location(Y[i, j])
-#         month,day = plotting.day_to_month_day(X[i,j],YEAR)
-#         _,_,_,_,dc = plotting.run_simulation(plane,YEAR,month,day,days)
-#         duty_cycle[i, j] = dc
+for i in tqdm(range(X.shape[0])):
+    for j in range(X.shape[1]):
+        plane.update_location(Y[i, j])
+        month,day = plotting.day_to_month_day(X[i,j],YEAR)
+        _,_,_,_,dc = plotting.run_simulation(sim,YEAR,month,day,days)
+        duty_cycle[i, j] = dc
 
-# # Plot the contour
-# plt.figure(figsize=(10, 6))
-# levels = np.linspace(0, np.max(duty_cycle), N_LEVELS)
-# contour = plt.contourf(X, Y, duty_cycle, levels=levels, cmap='viridis')
-# plt.colorbar(contour, label='Duty Cycle [%]')
+# Plot the contour
+plt.figure(figsize=(10, 6))
+levels = np.linspace(0, np.max(duty_cycle), N_LEVELS)
+contour = plt.contourf(X, Y, duty_cycle, levels=levels, cmap='viridis')
+plt.colorbar(contour, label='Duty Cycle [%]')
 
-# # Add labels and title
-# plt.xlabel('Day of the Year')
-# plt.ylabel('Latitude')
-# # plt.title('Duty Cycle Contour Plot')
+# Add labels and title
+plt.xlabel('Day of the Year')
+plt.ylabel('Latitude')
+# plt.title('Duty Cycle Contour Plot')
 
-# # Show plot
-# filename = "dc_contour_plot"
-# plot_path = os.path.join("Figures", f"{filename}.png")
-# plt.savefig(plot_path)
+# Show plot
+filename = "dc_contour_plot"
+plot_path = os.path.join("Figures", f"{filename}.png")
+plt.savefig(plot_path)
 
 
 

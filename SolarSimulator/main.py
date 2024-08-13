@@ -4,7 +4,8 @@ import datetime
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import tqdm
+
+from tqdm import tqdm
 
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.simulation_base import Simulation
@@ -89,74 +90,68 @@ print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
 
 # TODO: Make Function
 # Run simulation for optimal battery size(s)
-capacities = np.linspace(1,18,3).tolist()
-capacities.append(max_cap)
-plt.close()
-capacities = [17,20,max_cap]
-fig = -1
-duty_cycle = []
-
-year = 2019
-month = 6
-day = 1
-days = 30
-filename = "SimResults_{0}_{1}_{2}-{3}".format(year,month,day,days)
-
-for cap in capacities:
-    plane.capacity = cap
-    label = f"{plane.capacity:.2f} Ah"
-    times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days)
-    fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
-    duty_cycle.append(dc)
-print(duty_cycle)
-
-plt.tight_layout()
-plot_path = os.path.join("Figures", f"{filename}.png")
-plt.savefig(plot_path)
-
-
-
-# # TODO: Make Function
-# # Run simulation for optimal battery size(s)
-# cap = max_cap
-# # months = list(range(1,13))
-# months = [1,6]
+# capacities = np.linspace(1,18,3).tolist()
+# capacities.append(max_cap)
+# plt.close()
+# capacities = [17,20,max_cap]
 # fig = -1
 # duty_cycle = []
+
 # year = 2019
+# month = 6
 # day = 1
 # days = 30
+# filename = "SimResults_{0}_{1}_{2}-{3}".format(year,month,day,days)
 
-# filename = f"SimResults_{YEAR}_{months[0]}-{months[-1]}_{day}-{days}"
-# for i in tqdm(range(len(months))):
+# for cap in capacities:
 #     plane.capacity = cap
-#     month = months[i]
-#     label = f"Month: {month}"
-#     times,e_h,P_solar,states,dc = plotting.run_simulation(plane,year,month,day,days)
-#     times = np.linspace(1,days+1,len(e_h))
-#     fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig,label=label)
+#     label = f"{plane.capacity:.2f} Ah"
+#     times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days)
+#     fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
 #     duty_cycle.append(dc)
 # print(duty_cycle)
 
-# # Step 2: Extract the data from all lines on the first axis using the figure object
-# first_ax = fig.axes[0]  # Get the first axis from the figure
-# lines = first_ax.get_lines()  # Get all line objects
-
-# # Collect the data for each line
-# data = [(line.get_xdata(), line.get_ydata(), line.get_label()) for line in lines]
-
-# # Step 3: Create a new figure and plot the extracted data
-# fig_new, ax_new = plt.subplots()
-
-# for x_data, y_data, label in data:
-#     ax_new.scatter(x_data, y_data, label=label, s=0.2)
-# ax_new.set_title("Battery Charge Level")
-# ax_new.set_xlabel("Dates")
-# ax_new.set_ylabel("State of Charge [%]")
-# ax_new.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
 # plt.tight_layout()
+# plot_path = os.path.join("Figures", f"{filename}.png")
+# plt.savefig(plot_path)
 
-# plt.show()
+
+
+# TODO: Make Function
+# Run simulation for optimal battery size(s)
+cap = max_cap
+# months = list(range(1,13))
+months = [1,6]
+fig = -1
+duty_cycle = []
+year = 2019
+day = 1
+days = 30
+
+filename = f"SimResults_{YEAR}_{months[0]}-{months[-1]}_{day}-{days}"
+for i in tqdm(range(len(months))):
+    plane.capacity = cap
+    month = months[i]
+    label = f"Month: {month}"
+    times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days)
+    times = np.linspace(1,days+1,len(e_h))
+    fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig,label=label)
+    duty_cycle.append(dc)
+
+first_ax = fig.axes[0]
+lines = first_ax.get_lines()
+data = [(line.get_xdata(), line.get_ydata(), line.get_label()) for line in lines]
+fig_new, ax_new = plt.subplots()
+
+for x_data, y_data, label in data:
+    ax_new.scatter(x_data, y_data, label=label, s=0.2)
+ax_new.set_title("Battery Charge Level")
+ax_new.set_xlabel("Dates")
+ax_new.set_ylabel("State of Charge [%]")
+ax_new.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+
+plt.tight_layout()
+plt.show()
 
 
 # #-------------------------------------

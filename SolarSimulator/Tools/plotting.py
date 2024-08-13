@@ -157,7 +157,7 @@ def plot_battery_sweep(cap,duty,label = "",filename=-1,fig = -1,title=""):
     return fig
     
 
-def run_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1,U=20,rho=1.1):
+def run_simulation(sim: Simulation, year=2019,month=6,day=1,days=1,U=20,rho=1.1):
     # TODO: Add ability to plot multiple runs on same figure
     """Simulates and plots the duty cycle for the given plane and times
     
@@ -174,9 +174,10 @@ def run_simulation(plane: Seaplane, year=2019,month=6,day=1,days=1,U=20,rho=1.1)
     days: int
         Number of days to simulate
     """
+    plane = sim.plane
     plane.update_plane()
-    times, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-    duty_cycle,e_h,state,_ = plane.simulate_deployment(U,rho,1,.05,P_solar,5)
+    times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min',cs=sim.cs)
+    duty_cycle,e_h,state,_ = sim.simulate_deployment(U,rho,1,.05,P_solar,5)
     return times,e_h,P_solar,state,duty_cycle
 
     

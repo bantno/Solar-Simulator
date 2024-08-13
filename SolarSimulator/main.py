@@ -4,10 +4,12 @@ import datetime
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import tqdm
 
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.simulation_base import Simulation
 from Tools import plotting,stl_slice
+
 
 # Define constant parameters
 lat = 29.02291491363789
@@ -53,7 +55,7 @@ sim = Simulation(plane,
                  tz,
                  cs=True)
 
-# Create Pareto Plots
+# # Create Pareto Plots
 # plotting.make_pareto_classic(plane,(1,25),250)
 # plotting.make_pareto(plane)
 
@@ -66,6 +68,8 @@ DAYS = 30
 # Define capacities to investigate
 cap = np.linspace(5,30,50)
 
+
+# #######################################################
 # Run battery sweep
 duty,num_takeoffs = plotting.battery_sweep(sim,cap,month=MONTH,days=DAYS)
 
@@ -80,34 +84,35 @@ max_duty_row = df[df['Duty'] == max_duty]
 max_cap= max_duty_row['Capacity'].values[0]
 print("Capacity for max duty cycle: {0}".format('%.2f'%max_cap))
 print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
+# #######################################################
 
 
 # TODO: Make Function
 # Run simulation for optimal battery size(s)
-# capacities = np.linspace(1,18,3).tolist()
-# capacities.append(max_cap)
+capacities = np.linspace(1,18,3).tolist()
+capacities.append(max_cap)
 plt.close()
-# capacities = [17,20,max_cap]
-# fig = -1
-# duty_cycle = []
+capacities = [17,20,max_cap]
+fig = -1
+duty_cycle = []
 
-# year = 2019
-# month = 6
-# day = 1
-# days = 30
-# filename = "SimResults_{0}_{1}_{2}-{3}".format(year,month,day,days)
+year = 2019
+month = 6
+day = 1
+days = 30
+filename = "SimResults_{0}_{1}_{2}-{3}".format(year,month,day,days)
 
-# for cap in capacities:
-#     plane.capacity = cap
-#     label = f"{plane.capacity:.2f} Ah"
-#     times,e_h,P_solar,states,dc = plotting.run_simulation(plane,year,month,day,days)
-#     fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig,label=label)
-#     duty_cycle.append(dc)
-# print(duty_cycle)
+for cap in capacities:
+    plane.capacity = cap
+    label = f"{plane.capacity:.2f} Ah"
+    times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days)
+    fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
+    duty_cycle.append(dc)
+print(duty_cycle)
 
-# plt.tight_layout()
-# plot_path = os.path.join("Figures", f"{filename}.png")
-# plt.savefig(plot_path)
+plt.tight_layout()
+plot_path = os.path.join("Figures", f"{filename}.png")
+plt.savefig(plot_path)
 
 
 

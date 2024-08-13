@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from paretoset import paretoset
 
+from BaseClasses.simulation_base import Simulation
 from BaseClasses.seaplane_base import Seaplane
 from Utilities import ParetoFront
 
@@ -23,14 +24,14 @@ def day_to_month_day(day_number, year):
     
     return month, day
 
-def plot_solar(plane: Seaplane,year: int,month: int,day:int,days: int,filename=""):
+def plot_solar(sim: Simulation,year:int,month:int,day:int,days:int,filename=""):
     periods = 12*24*days
     freq = '5min'
-    times, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=periods,frequency=freq)
+    times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=periods,frequency=freq)
     start = f"{year}-{month}-{day}"
-    times = pd.date_range(start, periods=periods, freq=freq, tz=plane.tz)
-    wthr = plane.get_weather(plane.cs,times)
-    ghi = wthr['ghi']*plane.S # need to multiply by S
+    times = pd.date_range(start, periods=periods, freq=freq, tz=sim.tz)
+    wthr = sim.get_weather(sim.cs,times)
+    ghi = wthr['ghi']*sim.plane.S # need to multiply by S
 
     plot_path = os.path.join("Figures", f"{filename}.png")
     
@@ -54,8 +55,7 @@ def plot_solar(plane: Seaplane,year: int,month: int,day:int,days: int,filename="
     return fig
 
 
-def plot_endurance(plane,S,Cd0,af_mass,capacity,rho,filename=-1):
-    # TODO: Remove weight attribute
+def plot_endurance(plane:Seaplane,S,Cd0,af_mass,capacity,rho,filename=-1):
     # Create a figure and two subplots
     _, (ax1, ax2) = plt.subplots(1, 2,figsize=(18,5))
     # ax1.set_title('Endurance vs Forward Flight Speed')
@@ -109,20 +109,21 @@ def plot_endurance(plane,S,Cd0,af_mass,capacity,rho,filename=-1):
         plt.show()
     return
 
-def battery_sweep(plane: Seaplane,capacities,year=2019,month=6,day=1,days=1,U=20,rho=1.1):
+def battery_sweep(sim: Simulation,capacities,year=2019,month=6,day=1,days=1,U=20,rho=1.1):
+    plane = sim.plane
     duty_list = []
     if isinstance(capacities,float):
         plane.capacity = capacities
         plane.update_plane()
-        _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-        duty_cycle,_,_,num_takeoffs = plane.simulate_deployment(U,rho,1,.1,P_solar,5)
+        _, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min',cs=sim.cs)
+        duty_cycle,_,_,num_takeoffs = sim.simulate_deployment(U,rho,1,.1,P_solar,5)
         return duty_cycle,num_takeoffs
     else:
         for cap in tqdm(capacities):
             plane.capacity = cap
             plane.update_plane()
-            _, P_solar = plane.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min')
-            duty_cycle,_,_,num_takeoffs = plane.simulate_deployment(U,rho,1,.1,P_solar,5)
+            _, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min',cs=sim.cs)
+            duty_cycle,_,_,num_takeoffs = sim.simulate_deployment(U,rho,1,.1,P_solar,5)
             duty_list.append(duty_cycle)
 
     return duty_list,num_takeoffs

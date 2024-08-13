@@ -60,5 +60,5 @@ class Autonomy:
         else:
             dc = flying / total * 100
 
-        return dc, energy_history, state_history
+        return dc, energy_history, state_history, num_takeoff
 

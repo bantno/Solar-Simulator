@@ -9,8 +9,8 @@ from pvlib.bifacial.pvfactors import pvfactors_timeseries
 from pvlib import temperature
 from pvlib import pvsystem
 
-from Seaplane_base import Seaplane
-from autonomy_base import Autonomy
+from BaseClasses.seaplane_base import Seaplane
+from BaseClasses.autonomy_base import Autonomy
 
 class Simulation:
     def __init__(self,plane:Seaplane,lat,lon,tz,cs:bool=False) -> None:

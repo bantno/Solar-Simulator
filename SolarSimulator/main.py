@@ -6,9 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from BaseClasses.seaplane_base import Seaplane
-from Utilities import ParetoFront
-from Tools import plotting, stl_slice
-from tqdm import tqdm
+from BaseClasses.simulation_base import Simulation
+from Tools import plotting,stl_slice
 
 # Define constant parameters
 lat = 29.02291491363789
@@ -48,6 +47,12 @@ plane = Seaplane(lat,
 
 plane_AIAA = plane
 
+sim = Simulation(plane,
+                 lat,
+                 lon,
+                 tz,
+                 cs=True)
+
 # Create Pareto Plots
 # plotting.make_pareto_classic(plane,(1,25),250)
 # plotting.make_pareto(plane)
@@ -62,7 +67,7 @@ DAYS = 30
 cap = np.linspace(5,30,50)
 
 # Run battery sweep
-duty,num_takeoffs = plotting.battery_sweep(plane,cap,month=MONTH,days=DAYS)
+duty,num_takeoffs = plotting.battery_sweep(sim,cap,month=MONTH,days=DAYS)
 
 # Create battery sweep plot
 FILENAME = f"BatterySweep_{YEAR}_{MONTH}_{DAY}-{DAYS}"

@@ -5,12 +5,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from tqdm import tqdm
-
 from BaseClasses.seaplane_base import Seaplane
-from BaseClasses.simulation_base import Simulation
-from Tools import plotting,stl_slice
-
+from Utilities import ParetoFront
+from Tools import plotting, stl_slice
+from tqdm import tqdm
 
 # Define constant parameters
 lat = 29.02291491363789
@@ -50,13 +48,7 @@ plane = Seaplane(lat,
 
 plane_AIAA = plane
 
-sim = Simulation(plane,
-                 lat,
-                 lon,
-                 tz,
-                 cs=True)
-
-# # Create Pareto Plots
+# Create Pareto Plots
 # plotting.make_pareto_classic(plane,(1,25),250)
 # plotting.make_pareto(plane)
 
@@ -69,10 +61,8 @@ DAYS = 30
 # Define capacities to investigate
 cap = np.linspace(5,30,50)
 
-
-# #######################################################
 # Run battery sweep
-duty,num_takeoffs = plotting.battery_sweep(sim,cap,month=MONTH,days=DAYS)
+duty,num_takeoffs = plotting.battery_sweep(plane,cap,month=MONTH,days=DAYS)
 
 # Create battery sweep plot
 FILENAME = f"BatterySweep_{YEAR}_{MONTH}_{DAY}-{DAYS}"
@@ -85,14 +75,13 @@ max_duty_row = df[df['Duty'] == max_duty]
 max_cap= max_duty_row['Capacity'].values[0]
 print("Capacity for max duty cycle: {0}".format('%.2f'%max_cap))
 print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
-# #######################################################
 
 
 # TODO: Make Function
 # Run simulation for optimal battery size(s)
 # capacities = np.linspace(1,18,3).tolist()
 # capacities.append(max_cap)
-# plt.close()
+plt.close()
 # capacities = [17,20,max_cap]
 # fig = -1
 # duty_cycle = []
@@ -106,8 +95,8 @@ print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
 # for cap in capacities:
 #     plane.capacity = cap
 #     label = f"{plane.capacity:.2f} Ah"
-#     times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days)
-#     fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
+#     times,e_h,P_solar,states,dc = plotting.run_simulation(plane,year,month,day,days)
+#     fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig,label=label)
 #     duty_cycle.append(dc)
 # print(duty_cycle)
 
@@ -117,7 +106,7 @@ print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
 
 
 
-# TODO: Make Function
+# # TODO: Make Function
 # # Run simulation for optimal battery size(s)
 # cap = max_cap
 # # months = list(range(1,13))
@@ -133,14 +122,20 @@ print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
 #     plane.capacity = cap
 #     month = months[i]
 #     label = f"Month: {month}"
-#     times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days)
+#     times,e_h,P_solar,states,dc = plotting.run_simulation(plane,year,month,day,days)
 #     times = np.linspace(1,days+1,len(e_h))
 #     fig = plotting.plot_simulation(plane,times,e_h,P_solar,states,filename,fig=fig,label=label)
 #     duty_cycle.append(dc)
+# print(duty_cycle)
 
-# first_ax = fig.axes[0]
-# lines = first_ax.get_lines()
+# # Step 2: Extract the data from all lines on the first axis using the figure object
+# first_ax = fig.axes[0]  # Get the first axis from the figure
+# lines = first_ax.get_lines()  # Get all line objects
+
+# # Collect the data for each line
 # data = [(line.get_xdata(), line.get_ydata(), line.get_label()) for line in lines]
+
+# # Step 3: Create a new figure and plot the extracted data
 # fig_new, ax_new = plt.subplots()
 
 # for x_data, y_data, label in data:
@@ -149,8 +144,8 @@ print("Maximum Duty Cycle: {0}".format('%.2f'%max_duty))
 # ax_new.set_xlabel("Dates")
 # ax_new.set_ylabel("State of Charge [%]")
 # ax_new.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-
 # plt.tight_layout()
+
 # plt.show()
 
 
@@ -185,48 +180,49 @@ plotting.plot_endurance(plane,S,Cd0,af_mass,capacities,rho,filename="Endurance")
 
 
 
-# CONTOUR PLOT
-rho = 1.19
-U = 20
-days = 30
+# # CONTOUR PLOT
 
-plane = plane_AIAA
-print("Contour Plane Cap: {plane.capacity}")
-N_LAT = 30
-N_DAYS = 50
-N_LEVELS = 19
+# rho = 1.19
+# U = 20
+# days = 30
+
+# plane = plane_AIAA
+# print("Contour Plane Cap: {plane.capacity}")
+# N_LAT = 30
+# N_DAYS = 50
+# N_LEVELS = 19
 
 
-lat = np.linspace(-60,60,N_LAT)
-day = np.linspace(1, 365, N_DAYS).astype(int)
-duty_cycle = np.zeros((N_LAT,N_DAYS))
-plane.capacity = max_cap
+# lat = np.linspace(-60,60,N_LAT)
+# day = np.linspace(1, 365, N_DAYS).astype(int)
+# duty_cycle = np.zeros((N_LAT,N_DAYS))
+# plane.capacity = max_cap
 
-# Create a meshgrid from the data
-X, Y = np.meshgrid(day, lat)
+# # Create a meshgrid from the data
+# X, Y = np.meshgrid(day, lat)
 
-for i in tqdm(range(X.shape[0])):
-    for j in range(X.shape[1]):
-        plane.update_location(Y[i, j])
-        month,day = plotting.day_to_month_day(X[i,j],YEAR)
-        _,_,_,_,dc = plotting.run_simulation(sim,YEAR,month,day,days)
-        duty_cycle[i, j] = dc
+# for i in tqdm(range(X.shape[0])):
+#     for j in range(X.shape[1]):
+#         plane.update_location(Y[i, j])
+#         month,day = plotting.day_to_month_day(X[i,j],YEAR)
+#         _,_,_,_,dc = plotting.run_simulation(plane,YEAR,month,day,days)
+#         duty_cycle[i, j] = dc
 
-# Plot the contour
-plt.figure(figsize=(10, 6))
-levels = np.linspace(0, np.max(duty_cycle), N_LEVELS)
-contour = plt.contourf(X, Y, duty_cycle, levels=levels, cmap='viridis')
-plt.colorbar(contour, label='Duty Cycle [%]')
+# # Plot the contour
+# plt.figure(figsize=(10, 6))
+# levels = np.linspace(0, np.max(duty_cycle), N_LEVELS)
+# contour = plt.contourf(X, Y, duty_cycle, levels=levels, cmap='viridis')
+# plt.colorbar(contour, label='Duty Cycle [%]')
 
-# Add labels and title
-plt.xlabel('Day of the Year')
-plt.ylabel('Latitude')
-# plt.title('Duty Cycle Contour Plot')
+# # Add labels and title
+# plt.xlabel('Day of the Year')
+# plt.ylabel('Latitude')
+# # plt.title('Duty Cycle Contour Plot')
 
-# Show plot
-filename = "dc_contour_plot"
-plot_path = os.path.join("Figures", f"{filename}.png")
-plt.savefig(plot_path)
+# # Show plot
+# filename = "dc_contour_plot"
+# plot_path = os.path.join("Figures", f"{filename}.png")
+# plt.savefig(plot_path)
 
 
 

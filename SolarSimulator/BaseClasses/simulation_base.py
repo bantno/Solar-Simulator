@@ -1,4 +1,3 @@
-import os
 import warnings
 
 import numpy as np
@@ -10,138 +9,23 @@ from pvlib.bifacial.pvfactors import pvfactors_timeseries
 from pvlib import temperature
 from pvlib import pvsystem
 
+from BaseClasses.seaplane_base import Seaplane
+from BaseClasses.autonomy_base import Autonomy
 
-
-# supressing shapely warnings that occur on import of pvfactors
-warnings.filterwarnings(action='ignore', module='pvfactors')
-
-class Seaplane:
-    """Class representing a seaplane"""
-    def __init__(self, lat, lon, tz, pdc0,gamma,tracking:bool=False,cs:bool=False,
-                 cd0=0.01,cdtot = 0.06,n_tot=.75,S=1,af_mass=6,voltage=22.2,capacity=150):
-
+class Simulation:
+    def __init__(self,plane:Seaplane,lat,lon,tz,cs:bool=False) -> None:
+        self.plane = plane
+        
         # Define solar parameters
         self.lat = lat
         self.lon = lon
         self.tz = tz
-        self.tracking = tracking
-        self.location = location.Location(lat, lon, tz=tz)
-        
-        self.gamma = gamma
-        self.collected_energy = 0 #kWh
+        self.location = self.set_location(lat,lon,tz)
         self.cs = cs
 
-        # Define airframe and motion parameters
-        self.cd0 = cd0
-        self.n_tot = n_tot
-        self.S = S
-
-        path = r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data"
-        self.af_mass = self.get_total_mass(path)
-
-        self.voltage = voltage
-        self.capacity = capacity
-        self.Rt = 1.0
-        self.n = 1.3
-        self.AR = 6.0 #remove hardcode
-        self.e = 0.8
-        self.k = 1.0/(np.pi*self.AR*self.e)
-        self.cdtot = cdtot
-        
-        self.calculate_pdc0()
-        self.calculate_weight()
-        
-
-    def get_total_mass(self,directory):
-        # Search for a file with 'mass' in its name in the given directory
-        for filename in os.listdir(directory):
-            if 'mass' in filename.lower():
-                file_path = os.path.join(directory, filename)
-                with open(file_path, 'r') as file:
-                    for line in file:
-                        if 'Total Mass' in line:
-                            total_mass = float(line.split()[0])
-                            return total_mass
-        return None
-        
-    def update_plane(self):
-        self.calculate_pdc0()
-        self.calculate_weight()
-
-    def update_location(self,lat):
-        self.lat = lat
-        self.location = location.Location(self.lat, self.lon, tz=self.tz)
-
-    def calculate_pdc0(self):
-        self.pdc0 = self.S*3.3/.034 # based on ascent solar bare module - mid scale
-
-    def calculate_weight(self,energy_density=150) -> float:
-        """Estimates weight of the aircraft based on fixed airframe mass and variable battery mass.
-        
-        Assumes that the airframe mass will not change but the installed battery capacity will.
-        
-        Parameters:
-        self: Seaplane
-            Requires seaplane object
-        """
-
-        battery_mass = self.capacity*self.voltage/energy_density
-        payload_mass = 1.35
-        pv_mass = self.S*.0039/.034
-        fcs_mass = 0.2
-        propulsion_mass = 0.0002*4000 # k_ps*P_ps
-        k_str = 0.6
-
-        mass = (payload_mass + pv_mass  + fcs_mass + propulsion_mass)/(1-k_str) + battery_mass
-        mass = self.af_mass
-        self.weight = 9.81*(mass)
-
-
-    def get_endurance(self,u,rho) -> float:
-        """Returns endurance estimate according to Traub
-        
-        Parameters
-        ----------
-        U : float
-            Cruise speed [m/s]
-        rho : float
-            Air density [kg/m^3]
-        
-        """
-        p_req = self.get_required_power(u,rho)
-        e=self.Rt**(1.-self.n)*(self.n_tot*self.voltage*self.capacity)/p_req
-        return e
-
-    def get_dynamic_pressure(self,U,rho) -> float:
-        """Returns dynamic pressure
-
-        Parameters
-        ----------
-        U : float
-            Cruise speed [m/s]
-        rho : float
-            Air density [kg/m^3]
-        
-        """
-        return 0.5*rho*U**2
-
-    def get_required_power(self,U,rho) -> float:
-        """Returns required cruise power consumption
-        
-        Parameters
-        ----------
-        U : float
-            Cruise speed [m/s]
-        rho : float
-            Air density [kg/m^3]
-        
-        """
-        # q = self.get_dynamic_pressure(U,rho)
-        # D = q*self.S*self.cdtot*U
-        # D = self.cdtot*rho*0.5*self.S*(U**2) # U in m/s
-        D = .5*rho*U**3*self.S*self.cd0 + 2*self.weight**2*self.k/(rho*U*self.S) # From Traub
-        return D
-
+    def set_location(self,latitude,longitude,timezone):
+        return location.Location(latitude, longitude, tz=timezone)
+    
     def get_times(self,year,month,day,tz) -> pd.DatetimeIndex:
         """Returns hourly daterange for the times between given date and subsequent day"""
         # get times of interest
@@ -203,7 +87,33 @@ class Seaplane:
             wthr.index = times
         return wthr
 
-    def calc_collected_energy(self,year,month,day,periods,frequency):
+    def get_azimuth(self,cs,wthr):
+        "Get azimuthal position of plane for each time step"
+        if cs or wthr is None:
+            axis_azimuth = 0
+        else:
+            # Set windspeed and azimuth based on TMY data
+            #tilt axis is 90 degrees offset from wind direction
+            axis_azimuth = np.mod(wthr['wind_direction']+90,360)
+        return axis_azimuth
+    
+    def get_windspeed(self,cs,wthr):
+        """Get wind speed"""
+        if cs or wthr is None:
+            wind_speed = 0
+        else:
+            wind_speed = wthr['wind_speed'] # m/s
+        return wind_speed
+    
+    def get_air_temp(self,cs,wthr):
+        """Get the air temperature for use in solar panel model"""
+        if cs or wthr is None:
+            temp_air = 25
+        else:
+            temp_air = wthr['temp_air']
+        return temp_air
+
+    def calc_collected_energy(self,year,month,day,periods,frequency,cs):
         """Calculate energy collected by solar array for given period
         
         Parameters
@@ -221,7 +131,7 @@ class Seaplane:
 
     
         """
-        if self.cs:
+        if cs:
             start = f"{year[0]}-{month[0]}-{day[0]}"
             times = pd.date_range(start, periods=periods, freq=frequency, tz=self.tz)
             wthr = self.get_weather(self.cs,times)
@@ -240,10 +150,7 @@ class Seaplane:
 
         # set ground coverage ratio and max tilt angle
         gcr = 0.01
-        if self.tracking:
-            max_phi = 30
-        else:
-            max_phi = 0
+        max_phi = 0
 
         orientation = tracking.singleaxis(solar_position['apparent_zenith'],
                                         solar_position['azimuth'],
@@ -257,19 +164,9 @@ class Seaplane:
         pvrow_width = 10
         albedo = 0.06
 
-        #TODO: Create function to set windspeed and direction based on historical data for given location
-        if self.cs:
-            # axis_azimuth = np.random.rand(1)*360
-            # wind_speed = np.random.rand(1)*20
-            axis_azimuth = 0
-            wind_speed = 0
-            temp_air = 25
-        else:
-            # Set windspeed and azimuth based on TMY data
-            #tilt axis is 90 degrees offset from wind direction
-            axis_azimuth = np.mod(wthr['wind_direction']+90,360)
-            wind_speed = wthr['wind_speed'] # m/s
-            temp_air = wthr['temp_air']
+        axis_azimuth = self.get_azimuth(cs,wthr)
+        wind_speed = self.get_windspeed(cs,wthr)
+        temp_air = self.get_air_temp(cs,wthr)
 
         # explicity simulate on pvarray with sensor placed in middle row
         # users may select different values depending on needs
@@ -297,8 +194,8 @@ class Seaplane:
         # Create pvsystem using pvwatts model for single face solar cell
         pdc = pvsystem.pvwatts_dc(effective_irrad_mono,
                                     temp_cell,
-                                    self.pdc0,
-                                    gamma_pdc=self.gamma
+                                    self.plane.pdc0,
+                                    gamma_pdc=self.plane.gamma
                                     ).fillna(0)
 
         return times, pdc
@@ -332,55 +229,11 @@ class Seaplane:
 
         """
         # Ensure weight estimate is accurate
-        self.calculate_weight()
-
-        # Get cruise power
-        P_cruise = self.get_required_power(U,rho)
-
-        state = "Moored"
-        flying = 0
-        state_history = []
-
-        capacity_j = self.voltage*self.capacity*3600
-        energy_j = capacity_j
-        energy_history = []
-        num_takeoff = 0
+        self.plane.calculate_weight()
+        
+        P_cruise = self.plane.get_required_power(U,rho)
+        capacity_j = self.plane.voltage*self.plane.capacity*3600
         is_daytime = P_solar > 1
         min_flight_hr = 1
-
-
-        # Define state machine that governs plane behavior
-        for i in range(0,len(P_solar)):
-
-            if state == "Flying":
-                state_history.append(1)
-                flying += 1
-                energy_j-= (P_cruise - P_solar.iloc[i])*dt*60
-                if energy_j <= capacity_j*landing_capacity or not is_daytime.iloc[i]:
-                    state = "Moored"
-            elif state == "Moored":
-                state_history.append(0)
-                if energy_j <= capacity_j:
-                    energy_j+= (P_solar.iloc[i])*dt*60
-                if energy_j>=takeoff_capacity*capacity_j and is_daytime.iloc[i]:
-                    if energy_j > P_cruise*60*60*min_flight_hr:
-                        state = "Flying"
-                        energy_j -= self.calc_takeoff_penalty()
-                        energy_j-= (P_cruise - P_solar.iloc[i])*dt*60
-                        num_takeoff += 1
-            if energy_j > capacity_j :
-                energy_j = capacity_j
-            energy_history.append(energy_j/capacity_j*100)
-
-        total = is_daytime.sum()
-        if total == 0.0:
-            dc = 0
-        else:
-            dc = flying/total*100
-
         
-        return dc,energy_history,state_history,num_takeoff
-
-    def calc_takeoff_penalty(self) -> float:
-        """Determine energy cost of taking off in Joules"""
-        return 4000*15
+        return Autonomy.simple_plane_behavior(self, P_solar, is_daytime, P_cruise, capacity_j, landing_capacity, takeoff_capacity, dt, min_flight_hr, self.plane.calc_takeoff_penalty)

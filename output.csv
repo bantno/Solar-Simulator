@@ -1,0 +1,205 @@
+x @ t_i-1,y @ t_i-1,Sun @ t_i-1,Action,Final x,Reward
+0,flying,0,float,Battery Fail,0
+0,flying,0,fly,Battery Fail,0
+0,flying,1,float,30,0
+0,flying,1,float,60,0
+0,flying,1,float,90,0
+0,flying,1,fly,Battery Fail,0
+0,floating,0,float,Battery Fail,0
+0,floating,0,fly,Battery Fail,0
+0,floating,1,float,30,0
+0,floating,1,float,60,0
+0,floating,1,float,90,0
+0,floating,1,fly,Battery Fail,0
+10,flying,0,float,0,0
+10,flying,0,float,Battery Fail,0
+10,flying,0,fly,Battery Fail,0
+10,flying,1,float,40,0
+10,flying,1,float,70,0
+10,flying,1,float,100,0
+10,flying,1,fly,Battery Fail,0
+10,floating,0,float,0,0
+10,floating,0,float,Battery Fail,0
+10,floating,0,fly,Battery Fail,0
+10,floating,1,float,40,0
+10,floating,1,float,70,0
+10,floating,1,float,100,0
+10,floating,1,fly,Battery Fail,0
+20,flying,0,float,10,0
+20,flying,0,float,0,0
+20,flying,0,float,Battery Fail,0
+20,flying,0,fly,Battery Fail,0
+20,flying,1,float,50,0
+20,flying,1,float,80,0
+20,flying,1,float,110,0
+20,flying,1,fly,Battery Fail,0
+20,floating,0,float,10,0
+20,floating,0,float,0,0
+20,floating,0,float,Battery Fail,0
+20,floating,0,fly,Battery Fail,0
+20,floating,1,float,50,0
+20,floating,1,float,80,0
+20,floating,1,float,110,0
+20,floating,1,fly,Battery Fail,0
+30,flying,0,float,20,0
+30,flying,0,float,10,0
+30,flying,0,float,0,0
+30,flying,0,fly,Battery Fail,0
+30,flying,1,float,60,0
+30,flying,1,float,90,0
+30,flying,1,float,120,0
+30,flying,1,fly,0,10
+30,flying,1,fly,Battery Fail,10
+30,floating,0,float,20,0
+30,floating,0,float,10,0
+30,floating,0,float,0,0
+30,floating,0,fly,Battery Fail,0
+30,floating,1,float,60,0
+30,floating,1,float,90,0
+30,floating,1,float,120,0
+30,floating,1,fly,0,10
+30,floating,1,fly,Battery Fail,10
+40,flying,0,float,30,0
+40,flying,0,float,20,0
+40,flying,0,float,10,0
+40,flying,0,fly,Battery Fail,0
+40,flying,1,float,70,0
+40,flying,1,float,100,0
+40,flying,1,float,130,0
+40,flying,1,fly,10,10
+40,flying,1,fly,Battery Fail,10
+40,floating,0,float,30,0
+40,floating,0,float,20,0
+40,floating,0,float,10,0
+40,floating,0,fly,Battery Fail,0
+40,floating,1,float,70,0
+40,floating,1,float,100,0
+40,floating,1,float,130,0
+40,floating,1,fly,10,10
+40,floating,1,fly,Battery Fail,10
+50,flying,0,float,40,0
+50,flying,0,float,30,0
+50,flying,0,float,20,0
+50,flying,0,fly,Battery Fail,0
+50,flying,1,float,80,0
+50,flying,1,float,110,0
+50,flying,1,float,140,0
+50,flying,1,fly,20,10
+50,flying,1,fly,Battery Fail,10
+50,floating,0,float,40,0
+50,floating,0,float,30,0
+50,floating,0,float,20,0
+50,floating,0,fly,Battery Fail,0
+50,floating,1,float,80,0
+50,floating,1,float,110,0
+50,floating,1,float,140,0
+50,floating,1,fly,20,10
+50,floating,1,fly,Battery Fail,10
+60,flying,0,float,50,0
+60,flying,0,float,40,0
+60,flying,0,float,30,0
+60,flying,0,fly,Battery Fail,0
+60,flying,1,float,90,0
+60,flying,1,float,120,0
+60,flying,1,float,150,0
+60,flying,1,fly,30,10
+60,flying,1,fly,0,20
+60,flying,1,fly,Battery Fail,20
+60,floating,0,float,50,0
+60,floating,0,float,40,0
+60,floating,0,float,30,0
+60,floating,0,fly,Battery Fail,0
+60,floating,1,float,90,0
+60,floating,1,float,120,0
+60,floating,1,float,150,0
+60,floating,1,fly,30,10
+60,floating,1,fly,0,20
+60,floating,1,fly,Battery Fail,20
+70,flying,0,float,60,0
+70,flying,0,float,50,0
+70,flying,0,float,40,0
+70,flying,0,fly,0,0
+70,flying,0,fly,Battery Fail,0
+70,flying,1,float,100,0
+70,flying,1,float,130,0
+70,flying,1,float,160,0
+70,flying,1,fly,40,10
+70,flying,1,fly,10,20
+70,flying,1,fly,Battery Fail,20
+70,floating,0,float,60,0
+70,floating,0,float,50,0
+70,floating,0,float,40,0
+70,floating,0,fly,0,0
+70,floating,0,fly,Battery Fail,0
+70,floating,1,float,100,0
+70,floating,1,float,130,0
+70,floating,1,float,160,0
+70,floating,1,fly,40,10
+70,floating,1,fly,10,20
+70,floating,1,fly,Battery Fail,20
+80,flying,0,float,70,0
+80,flying,0,float,60,0
+80,flying,0,float,50,0
+80,flying,0,fly,10,0
+80,flying,0,fly,Battery Fail,0
+80,flying,1,float,110,0
+80,flying,1,float,140,0
+80,flying,1,float,170,0
+80,flying,1,fly,50,10
+80,flying,1,fly,20,20
+80,flying,1,fly,Battery Fail,20
+80,floating,0,float,70,0
+80,floating,0,float,60,0
+80,floating,0,float,50,0
+80,floating,0,fly,10,0
+80,floating,0,fly,Battery Fail,0
+80,floating,1,float,110,0
+80,floating,1,float,140,0
+80,floating,1,float,170,0
+80,floating,1,fly,50,10
+80,floating,1,fly,20,20
+80,floating,1,fly,Battery Fail,20
+90,flying,0,float,80,0
+90,flying,0,float,70,0
+90,flying,0,float,60,0
+90,flying,0,fly,20,0
+90,flying,0,fly,Battery Fail,0
+90,flying,1,float,120,0
+90,flying,1,float,150,0
+90,flying,1,float,180,0
+90,flying,1,fly,60,10
+90,flying,1,fly,30,20
+90,flying,1,fly,0,30
+90,floating,0,float,80,0
+90,floating,0,float,70,0
+90,floating,0,float,60,0
+90,floating,0,fly,20,0
+90,floating,0,fly,Battery Fail,0
+90,floating,1,float,120,0
+90,floating,1,float,150,0
+90,floating,1,float,180,0
+90,floating,1,fly,60,10
+90,floating,1,fly,30,20
+90,floating,1,fly,0,30
+100,flying,0,float,90,0
+100,flying,0,float,80,0
+100,flying,0,float,70,0
+100,flying,0,fly,30,0
+100,flying,0,fly,Battery Fail,0
+100,flying,1,float,130,0
+100,flying,1,float,160,0
+100,flying,1,float,190,0
+100,flying,1,fly,70,10
+100,flying,1,fly,40,20
+100,flying,1,fly,10,30
+100,floating,0,float,90,0
+100,floating,0,float,80,0
+100,floating,0,float,70,0
+100,floating,0,fly,30,0
+100,floating,0,fly,Battery Fail,0
+100,floating,1,float,130,0
+100,floating,1,float,160,0
+100,floating,1,float,190,0
+100,floating,1,fly,70,10
+100,floating,1,fly,40,20
+100,floating,1,fly,10,30

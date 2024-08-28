@@ -61,4 +61,8 @@ class Autonomy:
             dc = flying / total * 100
 
         return dc, energy_history, state_history, num_takeoff
+    
+    def mdp(self):
+        optimal_policy = ''
+        return optimal_policy
 

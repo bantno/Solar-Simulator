@@ -1,85 +1,122 @@
 import pandas as pd
+import numpy as np
 
-def create_table(charges, y_states, actions, transitions, rewards):
-    data = []
-    for charge in charges:
-        for y in y_states:
-            for sun in [0, 1]:
-                for action, transition, reward in zip(actions, transitions[sun], rewards[sun]):
-                    next_charge = transition  # Ensure charge stays within 0-100
-                    data.append([charge, y, sun, action, next_charge, reward])
+
+class mdp:
+    """
+    Class representing a markov decision process problem
+    """
+    def __init__(self,states,max_stages,stm,reward):
+        self.states=states
+        self.stm = stm
+        self.reward = reward
+        self.reward_table = np.full((len(self.states),max_stages),np.nan)
+
+    def create_table(self,charges, y_states, actions, transitions, rewards):
+        """
+        Create state transition table
+        """
+        data = []
+        for charge in charges:
+            for y in y_states:
+                for sun in [0, 1]:
+                    for action, transition, reward in zip(actions, transitions[sun], rewards[sun]):
+                        next_charge = transition  # Ensure charge stays within 0-100
+                        data.append([charge, y, sun, action, next_charge, reward])
+        
+        df = pd.DataFrame(data, columns=["x (State of Charge) @ t=i", "y @ t=i", "Sun?", "Action @ t=i", "delta_x @ t=i+1", "Reward @ i"])
+        return df
+
     
-    df = pd.DataFrame(data, columns=["x (State of Charge) @ t=i", "y @ t=i", "Sun?", "Action @ t=i", "delta_x @ t=i+1", "Reward @ i"])
-    return df
+    def calculate_reward(self,state,action,sun):
+        """
+        Calculates the current reward based on the state, action, and sun.
 
-# Define the states of charge, y states, actions, transitions, and rewards
-charges = list(range(0, 101, 10))  # State of charge from 0 to 100 in increments of 10
-y_states = ["flying", "floating"]
-actions = ["float", "fly"]
-transitions = [
-    [-1, -7],  # Transitions for sun=0
-    [3, -3]    # Transitions for sun=1
-]
-rewards = [
-    [0, 0],    # Rewards for sun=0
-    [0, 10]    # Rewards for sun=1
-]
+        Parameters:
+        state (tuple): The current state, (SoC, "flying" or "floating")
+        sun (int): The sun state, 0 or 1.
+        stm (list):
+        reward (list):
 
-# Create the table
-table = create_table(charges, y_states, actions, transitions, rewards)
-print(table.head(16))
+        Returns:
+        int: The reward based on the provided table.
+        """
+        
+        if action == 1:
+            if state[1] == "flying":
+                if sun == 0:
+                    step_reward = self.stm[1]
+                elif sun == 1:
+                    step_reward = self.stm[3]
+            elif state[1] == "moored":
+                if sun == 0:
+                    step_reward = self.stm[5]
+                elif sun == 1:
+                    step_reward = self.stm[7]
 
+        if action == 0:
+            if state[1] == "flying":
+                if sun == 0:
+                    step_reward = self.stm[0]
+                elif sun == 1:
+                    step_reward = self.stm[2]
+            elif state[1] == "moored":
+                if sun == 0:
+                    step_reward = self.stm[4]
+                elif sun == 1:
+                    step_reward = self.stm[6]
+            
+                
 
-import pandas as pd
-
-def simulate_multiple_steps(initial_charge, y_states, actions, transitions, rewards, max_steps):
-    data = []
+        # If the inputs do not match any of the conditions in the table, return None or raise an error.
+        return step_reward
     
-    for charge in initial_charge:
-        for y in y_states:
-            for sun in [0, 1]:
-                for action, transition, reward in zip(actions, transitions[sun], rewards[sun]):
-                    current_charge = charge
-                    cumulative_reward = 0
-                    current_sun = sun
-                    
-                    for step in range(max_steps):
-                        next_charge = current_charge + transition
-                        
-                        if next_charge < 0:
-                            next_charge = "Battery Fail"
-                            data.append([charge, y, current_sun, action, next_charge, cumulative_reward])
-                            break
-                        
-                        cumulative_reward += reward
-                        current_charge = next_charge
+    def daylight(self,hour):
+        """
+        Returns 0 if the input hour modulo 24 is between 0 and 5 or 18 and 23,
+        and 1 otherwise.
 
-                        # Record the data for this step, including the sun state
-                        data.append([charge, y, current_sun, action, current_charge, cumulative_reward])
+        Parameters:
+        hour (int): The input hour.
 
-                        # If battery fails, stop further steps
-                        if current_charge == "Battery Fail":
-                            break
-    
-    df = pd.DataFrame(data, columns=["x @ t_i-1", "y @ t_i-1", "Sun @ t_i-1", "Action", "Final x", "Reward"])
-    return df
+        Returns:
+        int: 0 or 1 based on the conditions.
+        """
+        hour_mod = hour % 24
+        if 0 <= hour_mod <= 5 or 18 <= hour_mod <= 23:
+            return 0
+        else:
+            return 1
+        
+    def calculate_table(self):
+        entry = []
+        for k in range(MAX_STAGES-1,-1,-1):
+            for i,state in enumerate(self.states):
+                # TODO: Make this a function
+                # Entry is simply single step reward if filling out last column of 
+                if k==MAX_STAGES-1:
+                    entry = self.calculate_reward(state,self.daylight(k))
+                    self.reward_table[i,k] = entry
+                else:
+                    entry = self.calculate_reward
 
-# Define the states of charge, y states, actions, transitions, and rewards
-initial_charge = list(range(0, 101, 10))  # State of charge from 0 to 100 in increments of 10
-y_states = ["flying", "floating"]
-actions = ["float", "fly"]
-transitions = [
-    [-10, -70],  # Transitions for sun=0 (e.g., decrease state of charge)
-    [30, -30]    # Transitions for sun=1 (e.g., increase or decrease state of charge)
-]
-rewards = [
-    [0, 0],    # Rewards for sun=0
-    [0, 10]    # Rewards for sun=1
-]
-max_steps = 3  # Number of time steps to simulate
+        
+        return None
 
-# Create the full table with multiple steps and sun state
-full_table = simulate_multiple_steps(initial_charge, y_states, actions, transitions, rewards, max_steps)
-print(full_table.head(20))  # Print the first 20 rows to see the simulation over time steps
-full_table.to_csv('output.csv',index=False)
+
+
+
+# Example usage
+states=[]
+for state in ["moored","flying"]:
+    for soc in range(0,101,20):
+        states.append((soc,state))
+print(states)
+
+stm = [0,-40,20,-20,0,-40,20,-20]
+reward = [0,0,0,10,0,0,0,0]
+MAX_STAGES=20
+mdproblem = mdp(states,MAX_STAGES,stm,reward)
+mdproblem.calculate_table()
+print(mdproblem.reward_table)
 

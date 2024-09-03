@@ -66,10 +66,72 @@ class mdp:
                 elif sun == 1:
                     step_reward = self.stm[6]
             
-                
-
-        # If the inputs do not match any of the conditions in the table, return None or raise an error.
         return step_reward
+    
+    def get_future_reward(self,state,stage):
+        """Function that retrieves expected reward for the given state and stage"""
+        i=0
+        for s in self.states:
+            if state == s:
+                break
+            else:
+                i+=1
+        
+        return self.reward_table[i,stage]
+    
+    def get_possible_next_states(self, state, sun):
+        """
+        Generates possible next states based on the current state and sun.
+
+        Parameters:
+        state (tuple): The current state, (SoC, "flying" or "floating").
+        sun (int): The sun state, 0 or 1.
+
+        Returns:
+        list of tuples: Possible next states, each paired with the action taken.
+        """
+        soc, mode = state
+        possible_states = []
+
+        if mode == "flying":
+            if sun == 1:
+                next_soc = soc - 20
+                if next_soc >= 0:
+                    possible_states.append(((next_soc, "flying"), "flying"))  # Continue flying with sun
+            else:
+                next_soc = soc - 40
+                if next_soc >= 0:
+                    possible_states.append(((next_soc, "flying"), "flying"))  # Continue flying without sun
+
+        elif mode == "floating":
+            if sun == 1:
+                next_soc = soc + 20
+                if next_soc <= 100:
+                    possible_states.append((next_soc, "floating"))  # Continue floating with sun
+            else:
+                next_soc = soc
+                possible_states.append((next_soc, "floating"))  # Continue floating without sun (no change in SoC)
+
+        # Include the option to switch modes at each step, ensuring valid SoC
+        if mode == "flying":
+            if sun == 1:
+                next_soc = soc + 20
+                if next_soc <= 100:
+                    possible_states.append((next_soc, "floating"))  # Switch to floating with sun
+            else:
+                next_soc = soc
+                possible_states.append((next_soc, "floating"))  # Switch to floating without sun
+        else:
+            if sun == 1:
+                next_soc = soc - 20
+                if next_soc >= 0:
+                    possible_states.append((next_soc, "flying"))  # Switch to flying with sun
+            else:
+                next_soc = soc - 40
+                if next_soc >= 0:
+                    possible_states.append((next_soc, "flying"))  # Switch to flying without sun
+
+        return possible_states
     
     def daylight(self,hour):
         """
@@ -90,15 +152,20 @@ class mdp:
         
     def calculate_table(self):
         entry = []
-        for k in range(MAX_STAGES-1,-1,-1):
-            for i,state in enumerate(self.states):
-                # TODO: Make this a function
-                # Entry is simply single step reward if filling out last column of 
-                if k==MAX_STAGES-1:
-                    entry = self.calculate_reward(state,self.daylight(k))
-                    self.reward_table[i,k] = entry
-                else:
-                    entry = self.calculate_reward
+
+        # for k in range(MAX_STAGES-1,-1,-1):
+        #     sun = self.daylight(k)
+        #     for i,state in enumerate(self.states):
+        #         # TODO: Make this a function
+
+        #         if k==MAX_STAGES-1:
+        #             entry = self.calculate_reward(state,0,self.daylight(k)) # need to figure out how to do the terminal calculation
+        #             self.reward_table[i,k] = entry
+        #         else:
+        #             candidates = []
+        #             for next_state in self.get_possible_next_states(state,sun):
+        #                 action = 0
+        #                 candidate = self.calculate_reward(state,action,sun) + self.get_future_reward(next_state,k+1)
 
         
         return None
@@ -111,12 +178,16 @@ states=[]
 for state in ["moored","flying"]:
     for soc in range(0,101,20):
         states.append((soc,state))
-print(states)
+# print(states)
 
 stm = [0,-40,20,-20,0,-40,20,-20]
 reward = [0,0,0,10,0,0,0,0]
 MAX_STAGES=20
 mdproblem = mdp(states,MAX_STAGES,stm,reward)
-mdproblem.calculate_table()
-print(mdproblem.reward_table)
+initial = (40,"flying")
+print(mdproblem.get_possible_next_states(state=initial,sun=1))
+
+
+# mdproblem.calculate_table()
+# print(mdproblem.reward_table)
 

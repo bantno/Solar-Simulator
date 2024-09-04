@@ -7,11 +7,13 @@ class mdp:
     Class representing a markov decision process problem
     """
 
-    def __init__(self, soc_increment, vehicle_states, max_stages, stm):
+    def __init__(self, soc_increment, vehicle_states, max_stages, actions, weights):
 
         self.states = self.create_states(soc_increment, vehicle_states)
+        self.actions = actions
+        self.w = weights
         self.create_ev_table(max_stages)
-        self.stm = stm
+        
 
     @staticmethod
     def create_states(soc_increment: int, vehicle_states: list) -> list:
@@ -44,6 +46,37 @@ class mdp:
             for soc in range(0, 101, soc_increment):
                 states.append((soc, state))
         return states
+    
+    @staticmethod
+    def get_activation_vector(u):
+        pass
+
+    @staticmethod
+    def get_control_reward(u: str, w: list):
+        """
+        Computes a control reward based on the input action string `u` and a list of weights `w`.
+
+        Args:
+            u (str): A string representing the control action. Expected values are:
+                - 'float': Represents a floating action, which is internally mapped to 0.
+                - 'fly': Represents a flying action, which is internally mapped to 1.
+            w (list): A list of numerical values (weights) to be scaled by the action.
+
+        Returns:
+            reward (float): A scalar reward calculated by sequentially multiplying the action value
+                   (`0` for 'float' or `1` for 'fly') with each element in the list `w`.
+        """
+
+        if u == "float":
+            u = 0
+        elif u == "fly":
+            u = 1
+
+        reward = u
+        for element in w:
+            reward *= element
+
+        return reward
 
     def create_ev_table(self, max_stages):
         """
@@ -76,54 +109,53 @@ class mdp:
             columns=range(num_columns),
         )
 
-    @staticmethod
-    def get_control_reward(u: str, w: list):
-        """
-        Computes a control reward based on the input action string `u` and a list of weights `w`.
+        for k in range(max_stages,-1,-1):
+            for s in self.states:
+                max_reward = -np.inf
+                for u in self.actions:
+                    control_reward = self.get_control_reward(u,self.w)
+                    future_reward = self.get_future_reward(s,u,k)
+                    reward = control_reward+future_reward
+                    if reward > max_reward:
+                        max_reward = reward
+                        # chosen_action = u
+                self.ev_table[s,k] = max_reward
 
-        Args:
-            u (str): A string representing the control action. Expected values are:
-                - 'float': Represents a floating action, which is internally mapped to 0.
-                - 'fly': Represents a flying action, which is internally mapped to 1.
-            w (list): A list of numerical values (weights) to be scaled by the action.
-
-        Returns:
-            reward (float): A scalar reward calculated by sequentially multiplying the action value
-                   (`0` for 'float' or `1` for 'fly') with each element in the list `w`.
-        """
-
-        if u == "float":
-            u = 0
-        elif u == "fly":
-            u = 1
-
-        reward = u
-        for element in w:
-            reward *= element
-
-        return reward
-
-    def get_future_reward(self, state, stage: int):
+    def get_future_reward(self, state, action, stage: int):
         """
         Function to retrieve the expected reward for a given state and stage.
 
         Params:
-            state (): State to check
-            k (int): Stage to check (typically timestep)
+            state (tuple): State from which an action will occur
+            u (int): Action to be attempted
+            k (int): Stage from which action will occur
 
         Returns:
-            reward : rewa
+            reward : 
         """
-        # TODO: Look into multi-indexing for data structure
+        if action == "float":
+            u=0
+        elif action == "fly":
+            u=1
 
-        if stage not in self.ev_table.columns:
-            reward = self.ev_table.loc[state, stage - 1]
+        new_stage = stage+1
+
+        if new_stage not in self.ev_table.columns:
+            reward = 0
         else:
-            reward = self.ev_table.loc[state, stage]
+            # TODO: Determine which state the action will bring us to
+            
+            # Determine value of the state transition activation function
+            a = self.get_activation_vector(u)
+            new_state = state + a
+            # Get the expected future reward for the new state
+            reward = self.ev_table.loc[new_state, new_stage]
 
         return reward
+    
 
-    def get_value(self, state, k):
+
+    def get_value(self, state, u, w, k):
         """
         Function to determine the value of being in a given state at a given stage.
 
@@ -136,8 +168,8 @@ class mdp:
                 Value of being in the provided state at the provided stage.
 
         """
-        control_reward = self.get_control_reward(state, k)
-        future_reward = self.get_future_reward(state, k + 1)
+        control_reward = self.get_control_reward(u, w)
+        future_reward = self.get_future_reward(state, u, k)
         return control_reward + future_reward
 
     def daylight(self, hour):

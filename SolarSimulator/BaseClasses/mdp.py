@@ -7,11 +7,10 @@ class mdp:
     Class representing a markov decision process problem
     """
 
-    def __init__(self, soc_increment, vehicle_states, max_stages, actions, weights):
-
+    def __init__(self, soc_increment, vehicle_states, max_stages, actions):
+        self.vehicle_states = vehicle_states
         self.states = self.create_states(soc_increment, vehicle_states)
         self.actions = actions
-        self.w = weights
         self.create_ev_table(max_stages)
         
 
@@ -48,8 +47,19 @@ class mdp:
         return states
     
     @staticmethod
-    def get_activation_vector(u):
-        pass
+    def get_activation_vector(u,w):
+        w = w[0] # Pull out the first value of w
+        if w == 0:
+            if u == 0:
+                a = 0
+            elif u == 1:
+                a = -40
+        elif w == 1:
+            if u == 0:
+                a = 20
+            elif u == 1:
+                a = -20
+        return a
 
     @staticmethod
     def get_control_reward(u: str, w: list):
@@ -80,7 +90,7 @@ class mdp:
 
     def create_ev_table(self, max_stages):
         """
-        Creates an empty expectation value (EV) table with a specified number of stages.
+        Creates an expectation value (EV) table with a specified number of stages.
 
         Args:
             max_stages (int): The number of stages to define the number of columns in the EV table.
@@ -91,37 +101,30 @@ class mdp:
         Attributes:
             ev_table (pd.DataFrame): A DataFrame where rows correspond to states and columns correspond to stages. Each cell is initialized to `NaN`.
 
-        Examples:
-            If `self.states` is `['state1', 'state2']` and `max_stages` is 3, the resulting `ev_table` will look like:
-
-            ```
-                   0   1   2
-            state1  NaN NaN NaN
-            state2  NaN NaN NaN
-            ```
         """
         num_columns = max_stages
 
         # Create table of zeros
         self.ev_table = pd.DataFrame(
             np.nan,
-            index=self.states,
+            index=pd.MultiIndex.from_tuples(self.states),
             columns=range(num_columns),
         )
 
-        for k in range(max_stages,-1,-1):
+        for k in range(max_stages-1,-1,-1):
+            w = [self.daylight(k)]
             for s in self.states:
                 max_reward = -np.inf
                 for u in self.actions:
-                    control_reward = self.get_control_reward(u,self.w)
-                    future_reward = self.get_future_reward(s,u,k)
+                    control_reward = self.get_control_reward(u,w)
+                    future_reward = self.get_future_reward(s,u,k,w)
                     reward = control_reward+future_reward
                     if reward > max_reward:
                         max_reward = reward
                         # chosen_action = u
-                self.ev_table[s,k] = max_reward
+                self.ev_table.loc[s,k] = max_reward
 
-    def get_future_reward(self, state, action, stage: int):
+    def get_future_reward(self, state, action, stage: int, w):
         """
         Function to retrieve the expected reward for a given state and stage.
 
@@ -146,31 +149,21 @@ class mdp:
             # TODO: Determine which state the action will bring us to
             
             # Determine value of the state transition activation function
-            a = self.get_activation_vector(u)
-            new_state = state + a
+            a = self.get_activation_vector(u,w)
+            soc = state[0]
+            if u == 0:
+                vehicle_state = self.vehicle_states[0]
+            elif u == 1:
+                vehicle_state = self.vehicle_states[1]
+            
+            new_state = (soc+a,vehicle_state)
             # Get the expected future reward for the new state
-            reward = self.ev_table.loc[new_state, new_stage]
+            if new_state[0] < 0 or new_state[0] > 100:
+                reward = -np.inf
+            else:
+                reward = self.ev_table.loc[new_state, new_stage]
 
         return reward
-    
-
-
-    def get_value(self, state, u, w, k):
-        """
-        Function to determine the value of being in a given state at a given stage.
-
-        Params:
-            i (int): Index of the list of states that describes the current state
-            k (int): Current stage (typically timestep)
-
-        Returns:
-            value (float):
-                Value of being in the provided state at the provided stage.
-
-        """
-        control_reward = self.get_control_reward(u, w)
-        future_reward = self.get_future_reward(state, u, k)
-        return control_reward + future_reward
 
     def daylight(self, hour):
         """

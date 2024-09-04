@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
 
 class mdp:
@@ -7,8 +8,9 @@ class mdp:
     Class representing a markov decision process problem
     """
 
-    def __init__(self, soc_increment, vehicle_states, max_stages, actions):
+    def __init__(self, soc_increment, vehicle_states, max_stages, actions, stm):
         self.vehicle_states = vehicle_states
+        self.stm = stm
         self.states = self.create_states(soc_increment, vehicle_states)
         self.actions = actions
         self.create_ev_table(max_stages)
@@ -46,19 +48,18 @@ class mdp:
                 states.append((soc, state))
         return states
     
-    @staticmethod
-    def get_activation_vector(u,w):
+    def get_activation_vector(self,u,w):
         w = w[0] # Pull out the first value of w
         if w == 0:
             if u == 0:
-                a = 0
+                a = self.stm[0]
             elif u == 1:
-                a = -40
+                a = self.stm[1]
         elif w == 1:
             if u == 0:
-                a = 20
+                a = self.stm[2]
             elif u == 1:
-                a = -20
+                a = self.stm[3]
         return a
 
     @staticmethod
@@ -111,7 +112,7 @@ class mdp:
             columns=range(num_columns),
         )
 
-        for k in range(max_stages-1,-1,-1):
+        for k in tqdm(range(max_stages-1,-1,-1)):
             w = [self.daylight(k)]
             for s in self.states:
                 max_reward = -np.inf

@@ -58,7 +58,8 @@ class TestMDP(unittest.TestCase):
         self.vehicle_states = ["moored", "flying"]
         self.max_stages = 3
         self.actions = ["float", "fly"]
-        self.mdp_instance = mdp(self.soc_increment, self.vehicle_states, self.max_stages, self.actions)
+        self.stm = [0, -40, 20, -20]
+        self.mdp_instance = mdp(self.soc_increment, self.vehicle_states, self.max_stages, self.actions, self.stm)
     
     def test_create_states(self):
         expected_states = [
@@ -94,11 +95,12 @@ class TestMDP(unittest.TestCase):
 
 if __name__ == '__main__':
     # unittest.main()s
-    soc_increment = 1
+    soc_increment = 5
     vehicle_states = ["moored", "flying"]
-    max_stages = 355
+    max_stages = 24
     actions = ["float", "fly"]
-    mdp_instance = mdp(soc_increment, vehicle_states, max_stages, actions)
+    stm = [0, -40, 20, -20]
+    mdp_instance = mdp(soc_increment, vehicle_states, max_stages, actions, stm)
     # print(mdp_instance.states)
     # print(mdp_instance.ev_table)
     plot_surfaces_by_state(mdp_instance.ev_table)

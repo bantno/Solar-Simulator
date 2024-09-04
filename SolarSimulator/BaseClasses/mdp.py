@@ -6,134 +6,141 @@ class mdp:
     """
     Class representing a markov decision process problem
     """
-    def __init__(self,states,max_stages,stm,reward):
-        self.states=states
+
+    def __init__(self, soc_increment, vehicle_states, max_stages, stm):
+
+        self.states = self.create_states(soc_increment, vehicle_states)
+        self.create_ev_table(max_stages)
         self.stm = stm
-        self.reward = reward
-        self.reward_table = np.full((len(self.states),max_stages),np.nan)
 
-    def create_table(self,charges, y_states, actions, transitions, rewards):
+    @staticmethod
+    def create_states(soc_increment: int, vehicle_states: list) -> list:
         """
-        Create state transition table
-        """
-        data = []
-        for charge in charges:
-            for y in y_states:
-                for sun in [0, 1]:
-                    for action, transition, reward in zip(actions, transitions[sun], rewards[sun]):
-                        next_charge = transition  # Ensure charge stays within 0-100
-                        data.append([charge, y, sun, action, next_charge, reward])
-        
-        df = pd.DataFrame(data, columns=["x (State of Charge) @ t=i", "y @ t=i", "Sun?", "Action @ t=i", "delta_x @ t=i+1", "Reward @ i"])
-        return df
+        Generate a list of states based on state of charge (SoC) increments and specified vehicle states.
 
-    
-    def calculate_reward(self,state,action,sun):
-        """
-        Calculates the current reward based on the state, action, and sun.
+        This static method creates a list of states where each state is represented by a tuple
+        containing the state of charge (SoC) and the state type. The SoC values range from 0 to 100
+        in increments specified by the `soc_increment` parameter. The state types are provided
+        by the `vehicle_states` parameter, allowing for flexibility in defining different vehicle states.
 
         Parameters:
-        state (tuple): The current state, (SoC, "flying" or "floating")
-        sun (int): The sun state, 0 or 1.
-        stm (list):
-        reward (list):
+            soc_increment (int): The increment value for state of charge. It must be a positive integer
+                                that determines the step size between SoC values.
+            vehicle_states (list): A list of state types (strings) to be used in the tuples. Each state
+                                type will be combined with the SoC values to create the list of states.
 
         Returns:
-        int: The reward based on the provided table.
-        """
-        
-        if action == 1:
-            if state[1] == "flying":
-                if sun == 0:
-                    step_reward = self.stm[1]
-                elif sun == 1:
-                    step_reward = self.stm[3]
-            elif state[1] == "moored":
-                if sun == 0:
-                    step_reward = self.stm[5]
-                elif sun == 1:
-                    step_reward = self.stm[7]
+            list: A list of tuples where each tuple represents a state with (SoC, state type).
+                SoC values range from 0 to 100, and state types are those provided in `vehicle_states`.
 
-        if action == 0:
-            if state[1] == "flying":
-                if sun == 0:
-                    step_reward = self.stm[0]
-                elif sun == 1:
-                    step_reward = self.stm[2]
-            elif state[1] == "moored":
-                if sun == 0:
-                    step_reward = self.stm[4]
-                elif sun == 1:
-                    step_reward = self.stm[6]
-            
-        return step_reward
-    
-    def get_future_reward(self,state,stage):
-        """Function that retrieves expected reward for the given state and stage"""
-        i=0
-        for s in self.states:
-            if state == s:
-                break
-            else:
-                i+=1
-        
-        return self.reward_table[i,stage]
-    
-    def get_possible_next_states(self, state, sun):
+        Example:
+            >>> create_states(20, ["moored", "flying"])
+            [(0, 'moored'), (20, 'moored'), (40, 'moored'), (60, 'moored'), (80, 'moored'), (100, 'moored'),
+            (0, 'flying'), (20, 'flying'), (40, 'flying'), (60, 'flying'), (80, 'flying'), (100, 'flying')]
         """
-        Generates possible next states based on the current state and sun.
 
-        Parameters:
-        state (tuple): The current state, (SoC, "flying" or "floating").
-        sun (int): The sun state, 0 or 1.
+        states = []
+        for state in vehicle_states:
+            for soc in range(0, 101, soc_increment):
+                states.append((soc, state))
+        return states
+
+    def create_ev_table(self, max_stages):
+        """
+        Creates an empty expectation value (EV) table with a specified number of stages.
+
+        Args:
+            max_stages (int): The number of stages to define the number of columns in the EV table.
 
         Returns:
-        list of tuples: Possible next states, each paired with the action taken.
+            None: This method does not return a value. It updates the `ev_table` attribute of the instance with a new DataFrame.
+
+        Attributes:
+            ev_table (pd.DataFrame): A DataFrame where rows correspond to states and columns correspond to stages. Each cell is initialized to `NaN`.
+
+        Examples:
+            If `self.states` is `['state1', 'state2']` and `max_stages` is 3, the resulting `ev_table` will look like:
+
+            ```
+                   0   1   2
+            state1  NaN NaN NaN
+            state2  NaN NaN NaN
+            ```
         """
-        soc, mode = state
-        possible_states = []
+        num_columns = max_stages
 
-        if mode == "flying":
-            if sun == 1:
-                next_soc = soc - 20
-                if next_soc >= 0:
-                    possible_states.append(((next_soc, "flying"), "flying"))  # Continue flying with sun
-            else:
-                next_soc = soc - 40
-                if next_soc >= 0:
-                    possible_states.append(((next_soc, "flying"), "flying"))  # Continue flying without sun
+        # Create table of zeros
+        self.ev_table = pd.DataFrame(
+            np.nan,
+            index=self.states,
+            columns=range(num_columns),
+        )
 
-        elif mode == "floating":
-            if sun == 1:
-                next_soc = soc + 20
-                if next_soc <= 100:
-                    possible_states.append((next_soc, "floating"))  # Continue floating with sun
-            else:
-                next_soc = soc
-                possible_states.append((next_soc, "floating"))  # Continue floating without sun (no change in SoC)
+    @staticmethod
+    def get_control_reward(u: str, w: list):
+        """
+        Computes a control reward based on the input action string `u` and a list of weights `w`.
 
-        # Include the option to switch modes at each step, ensuring valid SoC
-        if mode == "flying":
-            if sun == 1:
-                next_soc = soc + 20
-                if next_soc <= 100:
-                    possible_states.append((next_soc, "floating"))  # Switch to floating with sun
-            else:
-                next_soc = soc
-                possible_states.append((next_soc, "floating"))  # Switch to floating without sun
+        Args:
+            u (str): A string representing the control action. Expected values are:
+                - 'float': Represents a floating action, which is internally mapped to 0.
+                - 'fly': Represents a flying action, which is internally mapped to 1.
+            w (list): A list of numerical values (weights) to be scaled by the action.
+
+        Returns:
+            reward (float): A scalar reward calculated by sequentially multiplying the action value
+                   (`0` for 'float' or `1` for 'fly') with each element in the list `w`.
+        """
+
+        if u == "float":
+            u = 0
+        elif u == "fly":
+            u = 1
+
+        reward = u
+        for element in w:
+            reward *= element
+
+        return reward
+
+    def get_future_reward(self, state, stage: int):
+        """
+        Function to retrieve the expected reward for a given state and stage.
+
+        Params:
+            state (): State to check
+            k (int): Stage to check (typically timestep)
+
+        Returns:
+            reward : rewa
+        """
+        # TODO: Look into multi-indexing for data structure
+
+        if stage not in self.ev_table.columns:
+            reward = self.ev_table.loc[state, stage - 1]
         else:
-            if sun == 1:
-                next_soc = soc - 20
-                if next_soc >= 0:
-                    possible_states.append((next_soc, "flying"))  # Switch to flying with sun
-            else:
-                next_soc = soc - 40
-                if next_soc >= 0:
-                    possible_states.append((next_soc, "flying"))  # Switch to flying without sun
+            reward = self.ev_table.loc[state, stage]
 
-        return possible_states
-    
-    def daylight(self,hour):
+        return reward
+
+    def get_value(self, state, k):
+        """
+        Function to determine the value of being in a given state at a given stage.
+
+        Params:
+            i (int): Index of the list of states that describes the current state
+            k (int): Current stage (typically timestep)
+
+        Returns:
+            value (float):
+                Value of being in the provided state at the provided stage.
+
+        """
+        control_reward = self.get_control_reward(state, k)
+        future_reward = self.get_future_reward(state, k + 1)
+        return control_reward + future_reward
+
+    def daylight(self, hour):
         """
         Returns 0 if the input hour modulo 24 is between 0 and 5 or 18 and 23,
         and 1 otherwise.
@@ -149,45 +156,3 @@ class mdp:
             return 0
         else:
             return 1
-        
-    def calculate_table(self):
-        entry = []
-
-        # for k in range(MAX_STAGES-1,-1,-1):
-        #     sun = self.daylight(k)
-        #     for i,state in enumerate(self.states):
-        #         # TODO: Make this a function
-
-        #         if k==MAX_STAGES-1:
-        #             entry = self.calculate_reward(state,0,self.daylight(k)) # need to figure out how to do the terminal calculation
-        #             self.reward_table[i,k] = entry
-        #         else:
-        #             candidates = []
-        #             for next_state in self.get_possible_next_states(state,sun):
-        #                 action = 0
-        #                 candidate = self.calculate_reward(state,action,sun) + self.get_future_reward(next_state,k+1)
-
-        
-        return None
-
-
-
-
-# Example usage
-states=[]
-for state in ["moored","flying"]:
-    for soc in range(0,101,20):
-        states.append((soc,state))
-# print(states)
-
-stm = [0,-40,20,-20,0,-40,20,-20]
-reward = [0,0,0,10,0,0,0,0]
-MAX_STAGES=20
-mdproblem = mdp(states,MAX_STAGES,stm,reward)
-initial = (40,"flying")
-print(mdproblem.get_possible_next_states(state=initial,sun=1))
-
-
-# mdproblem.calculate_table()
-# print(mdproblem.reward_table)
-

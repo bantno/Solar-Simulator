@@ -1,11 +1,32 @@
-# Define the states of charge, y states, actions, transitions, and rewards
-charges = list(range(0, 101, 10))  # State of charge from 0 to 100 in increments of 10
-y_states = ["flying", "floating"]
-actions = ["float", "fly"]
-transitions = [[-10, -70], [30, -30]]  # Transitions for sun=0  # Transitions for sun=1
-rewards = [[0, 0], [0, 10]]  # Rewards for sun=0  # Rewards for sun=1
+import sys
+import os
 
-# Create the table
-table = create_table(charges, y_states, actions, transitions, rewards)
-table.to_csv("mdp_table.csv", index=False)
-print(table.head(16))
+# Add the parent directory to the sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'BaseClasses')))
+
+import pandas as pd
+import numpy as np
+import unittest
+
+from mdp import mdp
+
+
+class TestControlReward(unittest.TestCase):
+    def test_get_control_reward(self):
+        # Test case 1: u = 'float' should result in a reward of 0
+        self.assertEqual(mdp.get_control_reward('float', [2, 3, 4]), 0)
+
+        # Test case 2: u = 'fly' and w = [2, 3, 4] should result in a reward of 24 (1 * 2 * 3 * 4)
+        self.assertEqual(mdp.get_control_reward('fly', [2, 3, 4]), 24)
+
+        # Test case 3: u = 'fly' and w = [1, 10, 100] should result in a reward of 1000 (1 * 1 * 10 * 100)
+        self.assertEqual(mdp.get_control_reward('fly', [1, 10, 100]), 1000)
+
+        # Test case 4: u = 'fly' and w = [] (empty list) should result in a reward of 1 (multiplicative identity)
+        self.assertEqual(mdp.get_control_reward('fly', []), 1)
+
+        # Test case 5: u = 'float' and w = [] (empty list) should result in a reward of 0
+        self.assertEqual(mdp.get_control_reward('float', []), 0)
+
+if __name__ == '__main__':
+    unittest.main()

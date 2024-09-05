@@ -36,7 +36,7 @@ def plot_surface(df, title):
     
     # Adding a color bar to show the color scale
     fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
-    
+    plt.tight_layout()
     plt.show()
 
 def plot_surfaces_by_state(df):
@@ -94,15 +94,16 @@ class TestMDP(unittest.TestCase):
         self.assertEqual(self.mdp_instance.daylight(24), 0)
 
 if __name__ == '__main__':
-    # unittest.main()s
+    # unittest.main()
     soc_increment = 5
     vehicle_states = ["moored", "flying"]
     max_stages = 24
     actions = ["float", "fly"]
-    stm = [0, -40, 20, -20]
+    stm = [-5, -40, 20, -20]
     mdp_instance = mdp(soc_increment, vehicle_states, max_stages, actions, stm)
-    # print(mdp_instance.states)
-    # print(mdp_instance.ev_table)
+    print(mdp_instance.states)
+    mdp_instance.ev_table.to_csv('EV_table.csv')
+    
     plot_surfaces_by_state(mdp_instance.ev_table)
 
     

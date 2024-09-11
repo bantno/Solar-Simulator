@@ -17,7 +17,7 @@ warnings.filterwarnings(action='ignore', module='pvfactors')
 
 class Seaplane:
     """Class representing a seaplane"""
-    def __init__(self, lat, lon, tz, pdc0,gamma,tracking:bool=False,cs:bool=False,
+    def __init__(self, lat, lon, tz, pdc0, gamma,tracking:bool=False,cs:bool=False,
                  cd0=0.01,cdtot = 0.06,n_tot=.75,S=1,af_mass=6,voltage=22.2,capacity=150):
 
         # Define solar parameters

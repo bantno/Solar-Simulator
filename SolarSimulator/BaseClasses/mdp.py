@@ -8,11 +8,15 @@ class mdp:
     Class representing a markov decision process problem
     """
 
-    def __init__(self, soc_increment, vehicle_states, max_stages, actions, stm):
+    def __init__(self, plane, soc_increment, vehicle_states, max_stages, actions, stm):
         self.vehicle_states = vehicle_states
+        self.plane = plane
+        self.battery_capacity = self.plane.voltage*self.plane.capacity
         self.stm = stm
         self.states = self.create_states(soc_increment, vehicle_states)
         self.actions = actions
+        self.prob=1
+
         self.create_ev_table(max_stages)
         
 
@@ -62,32 +66,78 @@ class mdp:
                 a = self.stm[3]
         return a
 
-    @staticmethod
-    def get_control_reward(u: str, w: list):
+    
+    def get_control_reward(self, u: str, w: list, prob):
         """
-        Computes a control reward based on the input action string `u` and a list of weights `w`.
+        Determines the reward for a given action.
 
         Args:
-            u (str): A string representing the control action. Expected values are:
-                - 'float': Represents a floating action, which is internally mapped to 0.
-                - 'fly': Represents a flying action, which is internally mapped to 1.
-            w (list): A list of numerical values (weights) to be scaled by the action.
+            daytime (int) : Indicates whether it is day (1) or night (0).
+            u (char) : Describes chosen action
+            condition_current (char) : Describes condition of vehicle when action is selected
+            condition_next (char)
+        """    
+        
 
-        Returns:
-            reward (float): A scalar reward calculated by sequentially multiplying the action value
-                   (`0` for 'float' or `1` for 'fly') with each element in the list `w`.
-        """
-
-        if u == "float":
-            u = 0
-        elif u == "fly":
-            u = 1
-
-        reward = u
-        for element in w:
-            reward *= element
+        if w[0] == 0: # Night time case
+            if u == 'float':
+                reward = 0
+            elif u == 'fly':
+                reward = 0
+        elif w[0] == 1: # Day time case
+            if u == 'float':
+                reward = 0
+            elif u == 'fly':
+                reward = 1
 
         return reward
+
+    @staticmethod
+    def expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=5):
+        """
+        Calculates the expected solar power output for a given stage.
+        
+        Parameters:
+            irradiance_mean (float): Mean solar irradiance (in W/m^2) at the given stage.
+            cloud_prob (float): Probability of cloudiness at the stage.
+            time_of_day_factor (float): A factor (0 to 1) representing the intensity of sunlight for the time of day.
+            max_solar_power (float): Maximum power output of the solar system in kW (default is 5 kW).
+        
+        Returns:
+            float: Expected solar power output in kW.
+        """
+        # Calculate the expected irradiance adjusted by time of day
+        expected_irradiance = irradiance_mean * time_of_day_factor
+        
+        # Convert irradiance (W/m^2) to power in kW (assuming 1000 W/m^2 gives maximum power)
+        expected_power_clear = min(max_solar_power, expected_irradiance / 1000 * max_solar_power)
+        
+        # Calculate the expected power output, accounting for cloudiness
+        expected_power = expected_power_clear * (1 - 0.5 * cloud_prob)
+        
+        return expected_power
+    
+    @staticmethod
+    def time_of_day_func(stage,timestep):
+        """
+        Compute the time of day as a sinusoidal function based on the current stage and timestep.
+
+        This function models the time of day using a sine wave, where the input `stage` represents the current stage
+        in the simulation, and `timestep` is the interval in minutes between each stage. The function calculates
+        a normalized value between 0 and 1 representing the time of day, where the sine wave completes one full cycle
+        in a 24-hour period.
+
+        Args:
+            stage (int): The current stage of the simulation, which is an integer representing the progression of time.
+            timestep (int): The time interval in minutes between each stage.
+
+        Returns:
+            float: A value between 0 and 1 representing the time of day, where 0 corresponds to midnight and 1
+                corresponds to the end of the day.
+        """
+        daily_stages = 24*60/timestep
+        normalized_stage = (np.mod(stage, daily_stages) / daily_stages)
+        return max(0, np.sin(np.pi * normalized_stage))
 
     def create_ev_table(self, max_stages):
         """
@@ -113,17 +163,74 @@ class mdp:
         )
 
         for k in tqdm(range(max_stages-1,-1,-1)):
-            w = [self.daylight(k)]
+            w = [self.daytime(0,k,10)]
             for s in self.states:
                 max_reward = -np.inf
                 for u in self.actions:
-                    control_reward = self.get_control_reward(u,w)
+                    control_reward = self.get_control_reward(u,w,self.prob)
                     future_reward = self.get_future_reward(s,u,k,w)
                     reward = control_reward+future_reward
                     if reward > max_reward:
                         max_reward = reward
                         # chosen_action = u
                 self.ev_table.loc[s,k] = max_reward
+
+    def calculate_soc_update(self, action: str,dt:int,stage:int)->int:
+        """
+        Determines update to be applied to state of charge when executing a given action at a given stage of a simulation.
+
+        Args:
+            action (str) : Action that is executed.
+            dt (int)     : Time period over which the action occurs, in minutes.
+            stage (int)  : Stage at which the action will be executed.
+
+        Returns:
+            int: Integer representing the change in state of charge over the given time step when the given action is taken
+        """
+        # Get the amount of energy collected during this timestep
+        
+        irradiance_mean = 1000  # W/m^2
+        cloud_prob = 0.3  # Probability of cloud cover
+        daily_stages = 24*60/dt
+        time_of_day_factor = max(0, np.sin(np.pi * (np.mod(stage,daily_stages) / daily_stages)))
+
+        rho = 1.2
+        if action == 'float':
+            u = 0
+        elif action == 'flying':
+            u = 20
+        
+        solar_power = self.expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80)  # Watts
+        required_power = self.plane.get_required_power(u,rho)  # Watts
+        total_power = required_power - solar_power  # Watts
+        delta_energy = total_power * dt * 60  # Joules
+        
+        return delta_energy/self.battery_capacity
+
+    def expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80):
+        """
+        Calculates the expected solar power output for a given stage.
+        
+        Parameters:
+            irradiance_mean (float): Mean solar irradiance (in W/m^2) at the given stage.
+            cloud_prob (float): Probability of cloudiness at the stage.
+            time_of_day_factor (float): A factor (0 to 1) representing the intensity of sunlight for the time of day.
+            max_solar_power (float): Maximum power output of the solar system in W (default is 80 W).
+        
+        Returns:
+            float: Expected solar power output in kW.
+        """
+        # Calculate the expected irradiance adjusted by time of day
+        expected_irradiance = irradiance_mean * time_of_day_factor
+        
+        # Convert irradiance (W/m^2) to power in kW (assuming 1000 W/m^2 gives maximum power)
+        expected_power_clear = min(max_solar_power, expected_irradiance / 1000 * max_solar_power)
+        
+        # Calculate the expected power output, accounting for cloudiness
+        expected_power = expected_power_clear * (1 - 0.5 * cloud_prob)
+        
+        return expected_power
+
 
     def get_future_reward(self, state, action, stage: int, w):
         """
@@ -166,19 +273,24 @@ class mdp:
 
         return reward
 
-    def daylight(self, hour):
+    def daytime(self, start, step, dt):
         """
-        Returns 0 if the input hour modulo 24 is between 0 and 5 or 18 and 23,
-        and 1 otherwise.
+        Determines if the provided simulation step is during the day or at night
 
         Parameters:
-        hour (int): The input hour.
+            start (int): Time when the simulation begins (in minutes, e.g., 0 for midnight,
+                         720 for noon)
+            step (int) : Stage of the simulation
+            dt (int) : Time, in minutes, between simulation steps
 
         Returns:
-        int: 0 or 1 based on the conditions.
+            int: 0 (night) or 1 (day).
         """
-        hour_mod = hour % 24
-        if 0 <= hour_mod <= 5 or 18 <= hour_mod <= 23:
-            return 0
+        # Calculate the total time passed from the start in minutes
+        time_of_day = (start + step * dt) % 1440  # 1440 minutes in a day
+
+        # Day is considered between 6 AM (360 minutes) and 6 PM (1080 minutes)
+        if 360 <= time_of_day < 1080:
+            return 1  # Daytime
         else:
-            return 1
+            return 0  # Nighttime

@@ -1,54 +1,14 @@
 import sys
 import os
+import numpy as np
+import unittest
 
 # Add the parent directory to the sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../BaseClasses')))
 
-# import pandas as pd
-import numpy as np
-import unittest
-# from mpl_toolkits.mplot3d import Axes3D
-# import matplotlib.pyplot as plt
+from seaplane_base import Seaplane
 from mdp import mdp
 
-# def plot_surface(df, title):
-#     # Extracting the multiindex levels
-#     X = df.index.get_level_values(0).values.astype(float)
-#     Y = df.columns.values.astype(float)
-    
-#     # Converting the DataFrame values into a 2D numpy array
-#     Z = df.values
-    
-#     # Creating a meshgrid for X and Y
-#     X, Y = np.meshgrid(Y, X)
-    
-#     # Plotting the surface
-#     fig = plt.figure(figsize=(10, 7))
-#     ax = fig.add_subplot(111, projection='3d')
-    
-#     surf = ax.plot_surface(X, Y, Z, cmap='viridis', edgecolor='none')
-    
-#     # Adding labels
-#     ax.set_xlabel('Stages')
-#     ax.set_ylabel('State of Charge')
-#     ax.set_zlabel('Value')
-#     ax.set_title(f'Surface Plot for state: {title}')
-    
-#     # Adding a color bar to show the color scale
-#     fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
-#     plt.tight_layout()
-#     plt.show()
-
-# def plot_surfaces_by_state(df):
-#     # Get the unique values in the second level of the MultiIndex
-#     states = df.index.get_level_values(1).unique()
-    
-#     for state in states:
-#         # Filter the DataFrame based on the state
-#         df_state = df.xs(state, level=1)
-        
-#         # Plot the surface for this state
-#         plot_surface(df_state, state)
 
 class TestMDP(unittest.TestCase):
     
@@ -59,7 +19,47 @@ class TestMDP(unittest.TestCase):
         self.max_stages = 3
         self.actions = ["float", "fly"]
         self.stm = [0, -40, 20, -20]
-        self.mdp_instance = mdp(self.soc_increment, self.vehicle_states, self.max_stages, self.actions, self.stm)
+
+            # Define constant parameters
+        lat = 29.02291491363789
+        lon = -90.23223029442693
+        tz = "Etc/GMT+6"
+        pdc0 = 0  # nameplate power rating [W]
+        gamma = -0.0047  # Temperature coefficient of power [1/deg Celsius]
+
+        # Airplane params
+        capacity_ah = 0.0
+        voltage = 22.2
+        Cdtot = 0.0
+        Cd0 = 0.02584
+        S = 0.653  # from OpenVSP model
+        af_mass = 8.8  # TODO: Read in AF mass from VSPAero, multiply by safety factor
+        cruise_speed = 20.0  # m/s
+        rho = 1.19  # air density (dependent on altitude)
+        U = cruise_speed
+        N_PROP = 0.82  # from Raymer
+        N_ESC = 0.9  # esc efficiency estimate
+
+        # Create plane
+        plane = Seaplane(
+            lat,
+            lon,
+            tz,
+            pdc0,
+            gamma,
+            cd0=Cd0 * 1.5,
+            cs=True,
+            tracking=False,
+            cdtot=Cdtot,
+            n_tot=N_PROP * N_ESC,
+            S=S,
+            af_mass=af_mass,
+            voltage=voltage,
+            capacity=capacity_ah
+            )
+
+        self.plane = plane
+        self.mdp_instance = mdp(self.plane,self.soc_increment, self.vehicle_states, self.max_stages, self.actions, self.stm)
     
     def test_create_states(self):
         expected_states = [
@@ -67,15 +67,6 @@ class TestMDP(unittest.TestCase):
             (0, 'flying'), (20, 'flying'), (40, 'flying'), (60, 'flying'), (80, 'flying'), (100, 'flying')
         ]
         self.assertEqual(self.mdp_instance.states, expected_states)
-
-    # def test_get_control_reward(self):
-    #     weights = [1, 2, 3]
-        
-    #     # Test 'float' action
-    #     self.assertEqual(self.mdp_instance.get_control_reward("float", weights), 0)
-        
-    #     # Test 'fly' action
-    #     self.assertEqual(self.mdp_instance.get_control_reward("fly", weights), 1 * 1 * 2 * 3)
 
     def test_time_of_day_func(self):
         # Test case 1: Stage 0, timestep 60 (1 hour)
@@ -106,6 +97,73 @@ class TestMDP(unittest.TestCase):
         assert np.isclose(self.mdp_instance.time_of_day_func(10000, 1), self.mdp_instance.time_of_day_func(10000 % 1440, 1)), "Test case 7 failed"
 
         print("All test cases passed!")
+    
+    def test_expected_solar_power_clear_day(self):
+        """Test a clear day with no clouds and full sun."""
+        irradiance_mean = 1000  # W/m^2
+        cloud_prob = 0.0  # No cloud cover
+        time_of_day_factor = 1.0  # Full sunlight (no attenuation)
+        max_solar_power = 80  # W
+        
+        expected_power = mdp.expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power)
+        
+        self.assertEqual(expected_power, max_solar_power, f"Expected full power output, got {expected_power}")
+
+    def test_expected_solar_power_partial_cloud(self):
+        """Test a partially cloudy day with some attenuation."""
+        irradiance_mean = 800  # W/m^2
+        cloud_prob = 0.5  # 50% cloud probability
+        time_of_day_factor = 1.0  # Full sunlight
+        max_solar_power = 5  # W
+        
+        expected_power = mdp.expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power)
+        
+        expected_clear_power = (800 / 1000) * max_solar_power
+        expected_cloud_reduction = expected_clear_power * (1 - 0.5 * cloud_prob)
+        
+        self.assertAlmostEqual(expected_power, expected_cloud_reduction, places=3, 
+                               msg=f"Expected {expected_cloud_reduction}, got {expected_power}")
+
+    def test_expected_solar_power_low_sunlight(self):
+        """Test with low sunlight (early morning or late afternoon)."""
+        irradiance_mean = 600  # W/m^2
+        cloud_prob = 0.0  # No clouds
+        time_of_day_factor = 0.5  # Low sunlight intensity
+        max_solar_power = 5  # kW
+        
+        expected_power = mdp.expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power)
+        
+        expected_clear_power = (600 / 1000) * max_solar_power * 0.5
+        
+        self.assertAlmostEqual(expected_power, expected_clear_power, places=3, 
+                               msg=f"Expected {expected_clear_power}, got {expected_power}")
+
+    def test_expected_solar_power_full_cloud(self):
+        """Test with full cloud cover and full sunlight (clouds block half of the power)."""
+        irradiance_mean = 1000  # W/m^2
+        cloud_prob = 1.0  # 100% cloud probability
+        time_of_day_factor = 1.0  # Full sunlight
+        max_solar_power = 5  # kW
+        
+        expected_power = mdp.expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power)
+        
+        expected_clear_power = max_solar_power
+        expected_cloud_reduction = expected_clear_power * 0.5
+        
+        self.assertAlmostEqual(expected_power, expected_cloud_reduction, places=3, 
+                               msg=f"Expected {expected_cloud_reduction}, got {expected_power}")
+
+    def test_expected_solar_power_zero_irradiance(self):
+        """Test when there's zero irradiance (nighttime or complete darkness)."""
+        irradiance_mean = 0.0  # W/m^2
+        cloud_prob = 0.0  # No cloud cover
+        time_of_day_factor = 0.0  # No sunlight
+        max_solar_power = 5  # kW
+        
+        expected_power = mdp.expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power)
+        
+        self.assertEqual(expected_power, 0.0, f"Expected 0 power output, got {expected_power}")
+
 
 
 if __name__ == '__main__':

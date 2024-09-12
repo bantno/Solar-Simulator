@@ -11,8 +11,13 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from mdp import mdp
 from seaplane_base import Seaplane
+from datetime import datetime
 
-def plot_surface(df, title):
+def plot_surface(df, title, battery_capacity_ah):
+    # Ensure the 'Figures' folder exists
+    if not os.path.exists('Figures'):
+        os.makedirs('Figures')
+
     # Extracting the multiindex levels
     X = df.index.get_level_values(0).values.astype(float)
     Y = df.columns.values.astype(float)
@@ -33,14 +38,25 @@ def plot_surface(df, title):
     ax.set_xlabel('Stages')
     ax.set_ylabel('State of Charge')
     ax.set_zlabel('Value')
-    ax.set_title(f'Surface Plot for state: {title}')
+    ax.set_title(f'Surface Plot for state: {title} \nBattery Capacity: {battery_capacity_ah} Ah')
     
     # Adding a color bar to show the color scale
     fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
-    plt.tight_layout()
-    plt.show()
+    
+    # Adding an annotation with the battery capacity
+    plt.annotate(f'Battery Capacity: {battery_capacity_ah} Ah', xy=(0.5, 0.9), xycoords='axes fraction', fontsize=10, color='red', ha='center')
 
-def plot_surfaces_by_state(df):
+    plt.tight_layout()
+
+    # Generate a timestamp and create a filename
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"Figures/surface_plot_{title}_{timestamp}.png"
+
+    # Save the figure to the 'Figures' folder
+    plt.savefig(filename)
+    plt.close()  # Close the plot to avoid displaying it
+
+def plot_surfaces_by_state(df, battery_capacity_ah):
     # Get the unique values in the second level of the MultiIndex
     states = df.index.get_level_values(1).unique()
     
@@ -48,15 +64,10 @@ def plot_surfaces_by_state(df):
         # Filter the DataFrame based on the state
         df_state = df.xs(state, level=1)
         
-        # Plot the surface for this state
-        plot_surface(df_state, state)
+        # Plot the surface for this state with battery capacity
+        plot_surface(df_state, state, battery_capacity_ah)
 
 if __name__ == '__main__':
-    soc_increment = 5
-    vehicle_states = ["moored", "flying"]
-    max_stages = 200
-    actions = ["float", "fly"]
-    stm = [0, -40, 20, -20]
 
     # Define constant parameters
     lat = 29.02291491363789
@@ -66,7 +77,7 @@ if __name__ == '__main__':
     gamma = -0.0047  # Temperature coefficient of power [1/deg Celsius]
 
     # Airplane params
-    capacity_ah = 0.0
+    capacity_ah = 25.0
     voltage = 22.2
     Cdtot = 0.0
     Cd0 = 0.02584
@@ -94,12 +105,18 @@ if __name__ == '__main__':
         af_mass=af_mass,
         voltage=voltage,
         capacity=capacity_ah,
-)
+        )
+
+    soc_increment = 1
+    vehicle_states = ["moored", "flying"]
+    max_stages = 1440
+    actions = ["float", "fly"]
+    stm = [0, 0, 0, 0]
 
     mdp_instance = mdp(plane,soc_increment, vehicle_states, max_stages, actions, stm)    
-    plot_surfaces_by_state(mdp_instance.ev_table)
+    plot_surfaces_by_state(mdp_instance.ev_table,plane.capacity)
 
     # print(mdp_instance.states)
-    # print(mdp_instance.ev_table)
-    # mdp_instance.ev_table.to_csv('EV_table.csv')
+    print(mdp_instance.ev_table)
+    mdp_instance.ev_table.to_csv('EV_table.csv')
 

@@ -8,14 +8,15 @@ class mdp:
     Class representing a markov decision process problem
     """
 
-    def __init__(self, plane, soc_increment, vehicle_states, max_stages, actions, stm):
+    def __init__(self, plane, soc_increment, vehicle_states, max_stages, actions, stm, dt=10):
         self.vehicle_states = vehicle_states
         self.plane = plane
-        self.battery_capacity = self.plane.voltage*self.plane.capacity
+        self.battery_capacity = self.plane.voltage*self.plane.capacity*3600
         self.stm = stm
         self.states = self.create_states(soc_increment, vehicle_states)
         self.actions = actions
         self.prob=1
+        self.dt = dt
 
         self.create_ev_table(max_stages)
         
@@ -52,22 +53,28 @@ class mdp:
                 states.append((soc, state))
         return states
     
-    def get_activation_vector(self,u,w):
-        w = w[0] # Pull out the first value of w
+    def get_activation_vector(self,u,w:list,k):
+        # w = w[0] # Pull out the first value of w
+        # if w == 0:
+        #     if u == 0:
+        #         a = self.stm[0]
+        #     elif u == 1:
+        #         a = self.stm[1]
+        # elif w == 1:
+        #     if u == 0:
+        #         a = self.stm[2]
+        #     elif u == 1:
+        #         a = self.stm[3]
+
         if w == 0:
-            if u == 0:
-                a = self.stm[0]
-            elif u == 1:
-                a = self.stm[1]
+            a = 0
         elif w == 1:
-            if u == 0:
-                a = self.stm[2]
-            elif u == 1:
-                a = self.stm[3]
+            a = self.calculate_soc_update(u,self.dt,k)
+
         return a
 
     
-    def get_control_reward(self, u: str, w: list, prob):
+    def get_control_reward(self, u: str, w: list, current_state):
         """
         Determines the reward for a given action.
 
@@ -76,46 +83,23 @@ class mdp:
             u (char) : Describes chosen action
             condition_current (char) : Describes condition of vehicle when action is selected
             condition_next (char)
-        """    
-        
+        """
+        # TODO: Fix this
 
-        if w[0] == 0: # Night time case
-            if u == 'float':
-                reward = 0
-            elif u == 'fly':
-                reward = 0
-        elif w[0] == 1: # Day time case
-            if u == 'float':
-                reward = 0
-            elif u == 'fly':
-                reward = 1
+        if w == 0: # Night time case
+            # if u == self.actions[0]:
+            #     reward = 0
+            # elif u == self.actions[1]:
+            #     reward = 0
+            reward = 0
+        elif w == 1: # Day time case
+            if u == self.actions[0]:
+                prob_success,prob_failure = self.calculate_probabilities(self,current_state,u)
+                reward = prob_success*(action_reward[0]) + prob_failure*(action_reward[1])
+            elif u == self.actions[1]:
+                reward = prob_success*(action_reward[0]) + prob_failure*(action_reward[1])
 
         return reward
-
-    @staticmethod
-    def expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=5):
-        """
-        Calculates the expected solar power output for a given stage.
-        
-        Parameters:
-            irradiance_mean (float): Mean solar irradiance (in W/m^2) at the given stage.
-            cloud_prob (float): Probability of cloudiness at the stage.
-            time_of_day_factor (float): A factor (0 to 1) representing the intensity of sunlight for the time of day.
-            max_solar_power (float): Maximum power output of the solar system in kW (default is 5 kW).
-        
-        Returns:
-            float: Expected solar power output in kW.
-        """
-        # Calculate the expected irradiance adjusted by time of day
-        expected_irradiance = irradiance_mean * time_of_day_factor
-        
-        # Convert irradiance (W/m^2) to power in kW (assuming 1000 W/m^2 gives maximum power)
-        expected_power_clear = min(max_solar_power, expected_irradiance / 1000 * max_solar_power)
-        
-        # Calculate the expected power output, accounting for cloudiness
-        expected_power = expected_power_clear * (1 - 0.5 * cloud_prob)
-        
-        return expected_power
     
     @staticmethod
     def time_of_day_func(stage,timestep):
@@ -163,17 +147,33 @@ class mdp:
         )
 
         for k in tqdm(range(max_stages-1,-1,-1)):
-            w = [self.daytime(0,k,10)]
+            w = self.daytime(0,k,self.dt)
             for s in self.states:
                 max_reward = -np.inf
                 for u in self.actions:
-                    control_reward = self.get_control_reward(u,w,self.prob)
-                    future_reward = self.get_future_reward(s,u,k,w)
-                    reward = control_reward+future_reward
-                    if reward > max_reward:
-                        max_reward = reward
-                        # chosen_action = u
+                    if self.is_action_feasible(u,w,s,k):
+                        control_reward = self.get_control_reward(u,w,self.prob)
+                        future_reward = self.get_future_reward(s,u,k,w)
+                        reward = control_reward+future_reward
+                        if reward > max_reward:
+                            max_reward = reward
+                            # chosen_action = u
                 self.ev_table.loc[s,k] = max_reward
+
+    def is_action_feasible(self,action,w,state,k):
+        # Determine value of the state transition activation function
+        a = self.get_activation_vector(action,w,k)
+        soc = state[0]
+        if action == self.actions[0]:
+            vehicle_state = self.vehicle_states[0]
+        elif action == self.actions[1]:
+            vehicle_state = self.vehicle_states[1]
+        
+        new_state = (soc+a,vehicle_state)
+
+        feasible = new_state[0] <= 100 and new_state[0] > 0
+
+        return feasible
 
     def calculate_soc_update(self, action: str,dt:int,stage:int)->int:
         """
@@ -194,19 +194,29 @@ class mdp:
         daily_stages = 24*60/dt
         time_of_day_factor = max(0, np.sin(np.pi * (np.mod(stage,daily_stages) / daily_stages)))
 
-        rho = 1.2
-        if action == 'float':
-            u = 0
-        elif action == 'flying':
+        if stage == 45 :
+            sad = True
+
+        # Determine required power
+        if action == self.actions[0]:
+            required_power = 0
+        elif action == self.actions[1]:
             u = 20
-        
+            rho = 1.2
+            required_power = self.plane.get_required_power(u,rho)  # Watts
+
+        # Determine solar power
         solar_power = self.expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80)  # Watts
-        required_power = self.plane.get_required_power(u,rho)  # Watts
-        total_power = required_power - solar_power  # Watts
+    
+        avionics_power = 10
+
+        total_power =  solar_power - required_power - avionics_power  # Watts
+
         delta_energy = total_power * dt * 60  # Joules
         
-        return delta_energy/self.battery_capacity
+        return np.round(delta_energy/self.battery_capacity*100)
 
+    @staticmethod
     def expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80):
         """
         Calculates the expected solar power output for a given stage.
@@ -244,9 +254,9 @@ class mdp:
         Returns:
             reward : 
         """
-        if action == "float":
+        if action == self.actions[0]:
             u=0
-        elif action == "fly":
+        elif action == self.actions[1]:
             u=1
 
         new_stage = stage+1
@@ -254,10 +264,8 @@ class mdp:
         if new_stage not in self.ev_table.columns:
             reward = 0
         else:
-            # TODO: Determine which state the action will bring us to
-            
             # Determine value of the state transition activation function
-            a = self.get_activation_vector(u,w)
+            a = self.get_activation_vector(action,w,stage)
             soc = state[0]
             if u == 0:
                 vehicle_state = self.vehicle_states[0]

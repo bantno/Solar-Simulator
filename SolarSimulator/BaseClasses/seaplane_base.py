@@ -93,7 +93,7 @@ class Seaplane:
         k_str = 0.6
 
         mass = (payload_mass + pv_mass  + fcs_mass + propulsion_mass)/(1-k_str) + battery_mass
-        mass = self.af_mass
+        # mass = self.af_mass # Set mass to imported mass from openVSP
         self.weight = 9.81*(mass)
 
     def get_endurance(self,u,rho) -> float:

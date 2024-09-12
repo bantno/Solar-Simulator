@@ -13,7 +13,7 @@ from mdp import mdp
 from seaplane_base import Seaplane
 from datetime import datetime
 
-def plot_surface(df, title, battery_capacity_ah):
+def plot_surface(df, title, battery_capacity_ah, max_stages):
     # Ensure the 'Figures' folder exists
     if not os.path.exists('Figures'):
         os.makedirs('Figures')
@@ -50,13 +50,14 @@ def plot_surface(df, title, battery_capacity_ah):
 
     # Generate a timestamp and create a filename
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"Figures/surface_plot_{title}_{timestamp}.png"
+    filename = f"Figures/surface_plot_{max_stages}_{title}_{timestamp}.png"
 
     # Save the figure to the 'Figures' folder
     plt.savefig(filename)
+    plt.show()
     plt.close()  # Close the plot to avoid displaying it
 
-def plot_surfaces_by_state(df, battery_capacity_ah):
+def plot_surfaces_by_state(df, battery_capacity_ah,max_stages):
     # Get the unique values in the second level of the MultiIndex
     states = df.index.get_level_values(1).unique()
     
@@ -65,7 +66,7 @@ def plot_surfaces_by_state(df, battery_capacity_ah):
         df_state = df.xs(state, level=1)
         
         # Plot the surface for this state with battery capacity
-        plot_surface(df_state, state, battery_capacity_ah)
+        plot_surface(df_state, state, battery_capacity_ah,max_stages)
 
 if __name__ == '__main__':
 
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     gamma = -0.0047  # Temperature coefficient of power [1/deg Celsius]
 
     # Airplane params
-    capacity_ah = 25.0
+    capacity_ah = 5.0
     voltage = 22.2
     Cdtot = 0.0
     Cd0 = 0.02584
@@ -107,16 +108,19 @@ if __name__ == '__main__':
         capacity=capacity_ah,
         )
 
+    print(plane.weight)
     soc_increment = 1
     vehicle_states = ["moored", "flying"]
-    max_stages = 1440
+    max_stages = 144
     actions = ["float", "fly"]
     stm = [0, 0, 0, 0]
+    
+    print(plane.weight/9.81)
 
     mdp_instance = mdp(plane,soc_increment, vehicle_states, max_stages, actions, stm)    
-    plot_surfaces_by_state(mdp_instance.ev_table,plane.capacity)
+    plot_surfaces_by_state(mdp_instance.ev_table,plane.capacity,max_stages)
 
     # print(mdp_instance.states)
-    print(mdp_instance.ev_table)
-    mdp_instance.ev_table.to_csv('EV_table.csv')
+    # print(mdp_instance.ev_table)
+    # mdp_instance.ev_table.to_csv('EV_table.csv')
 

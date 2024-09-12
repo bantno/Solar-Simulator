@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import math
 from tqdm import tqdm
 
 
@@ -74,7 +75,7 @@ class mdp:
         return a
 
     
-    def get_control_reward(self, u: str, w: list, current_state):
+    def get_control_reward(self, u: str, w: list, current_state:tuple, k):
         """
         Determines the reward for a given action.
 
@@ -93,14 +94,51 @@ class mdp:
             #     reward = 0
             reward = 0
         elif w == 1: # Day time case
-            if u == self.actions[0]:
-                prob_success,prob_failure = self.calculate_probabilities(self,current_state,u)
-                reward = prob_success*(action_reward[0]) + prob_failure*(action_reward[1])
-            elif u == self.actions[1]:
-                reward = prob_success*(action_reward[0]) + prob_failure*(action_reward[1])
-
+            prob_success, prob_failure = self.calculate_maneuver_probabilities(current_state[1], u, k)
+            reward = prob_success*(1) + prob_failure*(-100)
+            
         return reward
     
+    @staticmethod
+    def calculate_maneuver_probabilities(current_state, action, stage):
+        """
+        Calculate the probabilities of successfully executing a maneuver and failing,
+        with a constant failure probability of 5% when moored and continuing to float.
+
+        Args:
+        - current_state (str): "moored" or "flying" (the current state of the vehicle)
+        - action (str): "float" or "fly" (the action being taken)
+        - stage (int): The current simulation stage (used as a proxy for time)
+
+        Returns:
+        - tuple: (success_prob, failure_prob)
+            - success_prob (float): The probability of successfully executing the maneuver (not crashing)
+            - failure_prob (float): The probability of failure (crashing)
+        """
+
+        if current_state == "moored" and action == "float":
+            # Constant failure probability of 5%
+            failure_prob = 0.01
+            success_prob = 1 - failure_prob
+        else:
+            # Base failure rate (lambda) - can be adjusted
+            base_lambda = 0.0000005
+            
+            # Adjust lambda based on current state and action
+            if current_state == "moored" and action == "fly":
+                lambda_value = base_lambda * 2.0
+            elif current_state == "flying" and action == "float":
+                lambda_value = base_lambda * 1.8
+            elif current_state == "flying" and action == "fly":
+                lambda_value = base_lambda * 1.5
+            
+            # Compute the probability of successfully completing the maneuver (not crashing)
+            success_prob = math.exp(-lambda_value * stage)
+            
+            # Compute the probability of failure (crashing)
+            failure_prob = 1 - success_prob
+        
+        return success_prob, failure_prob
     @staticmethod
     def time_of_day_func(stage,timestep):
         """
@@ -121,7 +159,10 @@ class mdp:
         """
         daily_stages = 24*60/timestep
         normalized_stage = (np.mod(stage, daily_stages) / daily_stages)
-        return max(0, np.sin(np.pi * normalized_stage))
+        factor = np.sin(np.pi * normalized_stage)
+        if factor < 0.6:
+            factor = 0
+        return max(0, factor)
 
     def create_ev_table(self, max_stages):
         """
@@ -152,7 +193,7 @@ class mdp:
                 max_reward = -np.inf
                 for u in self.actions:
                     if self.is_action_feasible(u,w,s,k):
-                        control_reward = self.get_control_reward(u,w,self.prob)
+                        control_reward = self.get_control_reward(u,w,s,k)
                         future_reward = self.get_future_reward(s,u,k,w)
                         reward = control_reward+future_reward
                         if reward > max_reward:
@@ -193,9 +234,6 @@ class mdp:
         cloud_prob = 0.3  # Probability of cloud cover
         daily_stages = 24*60/dt
         time_of_day_factor = max(0, np.sin(np.pi * (np.mod(stage,daily_stages) / daily_stages)))
-
-        if stage == 45 :
-            sad = True
 
         # Determine required power
         if action == self.actions[0]:

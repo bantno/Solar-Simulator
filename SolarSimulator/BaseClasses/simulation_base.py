@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
+
 from pvlib import location
 from pvlib import tracking
 from pvlib.bifacial.pvfactors import pvfactors_timeseries
@@ -25,14 +26,6 @@ class Simulation:
 
     def set_location(self,latitude,longitude,timezone):
         return location.Location(latitude, longitude, tz=timezone)
-    
-    def get_times(self,year,month,day,tz) -> pd.DatetimeIndex:
-        """Returns hourly daterange for the times between given date and subsequent day"""
-        # get times of interest
-        start = f"{year}-{month}-{day}"
-        day = day + 1
-        end = f"{year}-{month}-{day}"
-        return pd.date_range(start, end, freq='60min', tz=tz) # Get times for entire study period
 
     def get_DateTimeIndex(self,years,months,days,hours,minutes) -> pd.DatetimeIndex:
         """Returns DateTimeIndex for provided dates
@@ -72,19 +65,12 @@ class Simulation:
         """
 
         if cs :
-            # get clearsky weather
-            # TODO: throw error if times is -1
-            wthr = self.location.get_clearsky(times)
+            # Get clearsky weather
+            if times != -1:
+                wthr = self.location.get_clearsky(times)
         else :
-            wthr = pd.read_csv(r"C:\Users\brian\OneDrive\Documents\
-                               Georgia Tech\Research\Whale Plane\Solar Sim\2019TMY.csv")
-            times = self.get_DateTimeIndex(wthr['Year'],
-                                        wthr['Month'],
-                                        wthr['Day'],
-                                        wthr['Hour'],
-                                        wthr['Minute'],
-                                        )
-            wthr.index = times
+            # Get weather based on TMY data
+            raise NotImplementedError
         return wthr
 
     def get_azimuth(self,cs,wthr):
@@ -200,7 +186,7 @@ class Simulation:
 
         return times, pdc
 
-    def simulate_deployment(self,U,rho,takeoff_capacity,landing_capacity,P_solar,dt):
+    def simulate_deployment(self,U,rho,takeoff_capacity,landing_capacity,P_solar,dt,algo):
         """Determines duty cycle for specified period
         
         Parameters
@@ -219,6 +205,8 @@ class Simulation:
             Array of solar power collected by the vehicle's photovoltaic system [W]
         dt : int
             Time in minutes between each sample in P_solar
+        algo : str
+            The algorithm to use, either "Greedy" or "MDP".
 
         Returns
         -------
@@ -231,9 +219,13 @@ class Simulation:
         # Ensure weight estimate is accurate
         self.plane.calculate_weight()
         
-        P_cruise = self.plane.get_required_power(U,rho)
-        capacity_j = self.plane.voltage*self.plane.capacity*3600
-        is_daytime = P_solar > 1
-        min_flight_hr = 1
+        if algo == "Greedy":
+
+            P_cruise = self.plane.get_required_power(U,rho)
+            capacity_j = self.plane.voltage*self.plane.capacity*3600
+            is_daytime = P_solar > 1
+            min_flight_hr = 1    
+            return Autonomy.simple_plane_behavior(self, P_solar, is_daytime, P_cruise, capacity_j, landing_capacity, takeoff_capacity, dt, min_flight_hr, self.plane.calc_takeoff_penalty)
         
-        return Autonomy.simple_plane_behavior(self, P_solar, is_daytime, P_cruise, capacity_j, landing_capacity, takeoff_capacity, dt, min_flight_hr, self.plane.calc_takeoff_penalty)
+        if algo == "MDP" :
+            return Autonomy.mdp_behavior(self, P_solar, is_daytime, P_cruise, capacity_j, landing_capacity, takeoff_capacity, dt, min_flight_hr, self.plane.calc_takeoff_penalty)

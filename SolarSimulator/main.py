@@ -161,33 +161,33 @@ print("Maximum Duty Cycle: {0}".format("%.2f" % max_duty))
 # plotting.plot_yearly_dc(plane,year,month,day,days)
 
 
-# Endurance and P_req calculations
-plane = Seaplane(
-    lat,
-    lon,
-    tz,
-    pdc0,
-    gamma,
-    cd0=0.0145,
-    cs=True,
-    tracking=False,
-    cdtot=0.025,
-    n_tot=0.75,
-    S=0.38,
-    af_mass=6,
-    voltage=22.2,
-    capacity=28.82,
-)
+# ##################### Endurance and P_req calculations########################
+# plane = Seaplane(
+#     lat,
+#     lon,
+#     tz,
+#     pdc0,
+#     gamma,
+#     cd0=0.0145,
+#     cs=True,
+#     tracking=False,
+#     cdtot=0.025,
+#     n_tot=0.75,
+#     S=0.38,
+#     af_mass=6,
+#     voltage=22.2,
+#     capacity=28.82,
+# )
 
-# List Parameters for different wing area values
-S = [0.4, 0.5, 0.65, 0.79, 0.95]
-Cd0 = [0.030, 0.027, 0.024, 0.021, 0.020]
-Cdtot = [0.025, 0.025, 0.02572, 0.03, 0.032]
-af_mass = [9.71, 9.86, 10.09, 10.30, 10.54]  # TODO: Update airframe mass calculation
-capacities = [10, 10, 10, 10, 10]
-rho = 1.1
+# # List Parameters for different wing area values
+# S = [0.4, 0.5, 0.65, 0.79, 0.95]
+# Cd0 = [0.030, 0.027, 0.024, 0.021, 0.020]
+# Cdtot = [0.025, 0.025, 0.02572, 0.03, 0.032]
+# af_mass = [9.71, 9.86, 10.09, 10.30, 10.54]  # TODO: Update airframe mass calculation
+# capacities = [10, 10, 10, 10, 10]
+# rho = 1.1
 
-plotting.plot_endurance(plane, S, Cd0, af_mass, capacities, rho, filename="Endurance")
+# plotting.plot_endurance(plane, S, Cd0, af_mass, capacities, rho, filename="Endurance")
 
 
 # # TODO: Make function
@@ -196,102 +196,102 @@ plotting.plot_endurance(plane, S, Cd0, af_mass, capacities, rho, filename="Endur
 # # plane = Seaplane(lat, lon, tz, pdc0,gamma,cd0=0.0145,cs=True,tracking=False,cdtot = 0.025,n_tot=.75,S=0.38,af_mass=6,voltage=15.2,capacity=20.3)
 
 
-# CONTOUR PLOT
-rho = 1.19
-U = 20
-days = 30
+# ######################## CONTOUR PLOT ###############################
+# rho = 1.19
+# U = 20
+# days = 30
 
-plane = plane_AIAA
-print("Contour Plane Cap: {plane.capacity}")
-N_LAT = 30
-N_DAYS = 50
-N_LEVELS = 19
-
-
-lat = np.linspace(-60, 60, N_LAT)
-day = np.linspace(1, 365, N_DAYS).astype(int)
-duty_cycle = np.zeros((N_LAT, N_DAYS))
-plane.capacity = max_cap
-
-# Create a meshgrid from the data
-X, Y = np.meshgrid(day, lat)
-
-for i in tqdm(range(X.shape[0])):
-    for j in range(X.shape[1]):
-        plane.update_location(Y[i, j])
-        month, day = plotting.day_to_month_day(X[i, j], YEAR)
-        _, _, _, _, dc = plotting.run_simulation(sim, YEAR, month, day, days)
-        duty_cycle[i, j] = dc
-
-# Plot the contour
-plt.figure(figsize=(10, 6))
-levels = np.linspace(0, np.max(duty_cycle), N_LEVELS)
-contour = plt.contourf(X, Y, duty_cycle, levels=levels, cmap="viridis")
-plt.colorbar(contour, label="Duty Cycle [%]")
-
-# Add labels and title
-plt.xlabel("Day of the Year")
-plt.ylabel("Latitude")
-# plt.title('Duty Cycle Contour Plot')
-
-# Show plot
-filename = "dc_contour_plot"
-plot_path = os.path.join("Figures", f"{filename}.png")
-plt.savefig(plot_path)
+# plane = plane_AIAA
+# print("Contour Plane Cap: {plane.capacity}")
+# N_LAT = 30
+# N_DAYS = 50
+# N_LEVELS = 19
 
 
-# BUOYANCY
+# lat = np.linspace(-60, 60, N_LAT)
+# day = np.linspace(1, 365, N_DAYS).astype(int)
+# duty_cycle = np.zeros((N_LAT, N_DAYS))
+# plane.capacity = max_cap
 
-# Load the STL file
-FILE_PATH = r"SampleData\STL\WhalePlaneSkinny.stl"  # Adjust the path if necessary
+# # Create a meshgrid from the data
+# X, Y = np.meshgrid(day, lat)
 
+# for i in tqdm(range(X.shape[0])):
+#     for j in range(X.shape[1]):
+#         plane.update_location(Y[i, j])
+#         month, day = plotting.day_to_month_day(X[i, j], YEAR)
+#         _, _, _, _, dc = plotting.run_simulation(sim, YEAR, month, day, days)
+#         duty_cycle[i, j] = dc
 
-# Transverse Stability
-# Define the plane for the cross-section
-plane_origin = [0.52, 0.0, 0.0]  # Origin of the plane
-plane_normal = [1.0, 0.0, 0.0]  # Normal to the plane (XY plane)
+# # Plot the contour
+# plt.figure(figsize=(10, 6))
+# levels = np.linspace(0, np.max(duty_cycle), N_LEVELS)
+# contour = plt.contourf(X, Y, duty_cycle, levels=levels, cmap="viridis")
+# plt.colorbar(contour, label="Duty Cycle [%]")
 
-# TODO: write function to determine waterline
-# WATERLINE = 0.00 # = -0.3048/2+0.1328928
-PLANE_DIRECTION = "y"  # or "y"
-CUT_DIRECTION = "below"  # or "right" for plane "x", "below" or "above" for plane "y"
-WEIGHT = 8.8  # [kg]
-RHO_W = 1020  # density of water [kg/m^3]
-# h_cb = 0.2286-0.13289/2 #h_cg-0.066 # needs to be the vertical distance between the CG and the CB
-# h_cg = (0.3048)/4 # height of center of gravity
-CG = (0.49, 0.000, 0.046)
+# # Add labels and title
+# plt.xlabel("Day of the Year")
+# plt.ylabel("Latitude")
+# # plt.title('Duty Cycle Contour Plot')
 
-
-draft, WATERLINE = stl_slice.calculate_draft(8.0, FILE_PATH)
-
-print(f"Draft: {draft} m")
-
-stl_slice.calculate_hstab(
-    FILE_PATH,
-    "lateral",
-    plane_origin,
-    plane_normal,
-    WATERLINE,
-    PLANE_DIRECTION,
-    CUT_DIRECTION,
-    WEIGHT,
-    CG,
-)
+# # Show plot
+# filename = "dc_contour_plot"
+# plot_path = os.path.join("Figures", f"{filename}.png")
+# plt.savefig(plot_path)
 
 
-# Longitudinal Stability
-# Define the plane for the cross-section
-plane_origin = [0.0, 0.0, 0.0]  # Origin of the plane
-plane_normal = [0.0, 1.0, 0.0]  # Normal to the plane (XY plane)
+# ######################## BUOYANCY############################
 
-stl_slice.calculate_hstab(
-    FILE_PATH,
-    "longitudinal",
-    plane_origin,
-    plane_normal,
-    WATERLINE,
-    PLANE_DIRECTION,
-    CUT_DIRECTION,
-    WEIGHT,
-    CG,
-)
+# # Load the STL file
+# FILE_PATH = r"SampleData\STL\WhalePlaneSkinny.stl"  # Adjust the path if necessary
+
+
+# # Transverse Stability
+# # Define the plane for the cross-section
+# plane_origin = [0.52, 0.0, 0.0]  # Origin of the plane
+# plane_normal = [1.0, 0.0, 0.0]  # Normal to the plane (XY plane)
+
+# # TODO: write function to determine waterline
+# # WATERLINE = 0.00 # = -0.3048/2+0.1328928
+# PLANE_DIRECTION = "y"  # or "y"
+# CUT_DIRECTION = "below"  # or "right" for plane "x", "below" or "above" for plane "y"
+# WEIGHT = 8.8  # [kg]
+# RHO_W = 1020  # density of water [kg/m^3]
+# # h_cb = 0.2286-0.13289/2 #h_cg-0.066 # needs to be the vertical distance between the CG and the CB
+# # h_cg = (0.3048)/4 # height of center of gravity
+# CG = (0.49, 0.000, 0.046)
+
+
+# draft, WATERLINE = stl_slice.calculate_draft(8.0, FILE_PATH)
+
+# print(f"Draft: {draft} m")
+
+# stl_slice.calculate_hstab(
+#     FILE_PATH,
+#     "lateral",
+#     plane_origin,
+#     plane_normal,
+#     WATERLINE,
+#     PLANE_DIRECTION,
+#     CUT_DIRECTION,
+#     WEIGHT,
+#     CG,
+# )
+
+
+# # Longitudinal Stability
+# # Define the plane for the cross-section
+# plane_origin = [0.0, 0.0, 0.0]  # Origin of the plane
+# plane_normal = [0.0, 1.0, 0.0]  # Normal to the plane (XY plane)
+
+# stl_slice.calculate_hstab(
+#     FILE_PATH,
+#     "longitudinal",
+#     plane_origin,
+#     plane_normal,
+#     WATERLINE,
+#     PLANE_DIRECTION,
+#     CUT_DIRECTION,
+#     WEIGHT,
+#     CG,
+# )

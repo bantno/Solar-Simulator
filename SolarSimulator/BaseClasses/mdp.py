@@ -16,7 +16,7 @@ class mdp:
         self.stm = stm
         self.states = self.create_states(soc_increment, vehicle_states)
         self.actions = actions
-        self.prob=1
+        # self.prob=1
         self.dt = dt
 
         self.create_ev_table(max_stages)
@@ -54,51 +54,6 @@ class mdp:
                 states.append((soc, state))
         return states
     
-    def get_activation_vector(self,u,w:list,k):
-        # w = w[0] # Pull out the first value of w
-        # if w == 0:
-        #     if u == 0:
-        #         a = self.stm[0]
-        #     elif u == 1:
-        #         a = self.stm[1]
-        # elif w == 1:
-        #     if u == 0:
-        #         a = self.stm[2]
-        #     elif u == 1:
-        #         a = self.stm[3]
-
-        if w == 0:
-            a = 0
-        elif w == 1:
-            a = self.calculate_soc_update(u,self.dt,k)
-
-        return a
-
-    
-    def get_control_reward(self, u: str, w: list, current_state:tuple, k):
-        """
-        Determines the reward for a given action.
-
-        Args:
-            daytime (int) : Indicates whether it is day (1) or night (0).
-            u (char) : Describes chosen action
-            condition_current (char) : Describes condition of vehicle when action is selected
-            condition_next (char)
-        """
-        # TODO: Fix this
-
-        if w == 0: # Night time case
-            # if u == self.actions[0]:
-            #     reward = 0
-            # elif u == self.actions[1]:
-            #     reward = 0
-            reward = 0
-        elif w == 1: # Day time case
-            prob_success, prob_failure = self.calculate_maneuver_probabilities(current_state[1], u, k)
-            reward = prob_success*(1) + prob_failure*(-100)
-            
-        return reward
-    
     @staticmethod
     def calculate_maneuver_probabilities(current_state, action, stage):
         """
@@ -118,7 +73,7 @@ class mdp:
 
         if current_state == "moored" and action == "float":
             # Constant failure probability of 5%
-            failure_prob = 0.01
+            failure_prob = 0.001
             success_prob = 1 - failure_prob
         else:
             # Base failure rate (lambda) - can be adjusted
@@ -126,14 +81,11 @@ class mdp:
             
             # Adjust lambda based on current state and action
             if current_state == "moored" and action == "fly":
-                lambda_value = base_lambda * 2.0
+                success_prob = 0.99
             elif current_state == "flying" and action == "float":
-                lambda_value = base_lambda * 1.8
+                success_prob = 0.99
             elif current_state == "flying" and action == "fly":
-                lambda_value = base_lambda * 1.5
-            
-            # Compute the probability of successfully completing the maneuver (not crashing)
-            success_prob = math.exp(-lambda_value * stage)
+                success_prob = 0.95
             
             # Compute the probability of failure (crashing)
             failure_prob = 1 - success_prob
@@ -163,7 +115,32 @@ class mdp:
         if factor < 0.6:
             factor = 0
         return max(0, factor)
-
+    
+    @staticmethod
+    def expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80):
+        """
+        Calculates the expected solar power output for a given stage.
+        
+        Parameters:
+            irradiance_mean (float): Mean solar irradiance (in W/m^2) at the given stage.
+            cloud_prob (float): Probability of cloudiness at the stage.
+            time_of_day_factor (float): A factor (0 to 1) representing the intensity of sunlight for the time of day.
+            max_solar_power (float): Maximum power output of the solar system in W (default is 80 W).
+        
+        Returns:
+            float: Expected solar power output in W.
+        """
+        # Calculate the expected irradiance adjusted by time of day
+        expected_irradiance = irradiance_mean * time_of_day_factor
+        
+        # Convert irradiance (W/m^2) to power in kW (assuming 1000 W/m^2 gives maximum power)
+        expected_power_clear = min(max_solar_power, expected_irradiance / 1000 * max_solar_power)
+        
+        # Calculate the expected power output, accounting for cloudiness
+        expected_power = expected_power_clear * (1 - 0.5 * cloud_prob)
+        
+        return expected_power
+    
     def create_ev_table(self, max_stages):
         """
         Creates an expectation value (EV) table with a specified number of stages.
@@ -201,6 +178,47 @@ class mdp:
                             # chosen_action = u
                 self.ev_table.loc[s,k] = max_reward
 
+    def get_activation_vector(self,u,w:list,k):
+        """Retrieves activation vector
+
+        Args:
+            u (_type_): _description_
+            w (list): List of input parameters. w[0] represents whether or not it is day or night (1 means day)
+            k (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+
+        return self.calculate_soc_update(u,self.dt,k)
+
+    
+    def get_control_reward(self, u: str, w: list, current_state:tuple, k):
+        """
+        Determines the reward for a given action.
+
+        Args:
+            daytime (int) : Indicates whether it is day (1) or night (0).
+            u (char) : Describes chosen action
+            condition_current (char) : Describes condition of vehicle when action is selected
+            condition_next (char)
+        """
+        # TODO: Fix this
+
+        if w == 0: # Night time case
+            # if u == self.actions[0]:
+            #     reward = 0
+            # elif u == self.actions[1]:
+            #     reward = 0
+            reward = 0
+        elif w == 1: # Day time case
+            prob_success, prob_failure = self.calculate_maneuver_probabilities(current_state[1], u, k)
+            reward = prob_success*(1) + prob_failure*(-100)
+            
+        return reward
+    
+    
+
     def is_action_feasible(self,action,w,state,k):
         # Determine value of the state transition activation function
         a = self.get_activation_vector(action,w,k)
@@ -216,7 +234,7 @@ class mdp:
 
         return feasible
 
-    def calculate_soc_update(self, action: str,dt:int,stage:int)->int:
+    def calculate_soc_update(self, action: str,dt:int,stage:int,use_solar_approx=True,solar_power=0)->int:
         """
         Determines update to be applied to state of charge when executing a given action at a given stage of a simulation.
 
@@ -244,7 +262,8 @@ class mdp:
             required_power = self.plane.get_required_power(u,rho)  # Watts
 
         # Determine solar power
-        solar_power = self.expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80)  # Watts
+        if use_solar_approx:
+            solar_power = self.expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80)  # Watts
     
         avionics_power = 10
 
@@ -253,31 +272,6 @@ class mdp:
         delta_energy = total_power * dt * 60  # Joules
         
         return np.round(delta_energy/self.battery_capacity*100)
-
-    @staticmethod
-    def expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80):
-        """
-        Calculates the expected solar power output for a given stage.
-        
-        Parameters:
-            irradiance_mean (float): Mean solar irradiance (in W/m^2) at the given stage.
-            cloud_prob (float): Probability of cloudiness at the stage.
-            time_of_day_factor (float): A factor (0 to 1) representing the intensity of sunlight for the time of day.
-            max_solar_power (float): Maximum power output of the solar system in W (default is 80 W).
-        
-        Returns:
-            float: Expected solar power output in kW.
-        """
-        # Calculate the expected irradiance adjusted by time of day
-        expected_irradiance = irradiance_mean * time_of_day_factor
-        
-        # Convert irradiance (W/m^2) to power in kW (assuming 1000 W/m^2 gives maximum power)
-        expected_power_clear = min(max_solar_power, expected_irradiance / 1000 * max_solar_power)
-        
-        # Calculate the expected power output, accounting for cloudiness
-        expected_power = expected_power_clear * (1 - 0.5 * cloud_prob)
-        
-        return expected_power
 
 
     def get_future_reward(self, state, action, stage: int, w):

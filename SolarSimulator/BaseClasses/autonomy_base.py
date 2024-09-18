@@ -1,3 +1,4 @@
+from mdp import mdp
 
 class Autonomy:
     """Class representing a the autonomy module for a seaplane"""
@@ -62,7 +63,27 @@ class Autonomy:
 
         return dc, energy_history, state_history, num_takeoff
     
-    def mdp(self):
-        optimal_policy = ''
-        return optimal_policy
+    def mdp_behavior(self,plane,soc_increment,max_stages,start_state,P_solar):
+        """
+        Returns:
+        tuple: A tuple containing the following elements:
+            dc (float): The duty cycle, expressed as the percentage of time the plane spends flying during daytime.
+            energy_history (list): A list representing the percentage of battery capacity over time.
+            state_history (list): A list representing the state history over time, where 1 indicates flying and 0 indicates moored.
+            num_takeoff (int): The number of takeoffs performed by the plane.
+        """
+        vehicle_states = ["moored", "flying"]
+        actions = ["float", "fly"]
+        stm = [0, 0, 0, 0]
+
+        mdp_instance = mdp(plane,soc_increment, vehicle_states, max_stages, actions, stm)
+        state_list = [start_state]
+
+        for k in range(max_stages):
+            state = state_list[-1]
+            for a in actions:
+                if mdp_instance.is_action_feasible(a,w,state,k)
+            state_list.append(new_state)
+
+        return dc, energy_history, state_history, num_takeoff
 

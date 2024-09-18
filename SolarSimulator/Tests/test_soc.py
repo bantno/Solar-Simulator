@@ -1,76 +1,118 @@
 import sys
 import os
+import numpy as np
 import unittest
-from unittest.mock import MagicMock
 
 # Add the parent directory to the sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../BaseClasses')))
 
-from seaplane_base import Seaplane
 from mdp import mdp
+from seaplane_base import Seaplane
 
-class TestMDPCalculateSOCUpdate(unittest.TestCase):
+
+class TestMDP(unittest.TestCase):
 
     def setUp(self):
-        # Mock plane with necessary attributes and methods
-        self.plane_mock = MagicMock()
-        self.plane_mock.voltage = 12  # Volts
-        self.plane_mock.capacity = 10000  # mAh, so 12V * 10000mAh = 120000 Joules
-        self.plane_mock.get_required_power = MagicMock(return_value=150)
+        # Example setup for testing
+        self.soc_increment = 1
+        self.vehicle_states = ["moored", "flying"]
+        self.max_stages = 3
+        self.actions = ["float", "fly"]
+        self.stm = [0, -40, 20, -20]
 
-        # Actions and vehicle states
-        soc_increment = 20
-        vehicle_states = ['floating', 'flying']
-        actions = ['float', 'fly']
-        stm = [0, -20, 20, -40]  # state transition matrix
-        max_stages = 100
+            # Define constant parameters
+        lat = 29.02291491363789
+        lon = -90.23223029442693
+        tz = "Etc/GMT+6"
+        pdc0 = 0  # nameplate power rating [W]
+        gamma = -0.0047  # Temperature coefficient of power [1/deg Celsius]
 
-        # Create mdp object with mock plane
-        self.mdp_instance = mdp(self.plane_mock, soc_increment, vehicle_states, max_stages, actions, stm)
+        # Airplane params
+        capacity_ah = 5.0
+        voltage = 22.2
+        Cdtot = 0.0
+        Cd0 = 0.02584
+        S = 0.653  # from OpenVSP model
+        af_mass = 8.8  # TODO: Read in AF mass from VSPAero, multiply by safety factor
+        cruise_speed = 20.0  # m/s
+        rho = 1.19  # air density (dependent on altitude)
+        U = cruise_speed
+        N_PROP = 0.82  # from Raymer
+        N_ESC = 0.9  # esc efficiency estimate
 
-    def test_soc_update_floating_full_sunlight(self):
-        """Test the SoC update when floating during full sunlight."""
-        dt = 60  # 60 minutes timestep
-        stage = 12  # Assume midday
-        self.plane_mock.get_required_power.return_value = 0  # Floating requires no energy
+        # Create plane
+        plane = Seaplane(
+            lat,
+            lon,
+            tz,
+            pdc0,
+            gamma,
+            cd0=Cd0 * 1.5,
+            cs=True,
+            tracking=False,
+            cdtot=Cdtot,
+            n_tot=N_PROP * N_ESC,
+            S=S,
+            af_mass=af_mass,
+            voltage=voltage,
+            capacity=capacity_ah
+            )
 
-        soc_update = self.mdp_instance.calculate_soc_update(0, dt, stage)
+        self.plane = plane
+        self.mdp_instance = mdp(self.plane,self.soc_increment, self.vehicle_states, self.max_stages, self.actions, self.stm)
 
-        # Check that SoC increased by the correct amount
-        self.assertGreater(soc_update, 0, f"Expected positive SoC update, got {soc_update}")
+    def test_calculate_soc_update_fly(self):
+        """
+        Test that the SoC update is negative when the action is "fly", timestep is 10, and stage is 0.
+        """
+        action = "fly"
+        timestep = 10  # 10 minutes
+        stage = 0
 
-    def test_soc_update_flying_cloudy(self):
-        """Test the SoC update when flying with some cloud cover."""
-        dt = 60  # 60 minutes timestep
-        stage = 6  # Morning
-        self.plane_mock.get_required_power.return_value = 50  # Flying requires 50 watts
+        soc_update = self.mdp_instance.calculate_soc_update(action, timestep, stage)
+        print(f"SoC update at stage {stage} is {soc_update}.")
+        self.assertLess(soc_update, 0, "SoC update should be negative when the action is 'fly'.")
+    
+    def test_soc_update_noon_vs_midnight(self):
+        """
+        Test that the SoC update is less negative at noon (stage 720) compared to midnight (stage 0)
+        when the action is 'fly'.
+        """
+        action = "fly"
+        timestep = 10
 
-        soc_update = self.mdp_instance.calculate_soc_update(1, dt, stage)
+        # Midnight case (stage 0)
+        stage_midnight = 0
+        soc_update_midnight = self.mdp_instance.calculate_soc_update(action, timestep, stage_midnight)
 
-        # Check that SoC decreases due to high energy consumption
-        self.assertLess(soc_update, 0, f"Expected negative SoC update, got {soc_update}")
+        # Noon case (stage 720 represents noon when timestep is 10 minutes)
+        stage_noon = int((12 * 60) / timestep)  # 12 hours * 60 minutes = 720 minutes, divided by 10
+        soc_update_noon = self.mdp_instance.calculate_soc_update(action, timestep, stage_noon)
 
-    def test_soc_update_floating_night(self):
-        """Test the SoC update when floating at night (no solar power)."""
-        dt = 60  # 60 minutes timestep
-        stage = 0  # Midnight (no sunlight)
-        self.plane_mock.get_required_power.return_value = 0  # Floating requires no energy
+        print(f"SoC update at stage {stage_midnight} is {soc_update_midnight}.")
+        print(f"SoC update at stage {stage_noon} is {soc_update_noon}.")
+        # Assert that the SoC update at noon is less negative than at midnight
+        self.assertLess(soc_update_midnight,soc_update_noon, "SoC update should be less negative at noon than at midnight.")
 
-        soc_update = self.mdp_instance.calculate_soc_update(0, dt, stage)
+    def test_soc_update_before_and_after_noon(self):
+        """
+        Test that the SoC update is slightly more negative just after noon than just before noon
+        when the action is 'fly'.
+        """
+        action = "fly"
+        timestep = 10
 
-        # Check that SoC doesn't change as no energy is consumed or generated
-        self.assertEqual(soc_update, 0, f"Expected no change in SoC, got {soc_update}")
+        # Calculate the stage for slightly before noon (11:00 AM)
+        stage_before_noon = int(((12 * 60) - 60) / timestep)  
+        soc_update_before_noon = self.mdp_instance.calculate_soc_update(action, timestep, stage_before_noon)
 
-    def test_soc_update_flying_no_sunlight(self):
-        """Test the SoC update when flying at night (no solar power, high energy consumption)."""
-        dt = 60  # 60 minutes timestep
-        stage = 0  # Midnight
-        self.plane_mock.get_required_power.return_value = 60  # Flying requires 60 watts
+        # Calculate the stage for slightly after noon (1:0 PM)
+        stage_after_noon = int(((12 * 60) + 60) / timestep)  
+        soc_update_after_noon = self.mdp_instance.calculate_soc_update(action, timestep, stage_after_noon)
 
-        soc_update = self.mdp_instance.calculate_soc_update(1, dt, stage)
-
-        # Check that SoC decreases significantly due to energy consumption without solar power
-        self.assertLess(soc_update, 0, f"Expected large negative SoC update, got {soc_update}")
+        # Assert that the SoC update just after noon is slightly more negative than just before noon
+        self.assertLess(soc_update_after_noon, soc_update_before_noon,
+                        "SoC update should be slightly more negative just after noon than just before noon.")
 
 
 if __name__ == "__main__":

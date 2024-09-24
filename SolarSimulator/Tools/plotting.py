@@ -109,21 +109,21 @@ def plot_endurance(plane:Seaplane,S,Cd0,af_mass,capacity,rho,filename=-1):
         plt.show()
     return
 
-def battery_sweep(sim: Simulation,capacities,year=2019,month=6,day=1,days=1,U=20,rho=1.1):
+def battery_sweep(sim: Simulation,capacities,year=2019,month=6,day=1,days=1,U=20,rho=1.1,algo="Greedy"):
     plane = sim.plane
     duty_list = []
     if isinstance(capacities,float):
         plane.capacity = capacities
         plane.update_plane()
         _, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min',cs=sim.cs)
-        duty_cycle,_,_,num_takeoffs = sim.simulate_deployment(U,rho,1,.1,P_solar,5)
+        duty_cycle,_,_,num_takeoffs = sim.simulate_deployment(U,rho,1,.1,P_solar,10,algo)
         return duty_cycle,num_takeoffs
     else:
         for cap in tqdm(capacities):
             plane.capacity = cap
             plane.update_plane()
             _, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min',cs=sim.cs)
-            duty_cycle,_,_,num_takeoffs = sim.simulate_deployment(U,rho,1,.1,P_solar,5)
+            duty_cycle,_,_,num_takeoffs = sim.simulate_deployment(U,rho,1,.1,P_solar,10,algo)
             duty_list.append(duty_cycle)
 
     return duty_list,num_takeoffs
@@ -157,8 +157,9 @@ def plot_battery_sweep(cap,duty,label = "",filename=-1,fig = -1,title=""):
     return fig
     
 
-def run_simulation(sim: Simulation, year=2019,month=6,day=1,days=1,U=20,rho=1.1):
+def run_simulation(sim: Simulation, year=2019,month=6,day=1,days=1,U=20,rho=1.1,algo="MDP"):
     # TODO: Add ability to plot multiple runs on same figure
+    # TODO: Add timestep as a parameter
     """Simulates and plots the duty cycle for the given plane and times
     
     Parameters:
@@ -176,8 +177,8 @@ def run_simulation(sim: Simulation, year=2019,month=6,day=1,days=1,U=20,rho=1.1)
     """
     plane = sim.plane
     plane.update_plane()
-    times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min',cs=sim.cs)
-    duty_cycle,e_h,state,_ = sim.simulate_deployment(U,rho,1,.05,P_solar,5)
+    times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
+    duty_cycle,e_h,state,_ = sim.simulate_deployment(U,rho,1,.05,P_solar,10,algo)
     return times,e_h,P_solar,state,duty_cycle
 
     

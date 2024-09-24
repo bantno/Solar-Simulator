@@ -66,7 +66,7 @@ class Simulation:
 
         if cs :
             # Get clearsky weather
-            if times != -1:
+            if not (times is -1):
                 wthr = self.location.get_clearsky(times)
         else :
             # Get weather based on TMY data
@@ -186,46 +186,87 @@ class Simulation:
 
         return times, pdc
 
-    def simulate_deployment(self,U,rho,takeoff_capacity,landing_capacity,P_solar,dt,algo):
+    def simulate_deployment(self, U, rho, takeoff_capacity, landing_capacity, P_solar, dt, algo):
         """Determines duty cycle for specified period
         
         Parameters
         ----------
         U : float
-            Cruise speed of the vehicle
+            Cruise speed of the vehicle.
         rho : float
-            Air density at cruise altitude in kg/m^3
-        takeoff_voltage : float
-            Percentage of total capacity at which the vehicle is sufficiently charged to takeoff
-        landing_voltage : float
-            Percentage of total capacity at which the vehicle must land (%)
-        period : int
-            Time in days over which the simulation should run
-        P_solar : numpy arr
-            Array of solar power collected by the vehicle's photovoltaic system [W]
+            Air density at cruise altitude in kg/m^3.
+        takeoff_capacity : float
+            Percentage of total capacity at which the vehicle is sufficiently charged to takeoff.
+        landing_capacity : float
+            Percentage of total capacity at which the vehicle must land.
+        P_solar : numpy array
+            Array of solar power collected by the vehicle's photovoltaic system [W].
         dt : int
-            Time in minutes between each sample in P_solar
+            Time in minutes between each sample in P_solar.
         algo : str
             The algorithm to use, either "Greedy" or "MDP".
-
+        
         Returns
         -------
         duty_cycle : float
-            Percentage of time period spent in air
+            Percentage of time period spent in air.
         energy_j : list, float
-            Energy stored in battery for each simulated time
-
+            Energy stored in battery for each simulated time.
         """
+
+        
+        def daytime(start_time: int, time_step: int = 10, stage: int = 0) -> int:
+            """
+            Determines if the current stage is during the day or night, accounting for simulations
+            that span multiple days.
+
+            Args:
+                start_time (int): The time in minutes from the start of the day (0-1439).
+                                For example, 0 is 12:00 AM, 720 is 12:00 PM, and 1439 is 11:59 PM.
+                time_step (int): The time step duration in minutes. Default is 10 minutes.
+                stage (int): The current stage of the simulation.
+
+            Returns:
+                int: 1 if the stage is during the day (6 AM to 6 PM), otherwise 0.
+            """
+            # Number of minutes in a day
+            minutes_per_day = 24 * 60
+            
+            # Calculate the current time in minutes, accounting for multiple days
+            total_time = start_time + time_step * stage
+            current_time = total_time % minutes_per_day
+            
+            # Convert minutes to determine day (6:00 AM = 360 minutes, 6:00 PM = 1080 minutes)
+            if 360 <= current_time < 1080:
+                return 1
+            else:
+                return 0
+
         # Ensure weight estimate is accurate
         self.plane.calculate_weight()
+
+        # Calculate required parameters
+        P_cruise = self.plane.get_required_power(U, rho)
+        capacity_j = self.plane.voltage * self.plane.capacity * 3600
+        # is_daytime = pd.DataFrame(columns=['daytime'])
+        is_daytime = []
+        for i in range(len(P_solar-1)):
+            # is_daytime.iloc[i] = daytime(0,10,i)
+            is_daytime.append(daytime(0,10,i))
+        min_flight_hr = 0.5  # Minimum flight time (hours) after takeoff
         
         if algo == "Greedy":
-
-            P_cruise = self.plane.get_required_power(U,rho)
-            capacity_j = self.plane.voltage*self.plane.capacity*3600
-            is_daytime = P_solar > 1
-            min_flight_hr = 1    
+            # Call the simple behavior for the "Greedy" algorithm
             return Autonomy.simple_plane_behavior(self, P_solar, is_daytime, P_cruise, capacity_j, landing_capacity, takeoff_capacity, dt, min_flight_hr, self.plane.calc_takeoff_penalty)
         
-        if algo == "MDP" :
-            return Autonomy.mdp_behavior(self, P_solar, is_daytime, P_cruise, capacity_j, landing_capacity, takeoff_capacity, dt, min_flight_hr, self.plane.calc_takeoff_penalty)
+        elif algo == "MDP":
+            # Set MDP-specific parameters
+            soc_increment = 1  # State of Charge increments
+            max_stages = len(P_solar-1)  # Set max stages based on the length of the solar power data
+            start_state = (100, "moored")  # Initial state (100% SoC, moored)
+
+            # Call the mdp_behavior function from the Autonomy class
+            return Autonomy.mdp_behavior(self, self.plane, soc_increment, max_stages, start_state, P_solar, is_daytime)
+        
+        else:
+            raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")

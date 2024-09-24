@@ -45,11 +45,11 @@ class mdp:
             
             # Adjust lambda based on current state and action
             if current_state == "moored" and action == "fly":
-                success_prob = 0.99
-            elif current_state == "flying" and action == "float":
-                success_prob = 0.99
-            elif current_state == "flying" and action == "fly":
                 success_prob = 0.95
+            elif current_state == "flying" and action == "float":
+                success_prob = 0.95
+            elif current_state == "flying" and action == "fly":
+                success_prob = 0.99
             
             failure_prob = 1 - success_prob
         
@@ -111,6 +111,7 @@ class mdp:
         """
         Creates an expectation value (EV) table with a specified number of stages.
         """
+        print("Creating expected value table...\n")
         num_columns = max_stages
         self.ev_table = pd.DataFrame(
             np.nan,
@@ -132,6 +133,8 @@ class mdp:
                         if reward > max_reward:
                             max_reward = reward
                 self.ev_table.loc[s,k] = max_reward
+
+        print("Done!")
 
     def get_activation_vector(self, u, w, k):
         """

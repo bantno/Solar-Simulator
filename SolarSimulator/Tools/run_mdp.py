@@ -78,7 +78,7 @@ if __name__ == '__main__':
     gamma = -0.0047  # Temperature coefficient of power [1/deg Celsius]
 
     # Airplane params
-    capacity_ah = 25.0
+    capacity_ah = 5.0
     voltage = 22.2
     Cdtot = 0.0
     Cd0 = 0.02584

@@ -1,5 +1,5 @@
 import numpy as np
-from mdp import mdp
+from BaseClasses.mdp import mdp
 
 class Autonomy:
     """Class representing a the autonomy module for a seaplane"""
@@ -40,13 +40,13 @@ class Autonomy:
                 state_history.append(1)
                 flying += 1
                 energy_j -= (P_cruise - P_solar.iloc[i]) * dt * 60
-                if energy_j <= capacity_j * landing_capacity or not is_daytime.iloc[i]:
+                if energy_j <= capacity_j * landing_capacity or not is_daytime[i]:
                     state = "Moored"
             elif state == "Moored":
                 state_history.append(0)
                 if energy_j <= capacity_j:
                     energy_j += P_solar.iloc[i] * dt * 60
-                if energy_j >= takeoff_capacity * capacity_j and is_daytime.iloc[i]:
+                if energy_j >= takeoff_capacity * capacity_j and is_daytime[i]:
                     if energy_j > P_cruise * 60 * 60 * min_flight_hr:
                         state = "Flying"
                         energy_j -= calc_takeoff_penalty()
@@ -56,7 +56,7 @@ class Autonomy:
                 energy_j = capacity_j
             energy_history.append(energy_j / capacity_j * 100)
 
-        total = is_daytime.sum()
+        total = sum(is_daytime)
         if total == 0.0:
             dc = 0
         else:
@@ -132,7 +132,7 @@ class Autonomy:
         flying = 0
 
         # Loop through the stages to calculate optimal actions based on the EV table
-        for k in range(max_stages):
+        for k in range(max_stages-1):
             current_state = state_list[-1]
             max_reward = -np.inf
             best_action = None
@@ -152,7 +152,8 @@ class Autonomy:
 
             # Perform the chosen action and update the state
             soc_update = mdp_instance.calculate_soc_update(
-                plane, best_action, mdp_instance.dt, k, solar_power=P_solar.iloc[k]
+                plane, best_action, mdp_instance.dt, k,
+                False,solar_power=P_solar.iloc[k], soc_increment=mdp_instance.soc_increment
             )
             new_soc = current_state[0] + soc_update
             new_state = (new_soc, "flying" if best_action == "fly" else "moored")
@@ -171,7 +172,7 @@ class Autonomy:
                 break  # Exit if the SoC becomes invalid (e.g., battery drained)
 
         # Calculate duty cycle (percentage of time spent flying during daytime)
-        total_daytime = is_daytime.sum()
+        total_daytime = sum(is_daytime)
         dc = (flying / total_daytime * 100) if total_daytime > 0 else 0
 
         return dc, energy_history, state_history, num_takeoff

@@ -65,53 +65,60 @@ DAY = 1
 DAYS = 30
 
 # Define capacities to investigate
-cap = np.linspace(5, 30, 50)
+# cap = np.linspace(5, 30, 50)
+# cap = [25]
 
 
-# #######################################################
-# Run battery sweep
-duty, num_takeoffs = plotting.battery_sweep(sim, cap, month=MONTH, days=DAYS)
+# # #######################################################
+# # Run battery sweep
+# duty, num_takeoffs = plotting.battery_sweep(sim, cap, month=MONTH, days=DAYS)
 
-# Create battery sweep plot
-FILENAME = f"BatterySweep_{YEAR}_{MONTH}_{DAY}-{DAYS}"
+# # Create battery sweep plot
+# FILENAME = f"BatterySweep_{YEAR}_{MONTH}_{DAY}-{DAYS}"
 
-# Print optimal battery capacity
-data = data = {"Capacity": cap, "Duty": duty}
-df = pd.DataFrame(data)
-max_duty = df["Duty"].max()
-max_duty_row = df[df["Duty"] == max_duty]
-max_cap = max_duty_row["Capacity"].values[0]
-print("Capacity for max duty cycle: {0}".format("%.2f" % max_cap))
-print("Maximum Duty Cycle: {0}".format("%.2f" % max_duty))
-# #######################################################
+# # Print optimal battery capacity
+# data = data = {"Capacity": cap, "Duty": duty}
+# df = pd.DataFrame(data)
+# max_duty = df["Duty"].max()
+# max_duty_row = df[df["Duty"] == max_duty]
+# max_cap = max_duty_row["Capacity"].values[0]
+# print("Capacity for max duty cycle: {0}".format("%.2f" % max_cap))
+# print("Maximum Duty Cycle: {0}".format("%.2f" % max_duty))
+# # #######################################################
 
 
 # TODO: Make Function
 # Run simulation for optimal battery size(s)
 # capacities = np.linspace(1,18,3).tolist()
 # capacities.append(max_cap)
-# plt.close()
-# capacities = [17,20,max_cap]
-# fig = -1
-# duty_cycle = []
+plt.close()
+capacities = [25]
+fig = -1
+duty_cycle = []
 
-# year = 2019
-# month = 6
-# day = 1
-# days = 30
-# filename = "SimResults_{0}_{1}_{2}-{3}".format(year,month,day,days)
+year = 2019
+month = 6
+day = 1
+days = 15
 
-# for cap in capacities:
-#     plane.capacity = cap
-#     label = f"{plane.capacity:.2f} Ah"
-#     times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days)
-#     fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
-#     duty_cycle.append(dc)
-# print(duty_cycle)
+current_time = datetime.datetime.now()
+time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+filename = f"SimResults_{year}_{month}_{day}-{days}__{time_string}"
 
-# plt.tight_layout()
-# plot_path = os.path.join("Figures", f"{filename}.png")
-# plt.savefig(plot_path)
+for cap in capacities:
+    plane.capacity = cap
+    label = f"{plane.capacity:.2f} Ah"
+    times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='Greedy')
+    fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
+    duty_cycle.append(dc)
+    times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='MDP')
+    fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
+    duty_cycle.append(dc)
+print(duty_cycle)
+
+plt.tight_layout()
+plot_path = os.path.join("Figures", f"{filename}.png")
+plt.savefig(plot_path)
 
 
 # TODO: Make Function

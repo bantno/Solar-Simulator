@@ -1,179 +1,153 @@
 import numpy as np
 from BaseClasses.mdp import mdp
+import random
 
 class Autonomy:
-    """Class representing a the autonomy module for a seaplane"""
+    """Represents the autonomy module for a solar-powered seaplane."""
+
     def __init__(self):
         pass
 
-    def simple_plane_behavior(self, P_solar, is_daytime, P_cruise, capacity_j, landing_capacity, takeoff_capacity, dt, min_flight_hr, calc_takeoff_penalty):
+    def simulate_simple_behavior(self, solar_power, is_daytime, cruise_power, battery_capacity, landing_threshold, takeoff_threshold, timestep_minutes, min_flight_minutes, takeoff_penalty_fn):
         """
-        Simulates the behavior of a solar-powered plane over time.
+        Simulates simple plane behavior over time with random failures during state transitions.
 
         Parameters:
-        P_solar (pd.Series): A pandas Series representing the solar power available at each time step.
-        is_daytime (pd.Series): A pandas Series indicating whether it is daytime (True) or nighttime (False) at each time step.
-        P_cruise (float): The power required to cruise the plane.
-        capacity_j (float): The energy capacity of the plane's battery in joules.
-        landing_capacity (float): The battery capacity threshold at which the plane needs to land, expressed as a fraction of capacity_j.
-        takeoff_capacity (float): The battery capacity threshold required for the plane to take off, expressed as a fraction of capacity_j.
-        dt (float): The time step size in hours.
-        min_flight_hr (float): The minimum number of hours the plane must be able to fly after taking off.
-        calc_takeoff_penalty (function): A function that calculates the energy penalty for taking off.
+        solar_power (pd.Series): Solar power available at each time step.
+        is_daytime (pd.Series): Boolean series indicating daytime (True) or nighttime (False).
+        cruise_power (float): Power required for cruising.
+        battery_capacity (float): Total battery energy capacity in joules.
+        landing_threshold (float): Battery fraction at which the plane must land.
+        takeoff_threshold (float): Battery fraction required for takeoff.
+        timestep_minutes (float): Simulation time step in minutes.
+        min_flight_minutes (float): Minimum flight time after takeoff.
+        takeoff_penalty_fn (function): Function to compute energy penalty for takeoff.
 
         Returns:
-        tuple: A tuple containing the following elements:
-            dc (float): The duty cycle, expressed as the percentage of time the plane spends flying during daytime.
-            energy_history (list): A list representing the percentage of battery capacity over time.
-            state_history (list): A list representing the state history over time, where 1 indicates flying and 0 indicates moored.
-            num_takeoff (int): The number of takeoffs performed by the plane.
+        tuple: duty_cycle, energy_history, state_history, num_takeoffs, failure_occurred
         """
         state = "Moored"
-        energy_j = capacity_j
-        state_history = []
+        energy_joules = battery_capacity
         energy_history = []
-        num_takeoff = 0
-        flying = 0
+        state_history = []
+        num_takeoffs = 0
+        flight_time = 0
+        failure_occurred = False
 
-        for i in range(len(P_solar)):
+        for i in range(len(solar_power)):
             if state == "Flying":
-                state_history.append(1)
-                flying += 1
-                energy_j -= (P_cruise - P_solar.iloc[i]) * dt * 60
-                if energy_j <= capacity_j * landing_capacity or not is_daytime[i]:
+                # Flying state logic
+                flight_time += timestep_minutes / 60
+                energy_joules -= (cruise_power - solar_power.iloc[i]) * timestep_minutes * 60
+
+                # Transition to Moored state if energy is too low or it's nighttime
+                if energy_joules <= landing_threshold * battery_capacity or not is_daytime[i]:
+                    # Check if the transition to 'moored' fails
+                    if random.random() > 0.95:  # Failure probability for "flying" -> "moored"
+                        failure_occurred = True
+                        break  # End simulation on failure
                     state = "Moored"
+                state_history.append(1)
+
             elif state == "Moored":
-                state_history.append(0)
-                if energy_j <= capacity_j:
-                    energy_j += P_solar.iloc[i] * dt * 60
-                if energy_j >= takeoff_capacity * capacity_j and is_daytime[i]:
-                    if energy_j > P_cruise * 60 * 60 * min_flight_hr:
+                # Moored state logic
+                energy_joules = min(energy_joules + solar_power.iloc[i] * timestep_minutes * 60, battery_capacity)
+
+                # Check if conditions for takeoff are met
+                if energy_joules >= takeoff_threshold * battery_capacity and is_daytime[i]:
+                    # Check for flight feasibility based on available energy and flight time
+                    if energy_joules >= cruise_power * 60 * min_flight_minutes:
+                        # Check if the transition to 'flying' fails
+                        if random.random() > 0.95:  # Failure probability for "moored" -> "flying"
+                            failure_occurred = True
+                            break  # End simulation on failure
+
+                        # Take off
                         state = "Flying"
-                        energy_j -= calc_takeoff_penalty()
-                        energy_j -= (P_cruise - P_solar.iloc[i]) * dt * 60
-                        num_takeoff += 1
-            if energy_j > capacity_j:
-                energy_j = capacity_j
-            energy_history.append(energy_j / capacity_j * 100)
+                        energy_joules -= takeoff_penalty_fn() + (cruise_power - solar_power.iloc[i]) * timestep_minutes * 60
+                        num_takeoffs += 1
+                state_history.append(0)
 
-        total = sum(is_daytime)
-        if total == 0.0:
-            dc = 0
-        else:
-            dc = flying / total * 100
+            energy_history.append(energy_joules / battery_capacity * 100)
 
-        return dc, energy_history, state_history, num_takeoff
-    
-    # def mdp_behavior(self,plane,soc_increment,max_stages,start_state,P_solar, is_daytime):
-    #     """
-    #     Returns:
-    #     tuple: A tuple containing the following elements:
-    #         dc (float): The duty cycle, expressed as the percentage of time the plane spends flying during daytime.
-    #         energy_history (list): A list representing the percentage of battery capacity over time.
-    #         state_history (list): A list representing the state history over time, where 1 indicates flying and 0 indicates moored.
-    #         num_takeoff (int): The number of takeoffs performed by the plane.
-    #     """
-    #     vehicle_states = ["moored", "flying"]
-    #     actions = ["float", "fly"]
-    #     stm = [0, 0, 0, 0]
+        # Handle the failure case by filling remaining steps with -10 for energy and -1 for state
+        if failure_occurred:
+            remaining_steps = len(solar_power) - (i + 1)  # Ensure correct number of remaining steps
+            energy_history.extend([-10] * remaining_steps)
+            state_history.extend([-1] * remaining_steps)
+            energy_history.append(-10)
+            state_history.append(-1)
+            print("Failure")
 
-    #     mdp_instance = mdp(plane,soc_increment, vehicle_states, max_stages, actions, stm)
-    #     state_list = [start_state]
+        total_daytime_minutes = sum(is_daytime) * timestep_minutes
+        duty_cycle = (flight_time / (total_daytime_minutes / 60) * 100) if total_daytime_minutes > 0 else 0
 
-    #     for k in range(max_stages):
-    #         state = state_list[-1]
-    #         reward = -np.inf
-            
-    #         # Choose which action to take
-    #         for a in actions:
-    #             if mdp_instance.is_action_feasible(a,state,k):
-    #                 control_reward = mdp_instance.get_control_reward(a,w,state,k)
-    #                 future_reward = mdp_instance.get_future_reward(state,a,k,w)
-    #                 v = control_reward + future_reward
-    #                 if v > reward :
-    #                     reward = v
-    #                     new_state = 
-            
-    #         # Calculate effect of that action
-    #         state_list.append(new_state)
+        return duty_cycle, energy_history, state_history, num_takeoffs, failure_occurred
 
-    #     return dc, energy_history, state_history, num_takeoff
 
-    def mdp_behavior(self, plane, soc_increment, max_stages, start_state, P_solar, is_daytime):
+
+
+    def simulate_mdp_behavior(self, plane, soc_increment, max_stages, initial_state, expected_solar_power, actual_solar_power, is_daytime):
         """
-        Simulates the behavior of a solar-powered plane using MDP to determine the optimal policy.
+        Simulates plane behavior using an MDP to determine the optimal flight policy.
 
         Parameters:
-        plane: The plane object with necessary attributes such as voltage and capacity.
-        soc_increment (int): The increment of state of charge (SoC) in percentages.
-        max_stages (int): The number of stages (or time steps) for the simulation.
-        start_state (tuple): The initial state (SoC, vehicle_state).
-        P_solar (pd.Series): A pandas Series representing the solar power available at each time step.
-        is_daytime (pd.Series): A pandas Series indicating whether it is daytime (True) or nighttime (False) at each time step.
+        plane: The plane object containing relevant attributes like battery and power.
+        soc_increment (int): State of charge increment in percentages.
+        max_stages (int): Number of stages or time steps in the simulation.
+        initial_state (tuple): Starting state as (SoC, vehicle_state).
+        solar_power (pd.Series): Solar power available at each time step.
+        is_daytime (pd.Series): Boolean series indicating daytime (True) or nighttime (False).
 
         Returns:
-        tuple: A tuple containing the following elements:
-            dc (float): The duty cycle, expressed as the percentage of time the plane spends flying during daytime.
-            energy_history (list): A list representing the percentage of battery capacity over time.
-            state_history (list): A list representing the state history over time, where 1 indicates flying and 0 indicates moored.
-            num_takeoff (int): The number of takeoffs performed by the plane.
+        tuple: duty_cycle, energy_history, state_history, num_takeoffs
         """
-        vehicle_states = ["moored", "flying"]
-        actions = ["float", "fly"]
-        stm = [0, 0, 0, 0]
+        vehicle_states = ["Moored", "Flying"]
+        actions = ["Float", "Fly"]
 
-        # Create an instance of the MDP class
-        mdp_instance = mdp(plane, soc_increment, vehicle_states, max_stages, actions, stm)
+        mdp_model = mdp(plane, soc_increment, vehicle_states, max_stages, actions, expected_solar_power)
+        state_history_list = [initial_state]
+        energy_history = [initial_state[0]]
+        state_history = [1 if initial_state[1] == "Flying" else 0]
+        num_takeoffs = 0
+        flight_time = 0
 
-        state_list = [start_state]
-        energy_history = [start_state[0]]
-        state_history = [1 if start_state[1] == "flying" else 0]
-        num_takeoff = 0
-        flying = 0
-
-        # Loop through the stages to calculate optimal actions based on the EV table
-        for k in range(max_stages-1):
-            current_state = state_list[-1]
-            max_reward = -np.inf
+        for k in range(max_stages - 1):
+            current_state = state_history_list[-1]
             best_action = None
+            max_reward = -np.inf
 
-            w = mdp_instance.is_daytime(mdp_instance.start_time, mdp_instance.dt, k)
+            is_day = mdp_model.is_daytime(mdp_model.start_time, mdp_model.dt, k)
 
-            # Determine the optimal action at this stage
             for action in actions:
-                if mdp_instance.is_action_feasible(action, current_state, k):
-                    control_reward = mdp_instance.get_control_reward(action, w, current_state, k)
-                    future_reward = mdp_instance.get_future_reward(current_state, action, k, w)
+                if mdp_model.is_action_feasible(action, current_state, k):
+                    control_reward = mdp_model.get_control_reward(action, is_day, current_state, k)
+                    future_reward = mdp_model.get_future_reward(current_state, action, k, is_day)
                     total_reward = control_reward + future_reward
                     
                     if total_reward > max_reward:
                         max_reward = total_reward
                         best_action = action
 
-            # Perform the chosen action and update the state
-            soc_update = mdp_instance.calculate_soc_update(
-                plane, best_action, mdp_instance.dt, k,
-                False,solar_power=P_solar.iloc[k], soc_increment=mdp_instance.soc_increment
+            soc_update = mdp_model.calculate_soc_update(
+                plane, best_action, mdp_model.dt, k, False,
+                solar_power=solar_power.iloc[k], soc_increment=mdp_model.soc_increment
             )
             new_soc = current_state[0] + soc_update
-            new_state = (new_soc, "flying" if best_action == "fly" else "moored")
+            new_state = (new_soc, "Flying" if best_action == "Fly" else "Moored")
 
-            # Ensure the new state is valid and update histories
-            if new_soc <= 100 and new_soc >= 0:
-                state_list.append(new_state)
+            if 0 <= new_soc <= 100:
+                state_history_list.append(new_state)
                 energy_history.append(new_soc)
-                state_history.append(1 if new_state[1] == "flying" else 0)
-                
-                if new_state[1] == "flying":
-                    flying += 1
-                if best_action == "fly" and current_state[1] == "moored":
-                    num_takeoff += 1
+                state_history.append(1 if new_state[1] == "Flying" else 0)
+                if new_state[1] == "Flying":
+                    flight_time += 1
+                if best_action == "Fly" and current_state[1] == "Moored":
+                    num_takeoffs += 1
             else:
-                break  # Exit if the SoC becomes invalid (e.g., battery drained)
+                break
 
-        # Calculate duty cycle (percentage of time spent flying during daytime)
-        total_daytime = sum(is_daytime)
-        dc = (flying / total_daytime * 100) if total_daytime > 0 else 0
+        total_daytime_hours = sum(is_daytime)
+        duty_cycle = (flight_time / total_daytime_hours * 100) if total_daytime_hours > 0 else 0
 
-        return dc, energy_history, state_history, num_takeoff
-
+        return duty_cycle, energy_history, state_history, num_takeoffs

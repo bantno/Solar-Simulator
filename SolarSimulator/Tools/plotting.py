@@ -178,13 +178,13 @@ def run_simulation(sim: Simulation, year=2019,month=6,day=1,days=1,U=20,rho=1.1,
     plane = sim.plane
     plane.update_plane()
     times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
-    duty_cycle,e_h,state,_ = sim.simulate_deployment(U,rho,1,.05,P_solar,10,algo)
+    duty_cycle,e_h,state,_,_ = sim.simulate_deployment(U,rho,1,.05,P_solar,10,algo)
     return times,e_h,P_solar,state,duty_cycle
 
     
 def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1, label=""):
     """Plot results of simulation"""
-    num_plots = 2
+    num_plots = 3
     if fig == -1:
         fig, axes = plt.subplots(num_plots, 1,figsize=(12,6))
     if isinstance(fig,Figure):

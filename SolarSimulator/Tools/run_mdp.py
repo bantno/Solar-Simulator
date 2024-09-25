@@ -78,7 +78,7 @@ if __name__ == '__main__':
     gamma = -0.0047  # Temperature coefficient of power [1/deg Celsius]
 
     # Airplane params
-    capacity_ah = 5.0
+    capacity_ah = 50.0
     voltage = 22.2
     Cdtot = 0.0
     Cd0 = 0.02584
@@ -113,11 +113,9 @@ if __name__ == '__main__':
     vehicle_states = ["moored", "flying"]
     max_stages = 144
     actions = ["float", "fly"]
-    stm = [0, 0, 0, 0]
-    
-    print(plane.weight/9.81)
+    expected_solar_power = 
 
-    mdp_instance = mdp(plane,soc_increment, vehicle_states, max_stages, actions, stm)    
+    mdp_instance = mdp(plane,soc_increment, vehicle_states, max_stages, actions, expected_solar_power)    
     plot_surfaces_by_state(mdp_instance.ev_table,plane.capacity,max_stages)
 
     # print(mdp_instance.states)

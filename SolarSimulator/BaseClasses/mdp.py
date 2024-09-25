@@ -7,18 +7,29 @@ class mdp:
     Class representing a markov decision process problem
     """
 
-    def __init__(self, plane, soc_increment, vehicle_states, max_stages, actions, stm, dt=10, start_time=0):
+    def __init__(self, plane, soc_increment, vehicle_states, max_stages, actions, expected_solar_power, dt=10, start_time=0):
         self.vehicle_states = vehicle_states
+        
         self.plane = plane
+        
         self.battery_capacity = self.plane.voltage*self.plane.capacity*3600
-        self.stm = stm
+        
         self.soc_increment = soc_increment
+        
         self.states = self.create_states(soc_increment, vehicle_states)
+        
         self.actions = actions
+        
         self.start_time=0
+
         self.dt = dt
 
-        self.create_ev_table(max_stages)
+        if len(expected_solar_power) != max_stages-1:
+            raise ValueError(f"Expected length {max_stages-1}, but got {len(expected_solar_power)}.")
+        else:
+            self.expected_solar_power = expected_solar_power
+
+        self.create_ev_table(max_stages,expected_solar_power)
         
 
     @staticmethod
@@ -68,7 +79,7 @@ class mdp:
         return max(0, factor)
     
     @staticmethod
-    def expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80):
+    def estimate_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80):
         """
         Calculates the expected solar power output for a given stage.
         """
@@ -107,7 +118,7 @@ class mdp:
             return 0
 
     
-    def create_ev_table(self, max_stages):
+    def create_ev_table(self, max_stages, expected_solar_power):
         """
         Creates an expectation value (EV) table with a specified number of stages.
         """
@@ -126,7 +137,7 @@ class mdp:
             for s in self.states:
                 max_reward = -np.inf
                 for u in self.actions:
-                    if self.is_action_feasible(u,s,k):
+                    if self.is_action_feasible(u,s,k,expected_solar_power):
                         control_reward = self.get_control_reward(u,w,s,k)
                         future_reward = self.get_future_reward(s,u,k,w)
                         reward = control_reward+future_reward
@@ -154,11 +165,11 @@ class mdp:
             
         return reward
     
-    def is_action_feasible(self, action, state, k):
+    def is_action_feasible(self, action, state, solar_power):
         """
         Checks whether the action is feasible for the current state.
         """
-        a = self.calculate_soc_update(self.plane, action, self.dt, k, self.soc_increment)
+        a = self.calculate_soc_update(self.plane, action, self.dt, solar_power, self.soc_increment)
         soc = state[0]
         if action == self.actions[0]:
             vehicle_state = self.vehicle_states[0]
@@ -171,24 +182,16 @@ class mdp:
         return feasible
 
     @staticmethod
-    def calculate_soc_update(plane, action: str, dt: int, stage: int, use_solar_approx=True, solar_power=0, soc_increment=1) -> int:
+    def calculate_soc_update(plane, action: str, dt: int, solar_power=0, soc_increment=1) -> int:
         """
         Static method to determine update to state of charge when executing a given action.
         """
-        irradiance_mean = 1000  # W/m^2
-        cloud_prob = 0.3  # Probability of cloud cover
-        daily_stages = 24*60/dt
-        time_of_day_factor = max(0, np.sin(np.pi * (np.mod(stage, daily_stages) / daily_stages)))
-
         if action == "float":
             required_power = 0
         elif action == "fly":
             u = 20
             rho = 1.2
             required_power = plane.get_required_power(u, rho)  # Watts
-
-        if use_solar_approx:
-            solar_power = mdp.expected_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80)
 
         avionics_power = 10
         total_power = solar_power - required_power - avionics_power  # Watts

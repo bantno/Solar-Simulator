@@ -185,6 +185,9 @@ class Simulation:
                                     ).fillna(0)
 
         return times, pdc
+    
+    def calculate_expected_solar_power():
+        
 
     def simulate_deployment(self, U, rho, takeoff_capacity, landing_capacity, P_solar, dt, algo):
         """Determines duty cycle for specified period
@@ -257,7 +260,7 @@ class Simulation:
         
         if algo == "Greedy":
             # Call the simple behavior for the "Greedy" algorithm
-            return Autonomy.simple_plane_behavior(self, P_solar, is_daytime, P_cruise, capacity_j, landing_capacity, takeoff_capacity, dt, min_flight_hr, self.plane.calc_takeoff_penalty)
+            return Autonomy.simulate_simple_behavior(self, P_solar, is_daytime, P_cruise, capacity_j, landing_capacity, takeoff_capacity, dt, min_flight_hr, self.plane.calc_takeoff_penalty)
         
         elif algo == "MDP":
             # Set MDP-specific parameters

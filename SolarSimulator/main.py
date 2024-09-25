@@ -20,7 +20,7 @@ pdc0 = 0  # nameplate power rating [W]
 gamma = -0.0047  # Temperature coefficient of power [1/deg Celsius]
 
 # Airplane params
-capacity_ah = 0.0
+capacity_ah = 50.0
 voltage = 22.2
 Cdtot = 0.0
 Cd0 = 0.02584
@@ -92,7 +92,7 @@ DAYS = 30
 # capacities = np.linspace(1,18,3).tolist()
 # capacities.append(max_cap)
 plt.close()
-capacities = [25]
+capacities = [50]
 fig = -1
 duty_cycle = []
 
@@ -107,13 +107,14 @@ filename = f"SimResults_{year}_{month}_{day}-{days}__{time_string}"
 
 for cap in capacities:
     plane.capacity = cap
+    print(f"Required Power: {plane.get_required_power(20,1.2)} W")
     label = f"{plane.capacity:.2f} Ah"
     times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='Greedy')
     fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
     duty_cycle.append(dc)
-    times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='MDP')
-    fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
-    duty_cycle.append(dc)
+    # times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='MDP')
+    # fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
+    # duty_cycle.append(dc)
 print(duty_cycle)
 
 plt.tight_layout()

@@ -71,15 +71,15 @@ def plot_surfaces_by_state(df, battery_capacity_ah,max_stages):
 if __name__ == '__main__':
 
     # Define constant parameters
-    lat = 29.02291491363789
+    lat = 28.52291491363789
     lon = -90.23223029442693
     tz = "Etc/GMT+6"
-    pdc0 = 0  # nameplate power rating [W]
+    pdc0 = 80  # nameplate power rating [W]
     gamma = -0.0047  # Temperature coefficient of power [1/deg Celsius]
 
     # Airplane params
-    capacity_ah = 50.0
-    voltage = 22.2
+    capacity_ah = 25.0
+    voltage = 3.7*10
     Cdtot = 0.0
     Cd0 = 0.02584
     S = 0.653  # from OpenVSP model
@@ -113,6 +113,7 @@ if __name__ == '__main__':
     vehicle_states = ["moored", "flying"]
     max_stages = 144
     actions = ["float", "fly"]
+    data = 
     expected_solar_power = 
 
     mdp_instance = mdp(plane,soc_increment, vehicle_states, max_stages, actions, expected_solar_power)    

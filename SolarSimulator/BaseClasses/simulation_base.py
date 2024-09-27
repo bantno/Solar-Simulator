@@ -3,12 +3,11 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from scipy.stats import weibull_min
+from scipy.stats import beta as beta_dist
 
-from pvlib import location
-from pvlib import tracking
+from pvlib import location, tracking, temperature, pvsystem
 from pvlib.bifacial.pvfactors import pvfactors_timeseries
-from pvlib import temperature
-from pvlib import pvsystem
 
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.autonomy_base import Autonomy
@@ -185,9 +184,53 @@ class Simulation:
                                     ).fillna(0)
 
         return times, pdc
-    
-    def calculate_expected_solar_power():
+
+    @staticmethod
+    def generate_irradiance_timeseries(num_timesteps, num_samples, alpha, beta, max_irradiance):
+        """
+        Generate solar irradiance time series using a beta distribution.
         
+        Parameters:
+        - num_timesteps: Number of time steps in each simulation
+        - num_samples: Number samples to generate per step of the timeseries
+        - alpha: beta shape parameter 
+        - scale: beta scale parameter
+        - max_irradiance: Maximum irradiance 
+        
+        Returns:
+        - timeseries: Array of shape (num_simulations, num_timesteps) with wind speed values
+        """
+        timeseries = np.zeros((num_samples, num_timesteps))
+        
+        for t in range(num_timesteps):
+            samples = beta_dist.rvs(alpha[t], beta[t], size=num_samples)
+            timeseries[:, t] = samples * max_irradiance[t]
+        
+        return timeseries
+    
+    @staticmethod
+    def generate_windspeed_timeseries(num_timesteps, num_simulations, shape, scale):
+        """
+        Generate wind speed time series using a Weibull distribution.
+        
+        Parameters:
+        - num_timesteps: Number of time steps in each simulation
+        - num_simulations: Number of simulations to run
+        - shape: Weibull shape parameter (k)
+        - scale: Weibull scale parameter (c)
+        
+        Returns:
+        - timeseries: Array of shape (num_simulations, num_timesteps) with wind speed values
+        """
+        timeseries = np.zeros((num_simulations, num_timesteps))
+        
+        for t in range(num_timesteps):
+            # Generate samples from Weibull distribution
+            samples = weibull_min.rvs(shape, scale=scale, size=num_simulations)
+            timeseries[:, t] = samples
+        
+        return timeseries
+
 
     def simulate_deployment(self, U, rho, takeoff_capacity, landing_capacity, P_solar, dt, algo):
         """Determines duty cycle for specified period

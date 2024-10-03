@@ -104,6 +104,7 @@ days = 15
 current_time = datetime.datetime.now()
 time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 filename = f"SimResults_{year}_{month}_{day}-{days}__{time_string}"
+solar_file = "test.csv"
 
 for cap in capacities:
     plane.capacity = cap

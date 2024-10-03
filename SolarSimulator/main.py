@@ -109,21 +109,12 @@ for cap in capacities:
     plane.capacity = cap
     print(f"Required Power: {plane.get_required_power(20,1.2)} W")
     label = f"{plane.capacity:.2f} Ah"
-<<<<<<< HEAD
     # times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='Greedy')
     # fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
     # duty_cycle.append(dc)
     times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='MDP')
     fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
     duty_cycle.append(dc)
-=======
-    times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='Greedy')
-    fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
-    duty_cycle.append(dc)
-    # times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='MDP')
-    # fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
-    # duty_cycle.append(dc)
->>>>>>> d5d311a (Add failure chance to simulation)
 print(duty_cycle)
 
 plt.tight_layout()

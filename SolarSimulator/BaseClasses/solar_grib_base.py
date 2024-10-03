@@ -43,7 +43,7 @@ class SolarRadiationProcessor:
                         if day_month_hour not in self.data_dict[lat_lon_pair]:
                             self.data_dict[lat_lon_pair][day_month_hour] = []
                         
-                        self.data_dict[lat_lon_pair][day_month_hour].append(values[i, j])  # Add SSRD value
+                        self.data_dict[lat_lon_pair][day_month_hour].append(values[i, j]/3600)  # Add SSRD value
     
         grbs.close()
     
@@ -57,7 +57,7 @@ class SolarRadiationProcessor:
                 if lat_lon_pair not in normalized_data:
                     normalized_data[lat_lon_pair] = {}
                 
-                normalized_values = np.array(values) / max_ssrd  # Normalize the values
+                normalized_values = np.array(values) / 1000  # Normalize the values
                 normalized_data[lat_lon_pair][date_time] = normalized_values
         
         return normalized_data
@@ -102,4 +102,5 @@ if __name__ == "__main__":
     grib_file_path = r'C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\GRIB\January\solar_radiation.grib'
     processor = SolarRadiationProcessor(grib_file_path)
     beta_params = processor.process_grib_file()
-    print(beta_params)
+    beta_params.to_csv("solar_dist.csv")
+    # print(beta_params)

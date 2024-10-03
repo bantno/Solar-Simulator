@@ -91,7 +91,9 @@ def fit_beta_distributions(normalized_data, epsilon=1e-6):
                         # In case fitting still fails, assign NaN
                         beta_params[lat_lon_pair][date_time] = (np.nan, np.nan)
                         print(f"Fitting failed for {lat_lon_pair} at {date_time}: {e}")
-    return beta_params
+
+    beta_df = pd.DataFrame.from_dict(beta_params)
+    return beta_df
 
 # Main function to process the GRIB file, normalize, and fit distributions
 def process_grib_file(grib_file_path):
@@ -104,8 +106,9 @@ def process_grib_file(grib_file_path):
 grib_file_path = r'C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\GRIB\January\solar_radiation.grib'
 beta_params = process_grib_file(grib_file_path)
 
+
 # Output: Dictionary with (lat, lon) as keys and datetime -> (alpha, beta) parameters as values
-for lat_lon, params in beta_params.items():
-    print(f"Lat-Lon: {lat_lon}")
-    for dt, (alpha, beta_val) in params.items():
-        print(f"  {dt}: Alpha = {alpha}, Beta = {beta_val}")
+# for lat_lon, params in beta_params.items():
+#     print(f"Lat-Lon: {lat_lon}")
+#     for dt, (alpha, beta_val) in params.items():
+#         print(f"  {dt}: Alpha = {alpha}, Beta = {beta_val}")

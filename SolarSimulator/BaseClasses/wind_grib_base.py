@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import pytz
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from scipy.stats import weibull_min
 from tqdm import tqdm
 
@@ -135,6 +136,7 @@ class WindProcessor:
         plt.plot(times, magnitudes, marker='o')
         plt.title(f'Wind Magnitude for Latitude {lat_lon_pair[0]}, Longitude {lat_lon_pair[1]} over {num_days} Days')
         plt.xlabel('Time (Day-Hour)')
+        plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True, prune='lower', nbins=24)) 
         plt.xticks(rotation=45, ha='right')
         plt.ylabel('Wind Magnitude (m/s)')
         plt.grid(True)
@@ -142,9 +144,9 @@ class WindProcessor:
         plt.show()
     
     def process_grib_file(self):
-        u_data, v_data = self.extract_wind_data()  # Step 1: Extract U and V components
-        wind_magnitude_data = self.calculate_wind_magnitude(u_data, v_data)  # Step 2: Calculate wind magnitude
-        weibull_params = self.fit_weibull_distributions(wind_magnitude_data)  # Step 3: Fit Weibull distribution
+        u_data, v_data = self.extract_wind_data()
+        wind_magnitude_data = self.calculate_wind_magnitude(u_data, v_data)
+        weibull_params = self.fit_weibull_distributions(wind_magnitude_data)
         return wind_magnitude_data,weibull_params
 
 if __name__ == "__main__":
@@ -155,4 +157,5 @@ if __name__ == "__main__":
 
     # Example lat-lon pair for plotting
     lat_lon_pair = (29.50, -85.25)  # Replace with a specific latitude and longitude from your data
-    processor.plot_first_day_wind_magnitude(wind_magnitude_data, lat_lon_pair)
+    processor.plot_wind_magnitude(wind_magnitude_data, lat_lon_pair)
+    weibull_params.to_csv("wind_mag_dist.csv")

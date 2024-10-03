@@ -364,13 +364,13 @@ class Simulation:
             # Call the mdp_behavior function from the Autonomy class
             if len(expected_solar_w) == len(avail_solar_w):
                 return Autonomy.simulate_mdp_behavior(self,
-                                                    plane=self.plane,
-                                                    soc_increment=soc_increment,
-                                                    max_stages=max_stages,
-                                                    initial_state=start_state,
-                                                    expected_solar_power=expected_solar_w,
-                                                    actual_solar_power=avail_solar_w,
-                                                    is_daytime=is_daytime)
+                                                      plane=self.plane,
+                                                      soc_increment=soc_increment,
+                                                      max_stages=max_stages,
+                                                      initial_state=start_state,
+                                                      expected_solar_power=expected_solar_w,
+                                                      actual_solar_power=avail_solar_w,
+                                                      is_daytime=is_daytime)
             else:
                 raise ValueError(f"Lengths do not match: {len(expected_solar_w)} != {len(avail_solar_w)}")
         

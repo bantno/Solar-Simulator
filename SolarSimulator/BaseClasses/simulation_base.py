@@ -9,8 +9,15 @@ from scipy.stats import beta as beta_dist
 from pvlib import location, tracking, temperature, pvsystem
 from pvlib.bifacial.pvfactors import pvfactors_timeseries
 
+import sys
+import os
+
+# Add the project root directory to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, project_root)
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.autonomy_base import Autonomy
+from BaseClasses.solar_grib_base import SolarRadiationProcessor
 
 class Simulation:
     def __init__(self,plane:Seaplane,lat,lon,tz,cs:bool=False) -> None:
@@ -185,7 +192,21 @@ class Simulation:
 
         return times, pdc
     
-    def calculate_expected_solar_power():
+    def calculate_expected_solar_power(self,
+                                       year,
+                                       month,
+                                       day,
+                                       periods,
+                                       frequency):
+        grib_file_path = r'C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\GRIB\January\solar_radiation.grib'
+        processor = SolarRadiationProcessor(grib_file_path)
+        beta_params = processor.process_grib_file()
+        beta_dist = beta_params[(29.5, -85.25)]
+        start = f"{year[0]}-{month[0]}-{day[0]}"
+        times = pd.date_range(start, periods=periods, freq=frequency, tz=self.tz)
+
+        for i in len(times):
+            expected_value = param[0]/(param[0]+param[1])*param[2]
         
 
     @staticmethod
@@ -235,32 +256,49 @@ class Simulation:
         return timeseries
 
 
-    def simulate_deployment(self, U, rho, takeoff_capacity, landing_capacity, P_solar, dt, algo):
-        """Determines duty cycle for specified period
+    def simulate_deployment(self,
+                            U,
+                            rho,
+                            takeoff_capacity,
+                            landing_capacity,
+                            avail_solar_w,
+                            expected_solar_w,
+                            dt,
+                            algo):
         
+        """
+        Simulates the deployment of a vehicle and determines the duty cycle for a specified time period.
+
         Parameters
         ----------
         U : float
-            Cruise speed of the vehicle.
+            Cruise speed of the vehicle (m/s).
         rho : float
             Air density at cruise altitude in kg/m^3.
         takeoff_capacity : float
-            Percentage of total capacity at which the vehicle is sufficiently charged to takeoff.
+            Minimum percentage of total battery capacity required for takeoff.
         landing_capacity : float
-            Percentage of total capacity at which the vehicle must land.
-        P_solar : numpy array
-            Array of solar power collected by the vehicle's photovoltaic system [W].
+            Minimum percentage of total battery capacity required to initiate landing.
+        avail_solar_w : numpy.ndarray
+            Array of actual solar power collected by the vehicle's photovoltaic system (W) for each time step.
+        expected_solar_w : numpy.ndarray
+            Array of expected solar power (W) used for decision-making in the MDP algorithm.
         dt : int
-            Time in minutes between each sample in P_solar.
+            Time step duration in minutes between each sample in the solar power data.
         algo : str
-            The algorithm to use, either "Greedy" or "MDP".
-        
+            The algorithm to use for simulating behavior, either 'Greedy' or 'MDP'.
+
         Returns
         -------
         duty_cycle : float
-            Percentage of time period spent in air.
-        energy_j : list, float
-            Energy stored in battery for each simulated time.
+            The percentage of the total time period the vehicle spends in the air.
+        energy_j : list of float
+            List of energy stored in the battery (in joules) at each time step of the simulation.
+
+        Raises
+        ------
+        ValueError
+            If the lengths of `expected_solar_w` and `avail_solar_w` do not match or if an unknown algorithm is specified.
         """
 
         
@@ -299,30 +337,42 @@ class Simulation:
         capacity_j = self.plane.voltage * self.plane.capacity * 3600
         # is_daytime = pd.DataFrame(columns=['daytime'])
         is_daytime = []
-        for i in range(len(P_solar-1)):
+        for i in range(len(avail_solar_w-1)):
             # is_daytime.iloc[i] = daytime(0,10,i)
             is_daytime.append(daytime(0,10,i))
         min_flight_hr = 0.5  # Minimum flight time (hours) after takeoff
         
         if algo == "Greedy":
             # Call the simple behavior for the "Greedy" algorithm
-            return Autonomy.simulate_simple_behavior(self, P_solar, is_daytime, P_cruise, capacity_j, landing_capacity, takeoff_capacity, dt, min_flight_hr, self.plane.calc_takeoff_penalty)
+            return Autonomy.simulate_simple_behavior(self,
+                                                     avail_solar_w,
+                                                     is_daytime,
+                                                     P_cruise,
+                                                     capacity_j,
+                                                     landing_capacity,
+                                                     takeoff_capacity,
+                                                     dt,
+                                                     min_flight_hr,
+                                                     self.plane.calc_takeoff_penalty)
         
         elif algo == "MDP":
             # Set MDP-specific parameters
             soc_increment = 1  # State of Charge increments
-            max_stages = len(P_solar-1)  # Set max stages based on the length of the solar power data
+            max_stages = len(avail_solar_w-1)  # Set max stages based on the length of the solar power data
             start_state = (100, "moored")  # Initial state (100% SoC, moored)
 
             # Call the mdp_behavior function from the Autonomy class
-            return Autonomy.simulate_mdp_behavior(self,
-                                                  plane=self.plane,
-                                                  soc_increment=soc_increment,
-                                                  max_stages=max_stages,
-                                                  initial_state=start_state,
-                                                  expected_solar_power=expected_solar_power,
-                                                  actual_solar_power=actual_solar_power,
-                                                  is_daytime=is_daytime)
+            if len(expected_solar_w) == len(avail_solar_w):
+                return Autonomy.simulate_mdp_behavior(self,
+                                                    plane=self.plane,
+                                                    soc_increment=soc_increment,
+                                                    max_stages=max_stages,
+                                                    initial_state=start_state,
+                                                    expected_solar_power=expected_solar_w,
+                                                    actual_solar_power=avail_solar_w,
+                                                    is_daytime=is_daytime)
+            else:
+                raise ValueError(f"Lengths do not match: {len(expected_solar_w)} != {len(avail_solar_w)}")
         
         else:
             raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")

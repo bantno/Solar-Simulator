@@ -112,7 +112,7 @@ for cap in capacities:
     # times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='Greedy')
     # fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
     # duty_cycle.append(dc)
-    times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='MDP')
+    times,e_h,P_solar,states,dc = plotting.run_simulation(sim,solar_file,U,rho,algo='MDP')
     fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
     duty_cycle.append(dc)
 print(duty_cycle)

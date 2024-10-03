@@ -184,6 +184,9 @@ class Simulation:
                                     ).fillna(0)
 
         return times, pdc
+    
+    def calculate_expected_solar_power():
+        
 
     @staticmethod
     def generate_irradiance_timeseries(num_timesteps, num_samples, alpha, beta, max_irradiance):
@@ -312,7 +315,14 @@ class Simulation:
             start_state = (100, "moored")  # Initial state (100% SoC, moored)
 
             # Call the mdp_behavior function from the Autonomy class
-            return Autonomy.mdp_behavior(self, self.plane, soc_increment, max_stages, start_state, P_solar, is_daytime)
+            return Autonomy.simulate_mdp_behavior(self,
+                                                  plane=self.plane,
+                                                  soc_increment=soc_increment,
+                                                  max_stages=max_stages,
+                                                  initial_state=start_state,
+                                                  expected_solar_power=expected_solar_power,
+                                                  actual_solar_power=actual_solar_power,
+                                                  is_daytime=is_daytime)
         
         else:
             raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")

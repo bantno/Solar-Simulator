@@ -157,10 +157,14 @@ def plot_battery_sweep(cap,duty,label = "",filename=-1,fig = -1,title=""):
     return fig
     
 
-def run_simulation(sim: Simulation, year=2019,month=6,day=1,days=1,U=20,rho=1.1,algo="MDP"):
-    # TODO: Add ability to plot multiple runs on same figure
-    # TODO: Add timestep as a parameter
-    """Simulates and plots the duty cycle for the given plane and times
+def run_simulation(sim: Simulation,
+                   solar_file,
+                   U=20,
+                   rho=1.1,
+                   algo="MDP"):
+    
+    """
+    Simulates and plots the duty cycle for the given plane, solar data file, cruise speed, air density, and algorithm.
     
     Parameters:
     -----------
@@ -177,7 +181,8 @@ def run_simulation(sim: Simulation, year=2019,month=6,day=1,days=1,U=20,rho=1.1,
     """
     plane = sim.plane
     plane.update_plane()
-    times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
+    # times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
+    times,P_solar = sim.read_actual_solar(solar_file)
     duty_cycle,e_h,state,_,_ = sim.simulate_deployment(U,rho,1,.05,P_solar,10,algo)
     return times,e_h,P_solar,state,duty_cycle
 

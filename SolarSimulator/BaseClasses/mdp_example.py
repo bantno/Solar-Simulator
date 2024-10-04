@@ -65,7 +65,10 @@ class MDP:
         """
         prob_success, prob_failure = self.calculate_maneuver_probabilities(state[1], action, stage)
         if self.is_daytime(self.start_time, self.dt, stage):
-            return prob_success * 1 + prob_failure * (-10)  # Positive reward for success, negative for failure
+            if action == 'float':
+                return prob_success * 1 + prob_failure * (-10)  # Positive reward for success, negative for failure
+            elif action == 'fly':
+                return 5 + prob_success * 1 + prob_failure * (-10)  # Positive reward for success, negative for failure
         else:
             return 0  # No reward during nighttime
 
@@ -113,7 +116,7 @@ class MDP:
         print("Starting value iteration...")
         for iteration in range(max_iterations):
             delta = 0
-            for stage in range(self.ev_table.shape[1]):
+            for stage in tqdm(range(self.ev_table.shape[1])):
                 for state in self.states:
                     v = self.ev_table.loc[state, stage]
                     max_reward = -np.inf
@@ -151,7 +154,7 @@ class MDP:
         Checks whether the given action is feasible from the current state at the given stage.
         """
         delta_soc = self.calculate_soc_update(self.plane, action, self.dt, solar_power)
-        new_soc = state[0] + delta_soc
+        new_soc = min(state[0] + delta_soc,100)
         return 0 <= new_soc <= 100
     
     def plot_surface(self, df, title, battery_capacity_ah, max_stages):

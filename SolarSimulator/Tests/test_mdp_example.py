@@ -18,7 +18,7 @@ class Plane:
 
     def get_required_power(self, speed, efficiency):
         """ Returns a mock required power value for flying. """
-        return 200  # Assume 200 watts for simplicity
+        return 400  # Assume 200 watts for simplicity
 
 
 class TestMDP(unittest.TestCase):
@@ -26,17 +26,17 @@ class TestMDP(unittest.TestCase):
     def setUp(self):
         # Plane parameters
         voltage = 48  # Voltage in volts
-        capacity = 5  # Capacity in amp-hours
+        capacity = 20  # Capacity in amp-hours
         self.plane = Plane(voltage, capacity)
 
         # MDP parameters
-        self.soc_increment = 20
+        self.soc_increment = 1
         self.vehicle_states = ["moored", "flying"]
-        self.max_stages = 24  # 10 stages for testing
+        self.max_stages = 144  # 10 stages for testing
         self.actions = ["float", "fly"]
-        self.expected_solar_power = np.random.uniform(55, 60, self.max_stages)
-        self.dt = 60  # 15-minute time steps
-        self.gamma = .9  # Discount factor
+        self.expected_solar_power = np.random.uniform(100, 102, self.max_stages)
+        self.dt = 10  # 15-minute time steps
+        self.gamma = 1.0  # Discount factor
         self.epsilon = 1e-5  # Convergence threshold for value iteration
         self.start_time = 0  # Start at 0 minutes
 

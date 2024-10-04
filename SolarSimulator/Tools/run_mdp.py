@@ -78,13 +78,8 @@ if __name__ == '__main__':
     gamma = -0.0047  # Temperature coefficient of power [1/deg Celsius]
 
     # Airplane params
-<<<<<<< HEAD
     capacity_ah = 25.0
     voltage = 3.7*10
-=======
-    capacity_ah = 50.0
-    voltage = 22.2
->>>>>>> d5d311a (Add failure chance to simulation)
     Cdtot = 0.0
     Cd0 = 0.02584
     S = 0.653  # from OpenVSP model

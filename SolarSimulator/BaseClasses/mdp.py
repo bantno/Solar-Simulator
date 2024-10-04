@@ -9,19 +9,12 @@ class mdp:
 
     def __init__(self, plane, soc_increment, vehicle_states, max_stages, actions, expected_solar_power, dt=10, start_time=0):
         self.vehicle_states = vehicle_states
-        
         self.plane = plane
-        
         self.battery_capacity = self.plane.voltage*self.plane.capacity*3600
-        
         self.soc_increment = soc_increment
-        
         self.states = self.create_states(soc_increment, vehicle_states)
-        
         self.actions = actions
-        
         self.start_time=0
-
         self.dt = dt
 
         if len(expected_solar_power) != max_stages-1:
@@ -67,30 +60,9 @@ class mdp:
         return success_prob, failure_prob
     
     @staticmethod
-    def time_of_day_func(stage, timestep):
-        """
-        Compute the time of day as a sinusoidal function based on the current stage and timestep.
-        """
-        daily_stages = 24*60/timestep
-        normalized_stage = (np.mod(stage, daily_stages) / daily_stages)
-        factor = np.sin(np.pi * normalized_stage)
-        if factor < 0.6:
-            factor = 0
-        return max(0, factor)
-    
-    @staticmethod
-    def estimate_solar_power(irradiance_mean, cloud_prob, time_of_day_factor, max_solar_power=80):
-        """
-        Calculates the expected solar power output for a given stage.
-        """
-        expected_irradiance = irradiance_mean * time_of_day_factor
-        expected_power_clear = min(max_solar_power, expected_irradiance / 1000 * max_solar_power)
-        expected_power = expected_power_clear * (1 - 0.5 * cloud_prob)
-        
-        return expected_power
-    
-    @staticmethod
-    def is_daytime(start_time: int, time_step: int = 10, stage: int = 0) -> int:
+    def is_daytime(start_time: int,
+                   time_step: int = 10,
+                   stage: int = 0) -> int:
         """
         Determines if the current stage is during the day or night, accounting for simulations
         that span multiple days.
@@ -118,7 +90,9 @@ class mdp:
             return 0
 
     
-    def create_ev_table(self, max_stages, expected_solar_power):
+    def create_ev_table(self,
+                        max_stages,
+                        expected_solar_power):
         """
         Creates an expectation value (EV) table with a specified number of stages.
         """

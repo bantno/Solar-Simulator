@@ -6,6 +6,8 @@ import pandas as pd
 from scipy.stats import weibull_min
 from scipy.stats import beta as beta_dist
 
+from BaseClasses.whale_sighting_base import WhaleSightingProbability
+
 from pvlib import location, tracking, temperature, pvsystem
 from pvlib.bifacial.pvfactors import pvfactors_timeseries
 
@@ -337,7 +339,7 @@ class Simulation:
         capacity_j = self.plane.voltage * self.plane.capacity * 3600
         # is_daytime = pd.DataFrame(columns=['daytime'])
         is_daytime = []
-        for i in range(len(avail_solar_w-1)):
+        for i in range(len(avail_solar_w)-1):
             # is_daytime.iloc[i] = daytime(0,10,i)
             is_daytime.append(daytime(0,10,i))
         min_flight_hr = 0.5  # Minimum flight time (hours) after takeoff
@@ -358,8 +360,9 @@ class Simulation:
         elif algo == "MDP":
             # Set MDP-specific parameters
             soc_increment = 1  # State of Charge increments
-            max_stages = len(avail_solar_w-1)  # Set max stages based on the length of the solar power data
+            max_stages = len(avail_solar_w)-1  # Set max stages based on the length of the solar power data
             start_state = (100, "moored")  # Initial state (100% SoC, moored)
+            whale_probabilities = WhaleSightingProbability().df
 
             # Call the mdp_behavior function from the Autonomy class
             if len(expected_solar_w) == len(avail_solar_w):
@@ -370,7 +373,8 @@ class Simulation:
                                                       initial_state=start_state,
                                                       expected_solar_power=expected_solar_w,
                                                       actual_solar_power=avail_solar_w,
-                                                      is_daytime=is_daytime)
+                                                      whale_probabilities = whale_probabilities
+                                                      )
             else:
                 raise ValueError(f"Lengths do not match: {len(expected_solar_w)} != {len(avail_solar_w)}")
         

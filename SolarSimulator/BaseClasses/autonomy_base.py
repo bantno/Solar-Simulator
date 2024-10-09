@@ -85,9 +85,14 @@ class Autonomy:
         return duty_cycle, energy_history, state_history, num_takeoffs, failure_occurred
 
 
-
-
-    def simulate_mdp_behavior(self, plane, soc_increment, max_stages, initial_state, expected_solar_power, actual_solar_power, is_daytime):
+    def simulate_mdp_behavior(self,
+                              plane,
+                              soc_increment,
+                              max_stages,
+                              initial_state,
+                              expected_solar_power,
+                              actual_solar_power,
+                              whale_probabilities):
         """
         Simulates plane behavior using an MDP to determine the optimal flight policy.
 
@@ -102,52 +107,30 @@ class Autonomy:
         Returns:
         tuple: duty_cycle, energy_history, state_history, num_takeoffs
         """
-        vehicle_states = ["Moored", "Flying"]
-        actions = ["Float", "Fly"]
+        vehicle_states = ["moored", "flying"]
+        actions = ["float", "fly"]
 
-        mdp_model = mdp(plane, soc_increment, vehicle_states, max_stages, actions, expected_solar_power)
+        mdp_model = mdp(plane,
+                        soc_increment,
+                        vehicle_states,
+                        max_stages,
+                        actions,
+                        expected_solar_power,
+                        whale_probabilities,
+                        )
+        
         state_history_list = [initial_state]
-        energy_history = [initial_state[0]]
-        state_history = [1 if initial_state[1] == "Flying" else 0]
-        num_takeoffs = 0
-        flight_time = 0
+        # energy_history = [initial_state[0]]
+        # state_history = [1 if initial_state[1] == "Flying" else 0]
+        mdp_model.value_iteration()
+        optimal_policy = mdp_model.policy_table
 
-        for k in range(max_stages - 1):
+        for k in range(len(actual_solar_power)):
             current_state = state_history_list[-1]
-            best_action = None
-            max_reward = -np.inf
+            best_action = optimal_policy[current_state]
 
-            is_day = mdp_model.is_daytime(mdp_model.start_time, mdp_model.dt, k)
-
-            for action in actions:
-                if mdp_model.is_action_feasible(action, current_state, k):
-                    control_reward = mdp_model.get_control_reward(action, is_day, current_state, k)
-                    future_reward = mdp_model.get_future_reward(current_state, action, k, is_day)
-                    total_reward = control_reward + future_reward
-                    
-                    if total_reward > max_reward:
-                        max_reward = total_reward
-                        best_action = action
-
-            soc_update = mdp_model.calculate_soc_update(
-                plane, best_action, mdp_model.dt, k, False,
-                solar_power=solar_power.iloc[k], soc_increment=mdp_model.soc_increment
-            )
-            new_soc = current_state[0] + soc_update
-            new_state = (new_soc, "Flying" if best_action == "Fly" else "Moored")
-
-            if 0 <= new_soc <= 100:
-                state_history_list.append(new_state)
-                energy_history.append(new_soc)
-                state_history.append(1 if new_state[1] == "Flying" else 0)
-                if new_state[1] == "Flying":
-                    flight_time += 1
-                if best_action == "Fly" and current_state[1] == "Moored":
-                    num_takeoffs += 1
-            else:
-                break
-
-        total_daytime_hours = sum(is_daytime)
-        duty_cycle = (flight_time / total_daytime_hours * 100) if total_daytime_hours > 0 else 0
-
-        return duty_cycle, energy_history, state_history, num_takeoffs
+            new_state = mdp_model.calculate_new_state(state=current_state,
+                                                      action=best_action,
+                                                      stage=k)
+            state_history_list.append(new_state)
+        return True

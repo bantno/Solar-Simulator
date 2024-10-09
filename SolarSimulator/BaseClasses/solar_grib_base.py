@@ -51,19 +51,48 @@ class SolarRadiationProcessor:
         normalized_data = {}
         
         for lat_lon_pair, datetime_dict in self.data_dict.items():
-            max_ssrd = max([max(v) for v in datetime_dict.values() if len(v) > 0])  # Global max for this lat-lon pair
             
             for date_time, values in datetime_dict.items():
                 if lat_lon_pair not in normalized_data:
                     normalized_data[lat_lon_pair] = {}
                 
-                normalized_values = np.array(values) / 1000  # Normalize the values
+                normalized_values = np.array(values) / 1367  # Normalize the values by solar constant 1367 W/m^2
                 normalized_data[lat_lon_pair][date_time] = normalized_values
         
         return normalized_data
 
+    # def fit_beta_distributions(self, normalized_data, epsilon=1e-6):
+    #     beta_params = {}
+        
+    #     for lat_lon_pair, datetime_dict in normalized_data.items():
+    #         for date_time, values in datetime_dict.items():
+    #             if len(values) > 0:  # Ensure there is data
+    #                 values = np.array(values)
+                    
+    #                 # Check if any of the values are zero, or if the range is too narrow
+    #                 if np.any(values == 0) or np.any(values == 1) or np.ptp(values) == 0:
+    #                     if lat_lon_pair not in beta_params:
+    #                         beta_params[lat_lon_pair] = {}
+    #                     beta_params[lat_lon_pair][date_time] = (np.nan, np.nan)
+    #                 else:
+    #                     clipped_values = np.clip(values, epsilon, 1 - epsilon)
+
+    #                     # Fit the beta distribution
+    #                     try:
+    #                         a, b, loc, scale = beta.fit(clipped_values, floc=0, fscale=1)
+    #                         if lat_lon_pair not in beta_params:
+    #                             beta_params[lat_lon_pair] = {}
+                            
+    #                         beta_params[lat_lon_pair][date_time] = (a, b)  # Store the alpha and beta params
+    #                     except Exception as e:
+    #                         beta_params[lat_lon_pair][date_time] = (np.nan, np.nan)
+    #                         print(f"Fitting failed for {lat_lon_pair} at {date_time}: {e}")
+
+    #     beta_df = pd.DataFrame.from_dict(beta_params)
+    #     return beta_df
+
     def fit_beta_distributions(self, normalized_data, epsilon=1e-6):
-        beta_params = {}
+        expected_values = {}
         
         for lat_lon_pair, datetime_dict in normalized_data.items():
             for date_time, values in datetime_dict.items():
@@ -72,35 +101,36 @@ class SolarRadiationProcessor:
                     
                     # Check if any of the values are zero, or if the range is too narrow
                     if np.any(values == 0) or np.any(values == 1) or np.ptp(values) == 0:
-                        if lat_lon_pair not in beta_params:
-                            beta_params[lat_lon_pair] = {}
-                        beta_params[lat_lon_pair][date_time] = (np.nan, np.nan)
+                        if lat_lon_pair not in expected_values:
+                            expected_values[lat_lon_pair] = {}
+                        expected_values[lat_lon_pair][date_time] = 0  # Store 0 for invalid cases
                     else:
                         clipped_values = np.clip(values, epsilon, 1 - epsilon)
 
                         # Fit the beta distribution
                         try:
                             a, b, loc, scale = beta.fit(clipped_values, floc=0, fscale=1)
-                            if lat_lon_pair not in beta_params:
-                                beta_params[lat_lon_pair] = {}
+                            expected_value = a / (a + b)  # Calculate expected value
+                            if lat_lon_pair not in expected_values:
+                                expected_values[lat_lon_pair] = {}
                             
-                            beta_params[lat_lon_pair][date_time] = (a, b)  # Store the alpha and beta params
+                            expected_values[lat_lon_pair][date_time] = expected_value  # Store the expected value
                         except Exception as e:
-                            beta_params[lat_lon_pair][date_time] = (np.nan, np.nan)
+                            expected_values[lat_lon_pair][date_time] = np.nan  # Store NaN if fitting fails
                             print(f"Fitting failed for {lat_lon_pair} at {date_time}: {e}")
-
-        beta_df = pd.DataFrame.from_dict(beta_params)
-        return beta_df
+        
+        return pd.DataFrame.from_dict(expected_values)
 
     def process_grib_file(self):
         self.extract_ssrd_data()  # Step 1: Extract and segment
         normalized_ssrd_data = self.normalize_ssrd_data()  # Step 2: Normalize data
-        beta_params = self.fit_beta_distributions(normalized_ssrd_data)  # Step 3: Fit beta distributions
-        return beta_params
+        solar_ev = self.fit_beta_distributions(normalized_ssrd_data)  # Step 3: Fit beta distributions
+        return solar_ev
 
 if __name__ == "__main__":
     grib_file_path = r'C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\GRIB\January\solar_radiation.grib'
     processor = SolarRadiationProcessor(grib_file_path)
-    beta_params = processor.process_grib_file()
-    beta_params.to_csv("solar_dist.csv")
-    # print(beta_params)
+    solar_ev = processor.process_grib_file()
+    # beta_params.to_csv("solar_dist.csv")
+    solar_ev.to_pickle("solar_ev.pkl")
+    print("Done!")

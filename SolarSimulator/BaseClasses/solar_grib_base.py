@@ -11,6 +11,7 @@ class SolarRadiationProcessor:
         self.utc_tz = pytz.utc
         self.eastern_tz = pytz.timezone('US/Eastern')
         self.data_dict = {}
+        self.year_data_dict = {}
     
     def extract_ssrd_data(self):
         # Open the GRIB file
@@ -46,6 +47,46 @@ class SolarRadiationProcessor:
                         self.data_dict[lat_lon_pair][day_month_hour].append(values[i, j]/3600)  # Add SSRD value
     
         grbs.close()
+
+    def extract_ssrd_data_for_year(self, year):
+        # Open the GRIB file
+        grbs = pygrib.open(self.grib_file_path)
+
+        # Loop through all messages in the GRIB file
+        for grb in tqdm(grbs.select()):
+            # Check if the message is SSRD (Surface Solar Radiation Downwards)
+            if grb.parameterName == 'Surface solar radiation downwards':
+                lats, lons = grb.latlons()
+                values = grb.values
+
+                # Extract the date and time from the GRIB message
+                date = grb.validityDate    # YYYYMMDD format
+                hour = grb.validityTime    # HHMM format, may need padding
+                utc_date = pd.to_datetime(f'{date} {hour:04}', format='%Y%m%d %H%M')  # Convert to datetime
+                utc_date = utc_date.tz_localize(self.utc_tz)
+                valid_date = utc_date.astimezone(self.eastern_tz)
+
+                # Filter by the specified year
+                if valid_date.year == year:
+                    # Extract (month, day, hour) for grouping purposes
+                    day_month_hour = (valid_date.month, valid_date.day, valid_date.hour)
+
+                    # Store the SSRD data by (latitude, longitude) and (month, day, hour) for the specified year
+                    for i in range(lats.shape[0]):
+                        for j in range(lons.shape[1]):
+                            lat_lon_pair = (lats[i, j], lons[i, j])
+
+                            if lat_lon_pair not in self.year_data_dict:
+                                self.year_data_dict[lat_lon_pair] = {}
+
+                            if day_month_hour not in self.year_data_dict[lat_lon_pair]:
+                                self.year_data_dict[lat_lon_pair][day_month_hour] = []
+
+                            # Add SSRD value (converted to W/m^2 by dividing by 3600)
+                            self.year_data_dict[lat_lon_pair][day_month_hour].append(values[i, j] / 3600)
+
+        grbs.close()
+
     
     def normalize_ssrd_data(self):
         normalized_data = {}
@@ -101,7 +142,10 @@ class SolarRadiationProcessor:
 if __name__ == "__main__":
     grib_file_path = r'C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\GRIB\January\solar_radiation.grib'
     processor = SolarRadiationProcessor(grib_file_path)
-    solar_ev = processor.process_grib_file()
+    # solar_ev = processor.process_grib_file()
+    year = 2022
+    solar_val = processor.extract_ssrd_data_for_year(year)
+    pd.DataFrame.from_dict(processor.year_data_dict).to_pickle(f"{year}_solar_data.pkl")
     # beta_params.to_csv("solar_dist.csv")
-    solar_ev.to_pickle("solar_ev.pkl")
+    # solar_ev.to_pickle("solar_ev.pkl")
     print("Done!")

@@ -11,7 +11,7 @@ class MDP:
     Class representing a Markov Decision Process (MDP) problem.
     """
 
-    def __init__(self, plane, soc_increment, vehicle_states, max_stages, actions, expected_solar_power, dt=10, start_time=0, gamma=0.9, epsilon=1e-3):
+    def __init__(self, plane, soc_increment, vehicle_states, max_stages, actions, expected_solar_power, whale_prob, dt=10, start_time=0, gamma=0.9, epsilon=1e-3):
         self.vehicle_states = vehicle_states
         self.plane = plane
         self.soc_increment = soc_increment
@@ -27,17 +27,22 @@ class MDP:
             raise ValueError(f"Expected length {max_stages-1}, but got {len(expected_solar_power)}.")
         self.expected_solar_power = expected_solar_power
 
+
+
+        # Initialize tables
         self.ev_table = pd.DataFrame(
             np.nan, index=pd.MultiIndex.from_tuples(self.states), columns=range(max_stages)
         )
-
         self.policy_table = pd.DataFrame(
             np.nan,
             index=pd.MultiIndex.from_tuples(self.states),
             columns=range(max_stages),
             dtype=object
         )
+        self.whale_prob_table = whale_prob
 
+
+        # Fill in expected reward table
         self.create_ev_table(max_stages, expected_solar_power)
 
     def create_states(self, soc_increment: int, vehicle_states: list) -> list:
@@ -59,7 +64,7 @@ class MDP:
         new_state_failure = state  # Stay in the same state on failure
         return [(success_prob, new_state_success), (failure_prob, new_state_failure)]
 
-    def R(self, state, action, stage, wind_speed, whale_prob_table):
+    def R(self, state, action, stage):
         """
         Calculates the reward for performing the given action in the current state at the current stage.
         Includes stochastic rewards based on the probability of finding whales (time-dependent) and wind speed.
@@ -80,7 +85,7 @@ class MDP:
 
         # Determine whale sighting probability based on time of day
         if self.is_daytime(self.start_time, self.dt, stage):
-            whale_prob = whale_prob_table.get(stage, 0)  # Hourly whale probability
+            whale_prob = self.whale_prob_table.get(stage, 0)  # Hourly whale probability
             # Calculate rewards based on the action
             if action == 'float':
                 # Whale reward based on probability of randomly finding whale using hydrophone, assume 0 for now

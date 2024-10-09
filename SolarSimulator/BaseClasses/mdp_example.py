@@ -11,7 +11,20 @@ class MDP:
     Class representing a Markov Decision Process (MDP) problem.
     """
 
-    def __init__(self, plane, soc_increment, vehicle_states, max_stages, actions, expected_solar_power, whale_prob, dt=10, start_time=0, gamma=0.9, epsilon=1e-3):
+    def __init__(self,
+                 plane,
+                 soc_increment,
+                 vehicle_states,
+                 max_stages,
+                 actions,
+                 expected_solar_power,
+                 whale_prob,
+                 dt=10,
+                 start_time=0,
+                 gamma=0.9,
+                 epsilon=1e-3):
+        
+        
         self.vehicle_states = vehicle_states
         self.plane = plane
         self.soc_increment = soc_increment

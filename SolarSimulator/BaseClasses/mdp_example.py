@@ -22,9 +22,11 @@ class MDP:
                  dt=10,
                  start_time=0,
                  gamma=0.9,
-                 epsilon=1e-3):
+                 epsilon=1e-3,
+                 wind_mag_filename=r"Data\DISTRIBUTIONS\solar_ev.pkl",
+                 expected_solar_power_filename = r"Data\DISTRIBUTIONS\solar_ev.pkl"):
         
-        
+
         self.vehicle_states = vehicle_states
         self.plane = plane
         self.soc_increment = soc_increment
@@ -34,6 +36,8 @@ class MDP:
         self.gamma = gamma
         self.epsilon = epsilon
         self.start_time = start_time
+        self.wind_speed_table = pd.read_pickle(wind_mag_filename)[lat_lon_pair]
+        self.expected_solar_power = pd.read_pickle(expected_solar_power_filename)[lat_lon_pair]
 
         # Verify expected solar power length
         if len(expected_solar_power) != max_stages :

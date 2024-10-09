@@ -59,18 +59,46 @@ class MDP:
         new_state_failure = state  # Stay in the same state on failure
         return [(success_prob, new_state_success), (failure_prob, new_state_failure)]
 
-    def R(self, state, action, stage):
+    def R(self, state, action, stage, wind_speed, whale_prob_table):
         """
         Calculates the reward for performing the given action in the current state at the current stage.
+        Includes stochastic rewards based on the probability of finding whales (time-dependent) and wind speed.
+        
+        Parameters:
+        - state: Current state as a tuple (SoC, vehicle_state)
+        - action: The action being taken ('float', 'fly')
+        - stage: The current stage in the simulation
+        - wind_speed: Expected wind speed at the current stage
+        - whale_prob_table: Table that maps the time of day to the probability of finding whales
+        
+        Returns:
+        - Reward value considering both deterministic and stochastic factors.
         """
+
         prob_success, prob_failure = self.calculate_maneuver_probabilities(state[1], action, stage)
+        survival_reward = prob_success * 1 + prob_failure * (-10)
+
+        # Determine whale sighting probability based on time of day
         if self.is_daytime(self.start_time, self.dt, stage):
+            whale_prob = whale_prob_table.get(stage, 0)  # Hourly whale probability
+            # Calculate rewards based on the action
             if action == 'float':
-                return prob_success * 1 + prob_failure * (-10)  # Positive reward for success, negative for failure
+                # Whale reward based on probability of randomly finding whale using hydrophone, assume 0 for now
+                whale_reward = whale_prob * 0
+            
             elif action == 'fly':
-                return 5 + prob_success * 1 + prob_failure * (-10)  # Positive reward for success, negative for failure
-        else:
-            return 0  # No reward during nighttime
+                # Whale reward based on probability of finding whale during survey, assume 5 for now
+                whale_reward = whale_prob * 5
+        else: # Night time
+            if action == 'float':
+                # Whale reward based on probability of randomly finding whale using hydrophone, assume 0 for now
+                whale_reward = whale_prob * 0
+            elif action == 'fly':
+                # Whale reward based on probability of finding whale during flight, assume 0 because we cant see at night
+                whale_reward = whale_prob * 0
+
+        return survival_reward + whale_reward
+
 
     def calculate_new_state(self, state, action, stage):
         """
@@ -228,20 +256,44 @@ class MDP:
         soc_change = energy_change / (plane.voltage * plane.capacity * 3600) * 100
         return self.soc_increment * round(soc_change / self.soc_increment)
 
-    @staticmethod
-    def calculate_maneuver_probabilities(current_state, action, stage):
+    def calculate_maneuver_probabilities(self, current_state, action, stage):
         """
-        Calculate the success and failure probabilities for the given maneuver.
+        Calculate the success and failure probabilities for the given maneuver, adjusting continuously based on wind speed.
         """
+        wind_speed = self.wind_speed_table[stage]  # Retrieve wind speed for the current stage
+
+        # Base probabilities
         if current_state == "moored" and action == "float":
-            return 0.99, 0.01  # High success rate for floating
+            base_success_prob, base_failure_prob = 0.99, 0.01  # High success rate for floating
         elif current_state == "moored" and action == "fly":
-            return 0.90, 0.10 # Higher failure risk for taking off
+            base_success_prob, base_failure_prob = 0.90, 0.10  # Higher failure risk for taking off
         elif current_state == "flying" and action == "float":
-            return 0.90, 0.10  # Flying to floating has moderate risk
+            base_success_prob, base_failure_prob = 0.90, 0.10  # Moderate risk for flying to floating
         elif current_state == "flying" and action == "fly":
-            return 0.95, 0.01  # Low failure risk for continuous flying
-        return 1.0, 0.0  # Default to guaranteed success
+            base_success_prob, base_failure_prob = 0.95, 0.05  # Low failure risk for continuous flying
+        else:
+            return 1.0, 0.0  # Default to guaranteed success
+
+        # Wind speed influence
+        # Define thresholds for low and high wind speed ranges
+        low_wind_threshold = 5
+        high_wind_threshold = 20
+
+        # Adjust failure probability based on wind speed in a continuous manner
+        if wind_speed <= low_wind_threshold:
+            wind_factor = 0  # No adjustment for low wind (below or equal to threshold)
+        elif wind_speed >= high_wind_threshold:
+            wind_factor = 1  # Max adjustment for high wind (above or equal to threshold)
+        else:
+            # Linearly scale between the low and high wind thresholds
+            wind_factor = (wind_speed - low_wind_threshold) / (high_wind_threshold - low_wind_threshold)
+
+        # Adjust the failure probability continuously based on wind_factor
+        failure_prob = base_failure_prob + wind_factor * (0.5 - base_failure_prob)  # Scale up to a max of 50% failure
+        success_prob = 1 - failure_prob  # Success probability is the complement of failure
+
+        return success_prob, failure_prob
+
 
     @staticmethod
     def is_daytime(start_time, time_step, stage):

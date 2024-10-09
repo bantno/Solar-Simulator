@@ -76,7 +76,7 @@ class MDP:
         """
 
         prob_success, prob_failure = self.calculate_maneuver_probabilities(state[1], action, stage)
-        survival_reward = prob_success * 1 + prob_failure * (-10)
+        survival_reward = prob_success * 1 + prob_failure * (-100)
 
         # Determine whale sighting probability based on time of day
         if self.is_daytime(self.start_time, self.dt, stage):

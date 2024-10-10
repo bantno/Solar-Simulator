@@ -120,7 +120,7 @@ class Autonomy:
         mdp_model.value_iteration()
         optimal_policy = mdp_model.policy_table
 
-        for k in range(len(actual_solar_power)-1):
+        for k in range(len(actual_solar_power)):
             current_state = state_history_list[-1]
             best_action = optimal_policy.loc[current_state,k]
 

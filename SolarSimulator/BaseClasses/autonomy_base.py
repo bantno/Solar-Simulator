@@ -66,23 +66,18 @@ class Autonomy:
                         state = "Flying"
                         energy_joules -= takeoff_penalty_fn() + (cruise_power - solar_power.iloc[i]) * timestep_minutes * 60
                         num_takeoffs += 1
-                state_history.append(0)
-
-            energy_history.append(energy_joules / battery_capacity * 100)
+            state_history.append((energy_joules / battery_capacity * 100,state))
 
         # Handle the failure case by filling remaining steps with -10 for energy and -1 for state
         if failure_occurred:
             remaining_steps = len(solar_power) - (i + 1)  # Ensure correct number of remaining steps
             energy_history.extend([-10] * remaining_steps)
             state_history.extend([-1] * remaining_steps)
-            energy_history.append(-10)
             state_history.append(-1)
             print("Failure")
+        
 
-        total_daytime_minutes = sum(is_daytime) * timestep_minutes
-        duty_cycle = (flight_time / (total_daytime_minutes / 60) * 100) if total_daytime_minutes > 0 else 0
-
-        return duty_cycle, energy_history, state_history, num_takeoffs, failure_occurred
+        return state_history, solar_power
 
 
     def simulate_mdp_behavior(self,
@@ -134,5 +129,4 @@ class Autonomy:
                                                       action=best_action,
                                                       stage=k)
             state_history_list.append(new_state)
-        mdp_model.plot_surfaces_by_state(25,144)
-        return True
+        return state_history_list,expected_solar_power

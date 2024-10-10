@@ -41,6 +41,7 @@ class Autonomy:
         energy_history = []
         state_history = []
         num_takeoffs = 0
+        idle_power = 10
         flight_time = 0
         failure_occurred = False
 
@@ -48,7 +49,7 @@ class Autonomy:
             if state == "Flying":
                 # Flying state logic
                 flight_time += timestep_minutes / 60
-                energy_joules -= (cruise_power - solar_power.iloc[i][0]*0.15) * timestep_minutes * 60
+                energy_joules += (solar_power.iloc[i][0]*0.15 - cruise_power - idle_power) * timestep_minutes * 60
 
                 # Transition to Moored state if energy is too low or it's nighttime
                 if energy_joules <= landing_threshold * battery_capacity or not is_daytime[i]:
@@ -60,7 +61,7 @@ class Autonomy:
 
             elif state == "Moored":
                 # Moored state logic
-                energy_joules = min(energy_joules + solar_power.iloc[i][0] * 0.15 * timestep_minutes * 60, battery_capacity)
+                energy_joules = min(energy_joules + (solar_power.iloc[i][0]*0.15 - idle_power) * timestep_minutes * 60, battery_capacity)
 
                 # Check if conditions for takeoff are met
                 if energy_joules >= takeoff_threshold * battery_capacity and is_daytime[i]:
@@ -130,7 +131,7 @@ class Autonomy:
         mdp_model.value_iteration()
         optimal_policy = mdp_model.policy_table
 
-        for k in range(len(actual_solar_power)):
+        for k in range(len(actual_solar_power)-1):
             current_state = state_history_list[-1]
             best_action = optimal_policy.loc[current_state,k]
 

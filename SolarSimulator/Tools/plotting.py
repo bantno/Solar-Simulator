@@ -109,21 +109,21 @@ def plot_endurance(plane:Seaplane,S,Cd0,af_mass,capacity,rho,filename=-1):
         plt.show()
     return
 
-def battery_sweep(sim: Simulation,capacities,year=2019,month=6,day=1,days=1,U=20,rho=1.1):
+def battery_sweep(sim: Simulation,capacities,year=2019,month=6,day=1,days=1,U=20,rho=1.1,algo="Greedy"):
     plane = sim.plane
     duty_list = []
     if isinstance(capacities,float):
         plane.capacity = capacities
         plane.update_plane()
         _, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min',cs=sim.cs)
-        duty_cycle,_,_,num_takeoffs = sim.simulate_deployment(U,rho,1,.1,P_solar,5)
+        duty_cycle,_,_,num_takeoffs = sim.simulate_deployment(U,rho,1,.1,P_solar,10,algo)
         return duty_cycle,num_takeoffs
     else:
         for cap in tqdm(capacities):
             plane.capacity = cap
             plane.update_plane()
             _, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min',cs=sim.cs)
-            duty_cycle,_,_,num_takeoffs = sim.simulate_deployment(U,rho,1,.1,P_solar,5)
+            duty_cycle,_,_,num_takeoffs = sim.simulate_deployment(U,rho,1,.1,P_solar,10,algo)
             duty_list.append(duty_cycle)
 
     return duty_list,num_takeoffs
@@ -139,12 +139,6 @@ def plot_battery_sweep(cap,duty,label = "",filename=-1,fig = -1,title=""):
     
     plt.xlabel("Battery Capacity [Ah]")
     plt.ylabel("Duty Cycle [%]")
-
-    # if title == "":
-    #     plt.title("Battery Capacity Sweep at 22.2V")
-    # else:
-    #     plt.title(title)
-
     plt.tight_layout()
     plt.grid(True)
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -157,9 +151,14 @@ def plot_battery_sweep(cap,duty,label = "",filename=-1,fig = -1,title=""):
     return fig
     
 
-def run_simulation(sim: Simulation, year=2019,month=6,day=1,days=1,U=20,rho=1.1):
-    # TODO: Add ability to plot multiple runs on same figure
-    """Simulates and plots the duty cycle for the given plane and times
+def run_simulation(sim: Simulation,
+                   solar_file,
+                   U=20,
+                   rho=1.1,
+                   algo="MDP"):
+    
+    """
+    Simulates and plots the duty cycle for the given plane, solar data file, cruise speed, air density, and algorithm.
     
     Parameters:
     -----------
@@ -176,14 +175,28 @@ def run_simulation(sim: Simulation, year=2019,month=6,day=1,days=1,U=20,rho=1.1)
     """
     plane = sim.plane
     plane.update_plane()
-    times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=12*24*days,frequency='5min',cs=sim.cs)
-    duty_cycle,e_h,state,_ = sim.simulate_deployment(U,rho,1,.05,P_solar,5)
-    return times,e_h,P_solar,state,duty_cycle
+    # times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
+
+    start_index = (1, 2, 0)
+    end_index = (1, 3, 23)
+
+    # Extract the slice of the DataFrame
+    P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
+    P_solar_expected = pd.read_pickle(r"Data\DISTRIBUTIONS\solar_ev.pkl")[(29.25,  -85.0)].loc[start_index:end_index]
+    duty_cycle,e_h,state,_,_ = sim.simulate_deployment(U,
+                                                       rho,
+                                                       1,
+                                                       .05,
+                                                       avail_solar_w=P_solar_actual,
+                                                       expected_solar_w=P_solar_expected,
+                                                       dt=60,
+                                                       algo=algo)
+    return times,e_h,P_solar_actual,state,duty_cycle
 
     
 def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1, label=""):
     """Plot results of simulation"""
-    num_plots = 2
+    num_plots = 3
     if fig == -1:
         fig, axes = plt.subplots(num_plots, 1,figsize=(12,6))
     if isinstance(fig,Figure):

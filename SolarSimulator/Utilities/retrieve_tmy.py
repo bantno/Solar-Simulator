@@ -17,9 +17,15 @@ def get_tmy(lat,lon,filename):
     psm3.to_csv(filename)
     return
 
+# df, metadata = pvlib.iotools.read_tmy3(r"C:\path\to\file.csv", map_variables=True)
+
 
 # Define constant parameters
-lat = 29.02291491363789
+lat = 28.52291491363789
 lon = -90.23223029442693
-df = pd.read_csv(r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\Solar Sim\2019TMY.csv")
-print(df['ghi'])
+get_tmy(lat,lon,'test')
+
+# df = pd.read_csv(r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\SolarSimulator\Utilities\test")
+# print(df)
+# print(df['ghi'])
+# df, metadata = pvlib.iotools.read_tmy3(r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\SolarSimulator\Utilities\test", map_variables=True)

@@ -183,7 +183,7 @@ def run_simulation(sim: Simulation,
     # Extract the slice of the DataFrame
     P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
     P_solar_expected = pd.read_pickle(r"Data\DISTRIBUTIONS\solar_ev.pkl")[(29.25,  -85.0)].loc[start_index:end_index]
-    duty_cycle,e_h,state,_,_ = sim.simulate_deployment(U,
+    state_history,solar_power = sim.simulate_deployment(U,
                                                        rho,
                                                        1,
                                                        .05,
@@ -191,12 +191,15 @@ def run_simulation(sim: Simulation,
                                                        expected_solar_w=P_solar_expected,
                                                        dt=60,
                                                        algo=algo)
-    return times,e_h,P_solar_actual,state,duty_cycle
+    
+    times = generate_datetimes(start_index, end_index, timestep=60)
+    
+    return times, state_history, solar_power
 
     
-def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1, label=""):
+def plot_simulation(times,P_solar,state_history,filename=-1, fig = -1, label=""):
     """Plot results of simulation"""
-    num_plots = 3
+    num_plots = 2
     if fig == -1:
         fig, axes = plt.subplots(num_plots, 1,figsize=(12,6))
     if isinstance(fig,Figure):
@@ -204,7 +207,8 @@ def plot_simulation(plane,times,e_h,P_solar,state,filename=-1, fig = -1, label="
     titles = ["Battery Charge Level", "Collected Solar Power", "Vehicle State"]
     xlabel = "Dates"
     ylabels = ["Battery Charge [%]", "Power [W]", "State"]
-    data = [e_h,P_solar,state]
+    soc = [s[0] for s in state_history]
+    data = [soc,P_solar]
     for i in range(np.min([len(axes),num_plots])):
         plot_data(axes[i],times,data[i],titles[i],xlabel,ylabels[i],label)
 
@@ -366,3 +370,31 @@ def plot_yearly_dc(plane: Seaplane,
     filename = "YearSweep"
     plot_path = os.path.join("Figures", f"{filename}.png")
     plt.savefig(plot_path)
+
+def generate_datetimes(start_index, end_index, timestep):
+    """
+    Generates a list of datetime objects between start_index and end_index.
+    
+    :param start_index: Tuple representing (month, day, hour)
+    :param end_index: Tuple representing (month, day, hour)
+    :param timestep: Time difference between consecutive datetimes (in minutes)
+    :return: List of datetime objects
+    """
+    # Unpack the tuples (month, day, hour)
+    start_month, start_day, start_hour = start_index
+    end_month, end_day, end_hour = end_index
+    
+    # Create the starting and ending datetime objects
+    start_datetime = datetime(year=2024, month=start_month, day=start_day, hour=start_hour)
+    end_datetime = datetime(year=2024, month=end_month, day=end_day, hour=end_hour)
+
+    # List to store the generated datetime objects
+    datetime_list = []
+    
+    # Use a timedelta of `timestep` minutes to increment between start and end
+    current_datetime = start_datetime
+    while current_datetime <= end_datetime:
+        datetime_list.append(current_datetime)
+        current_datetime += timedelta(minutes=timestep)
+
+    return datetime_list

@@ -92,7 +92,7 @@ DAYS = 30
 # capacities = np.linspace(1,18,3).tolist()
 # capacities.append(max_cap)
 plt.close()
-capacities = [50]
+capacities = [25]
 fig = -1
 duty_cycle = []
 
@@ -113,10 +113,8 @@ for cap in capacities:
     # times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='Greedy')
     # fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
     # duty_cycle.append(dc)
-    times,e_h,P_solar,states,dc = plotting.run_simulation(sim,solar_file,U,rho,algo='MDP')
-    fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
-    duty_cycle.append(dc)
-print(duty_cycle)
+    times,P_solar,states = plotting.run_simulation(sim,solar_file,U,rho,algo='MDP')
+    fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)
 
 plt.tight_layout()
 plot_path = os.path.join("Figures", f"{filename}.png")

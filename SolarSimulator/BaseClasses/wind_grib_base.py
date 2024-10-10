@@ -115,9 +115,9 @@ class WindProcessor:
                         if lat_lon_pair not in weibull_params:
                             weibull_params[lat_lon_pair] = {}
                         
-                        weibull_params[lat_lon_pair][date_time] = (shape, scale, expected_value)  # Store the shape, scale, and expected value
+                        weibull_params[lat_lon_pair][date_time] = expected_value  # Store the shape, scale, and expected value
                     except Exception as e:
-                        weibull_params[lat_lon_pair][date_time] = (np.nan, np.nan, np.nan)  # Store NaN for all
+                        weibull_params[lat_lon_pair][date_time] = np.nan  # Store NaN for all
                         print(f"Fitting failed for {lat_lon_pair} at {date_time}: {e}")
         
         weibull_df = pd.DataFrame.from_dict(weibull_params)
@@ -205,8 +205,8 @@ if __name__ == "__main__":
 
     # Example lat-lon pair for plotting
     lat_lon_pair = (29.50, -85.25)  # Replace with a specific latitude and longitude from your data
-    processor.plot_wind_magnitude(wind_magnitude_data, lat_lon_pair)
-    # weibull_params.to_pickle("wind_mag_dist.pkl")
+    # processor.plot_wind_magnitude(wind_magnitude_data, lat_lon_pair)
+    weibull_params.to_pickle("wind_mag_dist.pkl")
     # df = pd.read_pickle('wind_mag_dist.pkl')
     # processor.plot_expected_wind(lat_lon_pair)
     print("Done!")

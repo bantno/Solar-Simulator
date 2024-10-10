@@ -347,15 +347,15 @@ class Simulation:
         if algo == "Greedy":
             # Call the simple behavior for the "Greedy" algorithm
             return Autonomy.simulate_simple_behavior(self,
-                                                     avail_solar_w,
-                                                     is_daytime,
-                                                     P_cruise,
-                                                     capacity_j,
-                                                     landing_capacity,
-                                                     takeoff_capacity,
-                                                     dt,
-                                                     min_flight_hr,
-                                                     self.plane.calc_takeoff_penalty)
+                                                     solar_power=avail_solar_w,
+                                                     is_daytime=is_daytime,
+                                                     cruise_power=P_cruise,
+                                                     battery_capacity=capacity_j,
+                                                     landing_threshold=landing_capacity,
+                                                     takeoff_threshold=takeoff_capacity,
+                                                     timestep_minutes=dt,
+                                                     min_flight_minutes=min_flight_hr,
+                                                     takeoff_penalty_fn=self.plane.calc_takeoff_penalty)
         
         elif algo == "MDP":
             # Set MDP-specific parameters

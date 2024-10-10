@@ -8,7 +8,17 @@ class Autonomy:
     def __init__(self):
         pass
 
-    def simulate_simple_behavior(self, solar_power, is_daytime, cruise_power, battery_capacity, landing_threshold, takeoff_threshold, timestep_minutes, min_flight_minutes, takeoff_penalty_fn):
+    def simulate_simple_behavior(self,
+                                 solar_power,
+                                 is_daytime,
+                                 cruise_power,
+                                 battery_capacity,
+                                 landing_threshold,
+                                 takeoff_threshold,
+                                 timestep_minutes,
+                                 min_flight_minutes,
+                                 takeoff_penalty_fn
+                                 ):
         """
         Simulates simple plane behavior over time with random failures during state transitions.
 
@@ -38,32 +48,32 @@ class Autonomy:
             if state == "Flying":
                 # Flying state logic
                 flight_time += timestep_minutes / 60
-                energy_joules -= (cruise_power - solar_power.iloc[i][0]) * timestep_minutes * 60
+                energy_joules -= (cruise_power - solar_power.iloc[i][0]*0.15) * timestep_minutes * 60
 
                 # Transition to Moored state if energy is too low or it's nighttime
                 if energy_joules <= landing_threshold * battery_capacity or not is_daytime[i]:
                     # Check if the transition to 'moored' fails
-                    if random.random() > 0.95:  # Failure probability for "flying" -> "moored"
-                        failure_occurred = True
-                        break  # End simulation on failure
+                    # if random.random() > 0.95:  # Failure probability for "flying" -> "moored"
+                    #     failure_occurred = True
+                    #     break  # End simulation on failure
                     state = "Moored"
 
             elif state == "Moored":
                 # Moored state logic
-                energy_joules = min(energy_joules + solar_power.iloc[i][0] * timestep_minutes * 60, battery_capacity)
+                energy_joules = min(energy_joules + solar_power.iloc[i][0] * 0.15 * timestep_minutes * 60, battery_capacity)
 
                 # Check if conditions for takeoff are met
                 if energy_joules >= takeoff_threshold * battery_capacity and is_daytime[i]:
                     # Check for flight feasibility based on available energy and flight time
                     if energy_joules >= cruise_power * 60 * min_flight_minutes:
                         # Check if the transition to 'flying' fails
-                        if random.random() > 0.95:  # Failure probability for "moored" -> "flying"
-                            failure_occurred = True
-                            break  # End simulation on failure
+                        # if random.random() > 0.95:  # Failure probability for "moored" -> "flying"
+                        #     failure_occurred = True
+                        #     break  # End simulation on failure
 
                         # Take off
                         state = "Flying"
-                        energy_joules -= takeoff_penalty_fn() + (cruise_power - solar_power.iloc[i][0]) * timestep_minutes * 60
+                        energy_joules -= takeoff_penalty_fn() + (cruise_power - solar_power.iloc[i][0]*0.15) * timestep_minutes * 60
                         num_takeoffs += 1
             state_history.append((energy_joules / battery_capacity * 100,state))
 

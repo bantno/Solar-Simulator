@@ -23,9 +23,9 @@ class mdp:
                  whale_prob,
                  dt=10,
                  start_time=0,
-                 gamma=0.9,
+                 gamma=1.0,
                  epsilon=1e-3,
-                 wind_mag_filename=r"Data\DISTRIBUTIONS\solar_ev.pkl",
+                 wind_mag_filename=r"Data\DISTRIBUTIONS\wind_mag_ev.pkl",
                  expected_solar_power_filename = r"Data\DISTRIBUTIONS\solar_ev.pkl"):
         
 
@@ -38,8 +38,13 @@ class mdp:
         self.gamma = gamma
         self.epsilon = epsilon
         self.start_time = start_time
+
+        start_index = (1, 2, 0)
+        end_index = (1, 3, 23)
+
         lat_lon_pair = [(29.25,  -85.0)] # TODO: make this not hard coded
-        self.wind_speed_table = pd.read_pickle(wind_mag_filename)[lat_lon_pair].loc[]
+        wind_table = pd.read_pickle(wind_mag_filename)[lat_lon_pair].sort_index()
+        self.wind_speed_table = wind_table.loc[start_index:end_index]
         self.expected_solar_power = pd.read_pickle(expected_solar_power_filename)[lat_lon_pair]
 
         # Verify expected solar power length
@@ -101,11 +106,12 @@ class mdp:
         """
 
         prob_success, prob_failure = self.calculate_maneuver_probabilities(state[1], action, stage)
-        survival_reward = prob_success * 1 + prob_failure * (-100)
+        survival_reward = prob_success * 1 + prob_failure * (-5)
+        minutes = (self.start_time + self.dt * stage) % 1440
+        whale_prob = self.whale_prob_table.loc[minutes // 120]["Sighting Probability"]
 
         # Determine whale sighting probability based on time of day
         if self.is_daytime(self.start_time, self.dt, stage):
-            whale_prob = self.whale_prob_table.get(stage, 0)  # Hourly whale probability
             # Calculate rewards based on the action
             if action == 'float':
                 # Whale reward based on probability of randomly finding whale using hydrophone, assume 0 for now
@@ -113,7 +119,7 @@ class mdp:
             
             elif action == 'fly':
                 # Whale reward based on probability of finding whale during survey, assume 5 for now
-                whale_reward = whale_prob * 5
+                whale_reward = whale_prob * 50
         else: # Night time
             if action == 'float':
                 # Whale reward based on probability of randomly finding whale using hydrophone, assume 0 for now
@@ -130,7 +136,7 @@ class mdp:
         Calculate the new state of charge after performing the action.
         """
         soc = state[0]
-        delta_soc = self.calculate_soc_update(self.plane, action, self.dt, self.expected_solar_power[stage])
+        delta_soc = self.calculate_soc_update(self.plane, action, self.dt, self.expected_solar_power.iloc[stage])
         new_soc = soc + delta_soc
         new_soc = min(new_soc, 100)  # Keep SoC less than 100
 
@@ -175,7 +181,7 @@ class mdp:
                     max_reward = -np.inf
                     best_action = None
                     for action in self.actions:
-                        if self.is_action_feasible(action, state, stage, self.expected_solar_power[stage]):
+                        if self.is_action_feasible(action, state, stage, self.expected_solar_power.iloc[stage]):
                             reward = self.R(state, action, stage)
                             future_reward = self.get_future_reward(state, action, stage)
                             total_reward = reward + self.gamma * future_reward
@@ -285,7 +291,7 @@ class mdp:
         """
         Calculate the success and failure probabilities for the given maneuver, adjusting continuously based on wind speed.
         """
-        wind_speed = self.wind_speed_table[stage]  # Retrieve wind speed for the current stage
+        wind_speed = self.wind_speed_table.iloc[stage].values[0]  # Retrieve wind speed for the current stage
 
         # Base probabilities
         if current_state == "moored" and action == "float":
@@ -301,7 +307,7 @@ class mdp:
 
         # Wind speed influence
         # Define thresholds for low and high wind speed ranges
-        low_wind_threshold = 5
+        low_wind_threshold = 10
         high_wind_threshold = 20
 
         # Adjust failure probability based on wind speed in a continuous manner

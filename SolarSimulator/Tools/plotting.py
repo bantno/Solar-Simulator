@@ -177,8 +177,8 @@ def run_simulation(sim: Simulation,
     plane.update_plane()
     # times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
 
-    start_index = (1, 1, 2)
-    end_index = (1, 30, 23)
+    start_index = (1, 2, 0)
+    end_index = (1, 3, 23)
 
     # Extract the slice of the DataFrame
     P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]

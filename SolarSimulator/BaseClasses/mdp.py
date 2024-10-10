@@ -276,13 +276,14 @@ class mdp:
         """
         Calculates the change in SoC after performing the given action.
         """
+        panel_efficiency = 0.15
         if action == "float":
             required_power = 0
         elif action == "fly":
             required_power = plane.get_required_power(20, 1.2)  # Assumed constants for flight
 
         avionics_power = 10
-        net_power = solar_power - required_power - avionics_power
+        net_power = solar_power*panel_efficiency - required_power - avionics_power
         energy_change = net_power * dt * 60  # Convert power (W) to energy (Joules)
         soc_change = energy_change / (plane.voltage * plane.capacity * 3600) * 100
         return self.soc_increment * round(soc_change / self.soc_increment)

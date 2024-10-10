@@ -304,7 +304,7 @@ class Simulation:
         """
 
         
-        def daytime(start_time: int, time_step: int = 10, stage: int = 0) -> int:
+        def daytime(start_time: int, time_step: int, stage: int = 0) -> int:
             """
             Determines if the current stage is during the day or night, accounting for simulations
             that span multiple days.
@@ -339,9 +339,9 @@ class Simulation:
         capacity_j = self.plane.voltage * self.plane.capacity * 3600
         # is_daytime = pd.DataFrame(columns=['daytime'])
         is_daytime = []
-        for i in range(len(avail_solar_w)-1):
+        for i in range(len(avail_solar_w)):
             # is_daytime.iloc[i] = daytime(0,10,i)
-            is_daytime.append(daytime(0,10,i))
+            is_daytime.append(daytime(0,dt,i))
         min_flight_hr = 0.5  # Minimum flight time (hours) after takeoff
         
         if algo == "Greedy":

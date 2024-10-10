@@ -208,7 +208,8 @@ def plot_simulation(times,P_solar,state_history,filename=-1, fig = -1, label="")
     xlabel = "Dates"
     ylabels = ["Battery Charge [%]", "Power [W]", "State"]
     soc = [s[0] for s in state_history]
-    data = [soc,P_solar]
+    solar_power = [p[0] for p in P_solar]
+    data = [soc,solar_power]
     for i in range(np.min([len(axes),num_plots])):
         plot_data(axes[i],times,data[i],titles[i],xlabel,ylabels[i],label)
 

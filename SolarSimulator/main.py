@@ -110,11 +110,11 @@ for cap in capacities:
     plane.capacity = cap
     print(f"Required Power: {plane.get_required_power(20,1.2)} W")
     label = f"{plane.capacity:.2f} Ah"
-    # times,e_h,P_solar,states,dc = plotting.run_simulation(sim,year,month,day,days,algo='Greedy')
-    # fig = plotting.plot_simulation(sim,times,e_h,P_solar,states,filename,fig=fig,label=label)
-    # duty_cycle.append(dc)
-    times,P_solar,states = plotting.run_simulation(sim,solar_file,U,rho,algo='MDP')
+    times,P_solar,states = plotting.run_simulation(sim,solar_file,U,rho,algo='Greedy')
     fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)
+    # duty_cycle.append(dc)
+    # times,P_solar,states = plotting.run_simulation(sim,solar_file,U,rho,algo='MDP')
+    # fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)
 
 plt.tight_layout()
 plot_path = os.path.join("Figures", f"{filename}.png")

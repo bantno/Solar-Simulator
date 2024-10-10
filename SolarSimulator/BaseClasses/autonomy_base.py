@@ -38,7 +38,7 @@ class Autonomy:
             if state == "Flying":
                 # Flying state logic
                 flight_time += timestep_minutes / 60
-                energy_joules -= (cruise_power - solar_power.iloc[i]) * timestep_minutes * 60
+                energy_joules -= (cruise_power - solar_power.iloc[i][0]) * timestep_minutes * 60
 
                 # Transition to Moored state if energy is too low or it's nighttime
                 if energy_joules <= landing_threshold * battery_capacity or not is_daytime[i]:
@@ -47,11 +47,10 @@ class Autonomy:
                         failure_occurred = True
                         break  # End simulation on failure
                     state = "Moored"
-                state_history.append(1)
 
             elif state == "Moored":
                 # Moored state logic
-                energy_joules = min(energy_joules + solar_power.iloc[i] * timestep_minutes * 60, battery_capacity)
+                energy_joules = min(energy_joules + solar_power.iloc[i][0] * timestep_minutes * 60, battery_capacity)
 
                 # Check if conditions for takeoff are met
                 if energy_joules >= takeoff_threshold * battery_capacity and is_daytime[i]:
@@ -64,7 +63,7 @@ class Autonomy:
 
                         # Take off
                         state = "Flying"
-                        energy_joules -= takeoff_penalty_fn() + (cruise_power - solar_power.iloc[i]) * timestep_minutes * 60
+                        energy_joules -= takeoff_penalty_fn() + (cruise_power - solar_power.iloc[i][0]) * timestep_minutes * 60
                         num_takeoffs += 1
             state_history.append((energy_joules / battery_capacity * 100,state))
 
@@ -127,6 +126,7 @@ class Autonomy:
 
             new_state = mdp_model.calculate_new_state(state=current_state,
                                                       action=best_action,
-                                                      stage=k)
+                                                      stage=k,
+                                                      solar_power=actual_solar_power.iloc[k][0])
             state_history_list.append(new_state)
-        return state_history_list,expected_solar_power
+        return state_history_list,actual_solar_power

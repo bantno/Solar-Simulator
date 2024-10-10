@@ -85,7 +85,7 @@ class mdp:
         Returns the possible next states and their transition probabilities for a given action and stage.
         """
         success_prob, failure_prob = self.calculate_maneuver_probabilities(state[1], action, stage)
-        new_state_success = self.calculate_new_state(state, action, stage)
+        new_state_success = self.calculate_new_state(state, action, stage, self.expected_solar_power.iloc[stage])
         new_state_failure = state  # Stay in the same state on failure
         return [(success_prob, new_state_success), (failure_prob, new_state_failure)]
 
@@ -131,12 +131,12 @@ class mdp:
         return survival_reward + whale_reward
 
 
-    def calculate_new_state(self, state, action, stage):
+    def calculate_new_state(self, state, action, stage, solar_power):
         """
         Calculate the new state of charge after performing the action.
         """
         soc = state[0]
-        delta_soc = self.calculate_soc_update(self.plane, action, self.dt, self.expected_solar_power.iloc[stage])
+        delta_soc = self.calculate_soc_update(self.plane, action, self.dt, solar_power)
         new_soc = soc + delta_soc
         new_soc = min(new_soc, 100)  # Keep SoC less than 100
 
@@ -144,6 +144,8 @@ class mdp:
             new_vehicle_state = "flying"
         elif action == "float":
             new_vehicle_state = "moored"
+        else:
+            raise ValueError(f"Expected action 'float' or 'fly'. Got {action}.")
         return (new_soc, new_vehicle_state)
 
     def create_ev_table(self, max_stages, expected_solar_power):
@@ -205,7 +207,7 @@ class mdp:
         next_stage = stage + 1
         if next_stage not in self.ev_table.columns:
             return 0  # No future reward beyond the last stage
-        new_state = self.calculate_new_state(state, action,stage)
+        new_state = self.calculate_new_state(state, action,stage, self.expected_solar_power.iloc[stage])
         return self.ev_table.loc[new_state, next_stage]
 
     def is_action_feasible(self, action, state, stage, solar_power):
@@ -281,6 +283,8 @@ class mdp:
             required_power = 0
         elif action == "fly":
             required_power = plane.get_required_power(20, 1.2)  # Assumed constants for flight
+        else :
+            raise ValueError(f"Expected action 'float' or 'fly'. Got {action}.")
 
         avionics_power = 10
         net_power = solar_power*panel_efficiency - required_power - avionics_power

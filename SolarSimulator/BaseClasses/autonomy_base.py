@@ -117,6 +117,7 @@ class Autonomy:
                         actions,
                         expected_solar_power,
                         whale_probabilities,
+                        dt=60
                         )
         
         state_history_list = [initial_state]
@@ -125,12 +126,13 @@ class Autonomy:
         mdp_model.value_iteration()
         optimal_policy = mdp_model.policy_table
 
-        for k in range(len(actual_solar_power)):
+        for k in range(len(actual_solar_power)-1):
             current_state = state_history_list[-1]
-            best_action = optimal_policy[current_state]
+            best_action = optimal_policy.loc[current_state,k]
 
             new_state = mdp_model.calculate_new_state(state=current_state,
                                                       action=best_action,
                                                       stage=k)
             state_history_list.append(new_state)
+        mdp_model.plot_surfaces_by_state(25,144)
         return True

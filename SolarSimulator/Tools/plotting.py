@@ -211,7 +211,7 @@ def plot_simulation(times,state_history,P_solar,filename=-1, fig = -1, label="")
     solar_power = P_solar
     data = [soc,solar_power]
     for i in range(np.min([len(axes),num_plots])):
-        plot_data(axes[i],times,data[i],titles[i],xlabel,ylabels[i],label)
+        plot_data(axes[i],times[0:len(data[i])],data[i],titles[i],xlabel,ylabels[i],label)
 
     plt.tight_layout() 
 

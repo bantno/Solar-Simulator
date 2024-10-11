@@ -92,14 +92,14 @@ DAYS = 30
 # capacities = np.linspace(1,18,3).tolist()
 # capacities.append(max_cap)
 plt.close()
-capacities = [25]
+capacities = [10,25]
 fig = -1
 duty_cycle = []
 
-year = 2019
-month = 6
-day = 1
-days = 15
+year = 2022
+month = 1
+day = 2
+days = 2
 
 current_time = datetime.datetime.now()
 time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
@@ -110,11 +110,11 @@ end_index = (1, 3, 23)
 
 for cap in capacities:
     sim.plane.capacity = cap
-    print(f"Required Power: {plane.get_required_power(20,1.2)} W")
-    label = f"Greedy: {plane.capacity:.2f} Ah"
+    print(f"Required Power: {sim.plane.get_required_power(20,1.2)} W")
+    label = f"Greedy: {sim.plane.capacity:.2f} Ah"
     times,P_solar,states = plotting.run_simulation(sim,solar_file,start_index,end_index,U,rho,algo='Greedy')
     fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)
-    label = f"MDP: {plane.capacity:.2f} Ah"
+    label = f"MDP: {sim.plane.capacity:.2f} Ah"
     times,P_solar,states = plotting.run_simulation(sim,solar_file,start_index,end_index,U,rho,algo='MDP')
     fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)
 

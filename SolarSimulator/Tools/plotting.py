@@ -177,6 +177,7 @@ def run_simulation(sim: Simulation,
     """
     plane = sim.plane
     plane.update_plane()
+    print(plane.capacity)
     # times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
 
     # Extract the slice of the DataFrame

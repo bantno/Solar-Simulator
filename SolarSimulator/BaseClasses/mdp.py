@@ -307,7 +307,7 @@ class mdp:
         elif current_state == "flying" and action == "fly":
             base_success_prob, base_failure_prob = 0.95, 0.05  # Low failure risk for continuous flying
         else:
-            return 1.0, 0.0  # Default to guaranteed success
+            return 0.0, 1.0  # Default to guaranteed failure
 
         # Wind speed influence
         # Define thresholds for low and high wind speed ranges

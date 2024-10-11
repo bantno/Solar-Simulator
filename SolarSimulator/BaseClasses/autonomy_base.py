@@ -59,15 +59,15 @@ class Autonomy:
         for k in range(len(actual_solar_power)-1):
             current_state = state_history_list[-1]
             solar_power = actual_solar_power.iloc[k][0]
-            if mdp_model.is_action_feasible("fly",current_state,k,solar_power) and mdp_model.is_daytime(0,mdp_model.dt,k):
+            if mdp_model.is_action_feasible("fly",current_state,k,solar_power) and mdp_model.is_daytime(0,mdp_model.dt,k) :
                 best_action = "fly"
             else :
                 best_action = "float"
 
-            success_prob,failure_prob = mdp_model.calculate_maneuver_probabilities(current_state=current_state,
+            success_prob,failure_prob = mdp_model.calculate_maneuver_probabilities(current_state=current_state[1],
                                                                                    action=best_action,
                                                                                    stage=k)
-            if np.random.uniform(0,1) > failure_prob and not  mdp_model.is_action_feasible(best_action,current_state,k,solar_power) :
+            if np.random.uniform(0,1) > failure_prob and mdp_model.is_action_feasible(best_action,current_state,k,solar_power) :
                 new_state = mdp_model.calculate_new_state(state=current_state,
                                         action=best_action,
                                         stage=k,
@@ -134,7 +134,7 @@ class Autonomy:
             current_state = state_history_list[-1]
             best_action = optimal_policy.loc[current_state,k]
             solar_power = actual_solar_power.iloc[k][0]
-            success_prob,failure_prob = mdp_model.calculate_maneuver_probabilities(current_state=current_state,
+            success_prob,failure_prob = mdp_model.calculate_maneuver_probabilities(current_state=current_state[1],
                                                                                    action=best_action,
                                                                                    stage=k)
             if np.random.uniform(0,1) > failure_prob :

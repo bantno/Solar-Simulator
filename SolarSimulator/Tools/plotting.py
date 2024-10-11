@@ -153,6 +153,8 @@ def plot_battery_sweep(cap,duty,label = "",filename=-1,fig = -1,title=""):
 
 def run_simulation(sim: Simulation,
                    solar_file,
+                    start_index,
+                   end_index,
                    U=20,
                    rho=1.1,
                    algo="MDP"):
@@ -177,18 +179,15 @@ def run_simulation(sim: Simulation,
     plane.update_plane()
     # times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
 
-    start_index = (1, 2, 0)
-    end_index = (1, 3, 23)
-
     # Extract the slice of the DataFrame
-    P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
-    P_solar_expected = pd.read_pickle(r"Data\DISTRIBUTIONS\solar_ev.pkl")[(29.25,  -85.0)].loc[start_index:end_index]
-    state_history,solar_power = sim.simulate_deployment(U,
-                                                       rho,
-                                                       1,
-                                                       .05,
-                                                       avail_solar_w=P_solar_actual,
-                                                       expected_solar_w=P_solar_expected,
+    # P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
+    # P_solar_expected = pd.read_pickle(r"Data\DISTRIBUTIONS\solar_ev.pkl")[(29.25,  -85.0)].loc[start_index:end_index]
+    state_history,solar_power = sim.simulate_deployment(U=U,
+                                                       rho=rho,
+                                                       takeoff_capacity=1,
+                                                       landing_capacity=.05,
+                                                       start_index=start_index,
+                                                       end_index=end_index,
                                                        dt=60,
                                                        algo=algo)
     

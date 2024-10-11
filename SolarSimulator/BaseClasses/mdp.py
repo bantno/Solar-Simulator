@@ -19,9 +19,10 @@ class mdp:
                  vehicle_states,
                  max_stages,
                  actions,
-                 expected_solar_power,
+                 start_index,
+                 end_index,
                  whale_prob,
-                 dt=10,
+                 dt,
                  start_time=0,
                  gamma=1.0,
                  epsilon=1e-3,
@@ -39,13 +40,11 @@ class mdp:
         self.epsilon = epsilon
         self.start_time = start_time
 
-        start_index = (1, 2, 0)
-        end_index = (1, 3, 23)
-
         lat_lon_pair = [(29.25,  -85.0)] # TODO: make this not hard coded
         wind_table = pd.read_pickle(wind_mag_filename)[lat_lon_pair].sort_index()
         self.wind_speed_table = wind_table.loc[start_index:end_index]
-        self.expected_solar_power = pd.read_pickle(expected_solar_power_filename)[lat_lon_pair]
+        solar_table = pd.read_pickle(expected_solar_power_filename)[lat_lon_pair].sort_index()
+        expected_solar_power = solar_table.loc[start_index:end_index]
 
         # Verify expected solar power length
         if len(expected_solar_power)-1 != max_stages :
@@ -159,7 +158,7 @@ class mdp:
                 max_reward = -np.inf
                 best_action = None
                 for action in self.actions:
-                    if self.is_action_feasible(action, state, stage, expected_solar_power.iloc[stage]):
+                    if self.is_action_feasible(action, state, stage, expected_solar_power.iloc[stage].values[0]):
                         reward = self.R(state, action, stage)
                         future_reward = self.get_future_reward(state, action, stage)
                         total_reward = reward + self.gamma * future_reward
@@ -183,7 +182,7 @@ class mdp:
                     max_reward = -np.inf
                     best_action = None
                     for action in self.actions:
-                        if self.is_action_feasible(action, state, stage, self.expected_solar_power.iloc[stage]):
+                        if self.is_action_feasible(action, state, stage, self.expected_solar_power.iloc[stage].values[0]):
                             reward = self.R(state, action, stage)
                             future_reward = self.get_future_reward(state, action, stage)
                             total_reward = reward + self.gamma * future_reward
@@ -207,7 +206,7 @@ class mdp:
         next_stage = stage + 1
         if next_stage not in self.ev_table.columns:
             return 0  # No future reward beyond the last stage
-        new_state = self.calculate_new_state(state, action,stage, self.expected_solar_power.iloc[stage])
+        new_state = self.calculate_new_state(state, action,stage, self.expected_solar_power.iloc[stage].values[0])
         return self.ev_table.loc[new_state, next_stage]
 
     def is_action_feasible(self, action, state, stage, solar_power):

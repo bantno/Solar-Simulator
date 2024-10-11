@@ -193,69 +193,6 @@ class Simulation:
                                     ).fillna(0)
 
         return times, pdc
-    
-    def calculate_expected_solar_power(self,
-                                       year,
-                                       month,
-                                       day,
-                                       periods,
-                                       frequency):
-        grib_file_path = r'C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\GRIB\January\solar_radiation.grib'
-        processor = SolarRadiationProcessor(grib_file_path)
-        beta_params = processor.process_grib_file()
-        beta_dist = beta_params[(29.5, -85.25)]
-        start = f"{year[0]}-{month[0]}-{day[0]}"
-        times = pd.date_range(start, periods=periods, freq=frequency, tz=self.tz)
-
-        for i in len(times):
-            expected_value = param[0]/(param[0]+param[1])*param[2]
-        
-
-    @staticmethod
-    def generate_irradiance_timeseries(num_timesteps, num_samples, alpha, beta, max_irradiance):
-        """
-        Generate solar irradiance time series using a beta distribution.
-        
-        Parameters:
-        - num_timesteps: Number of time steps in each simulation
-        - num_samples: Number samples to generate per step of the timeseries
-        - alpha: beta shape parameter 
-        - scale: beta scale parameter
-        - max_irradiance: Maximum irradiance 
-        
-        Returns:
-        - timeseries: Array of shape (num_simulations, num_timesteps) with wind speed values
-        """
-        timeseries = np.zeros((num_samples, num_timesteps))
-        
-        for t in range(num_timesteps):
-            samples = beta_dist.rvs(alpha[t], beta[t], size=num_samples)
-            timeseries[:, t] = samples * max_irradiance[t]
-        
-        return timeseries
-    
-    @staticmethod
-    def generate_windspeed_timeseries(num_timesteps, num_simulations, shape, scale):
-        """
-        Generate wind speed time series using a Weibull distribution.
-        
-        Parameters:
-        - num_timesteps: Number of time steps in each simulation
-        - num_simulations: Number of simulations to run
-        - shape: Weibull shape parameter (k)
-        - scale: Weibull scale parameter (c)
-        
-        Returns:
-        - timeseries: Array of shape (num_simulations, num_timesteps) with wind speed values
-        """
-        timeseries = np.zeros((num_simulations, num_timesteps))
-        
-        for t in range(num_timesteps):
-            # Generate samples from Weibull distribution
-            samples = weibull_min.rvs(shape, scale=scale, size=num_simulations)
-            timeseries[:, t] = samples
-        
-        return timeseries
 
 
     def simulate_deployment(self,
@@ -263,8 +200,8 @@ class Simulation:
                             rho,
                             takeoff_capacity,
                             landing_capacity,
-                            avail_solar_w,
-                            expected_solar_w,
+                            start_index,
+                            end_index,
                             dt,
                             algo):
         
@@ -337,7 +274,13 @@ class Simulation:
         # Calculate required parameters
         P_cruise = self.plane.get_required_power(U, rho)
         capacity_j = self.plane.voltage * self.plane.capacity * 3600
-        # is_daytime = pd.DataFrame(columns=['daytime'])
+
+        solar_file = r"Data\DISTRIBUTIONS\2022_solar_data.pkl"
+        avail_solar_w = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
+
+        wind_file = r"Data\DISTRIBUTIONS\2022_wind_mag.pkl"
+        avail_wind_mag = pd.read_pickle(wind_file)[(29.25,  -85.0)].sort_index().loc[start_index:end_index]
+
         is_daytime = []
         for i in range(len(avail_solar_w)):
             # is_daytime.iloc[i] = daytime(0,10,i)
@@ -358,6 +301,7 @@ class Simulation:
                                                      takeoff_penalty_fn=self.plane.calc_takeoff_penalty)
         
         elif algo == "MDP":
+
             # Set MDP-specific parameters
             soc_increment = 1  # State of Charge increments
             max_stages = len(avail_solar_w)-1  # Set max stages based on the length of the solar power data
@@ -365,18 +309,16 @@ class Simulation:
             whale_probabilities = WhaleSightingProbability().df
 
             # Call the mdp_behavior function from the Autonomy class
-            if len(expected_solar_w) == len(avail_solar_w):
-                return Autonomy.simulate_mdp_behavior(self,
-                                                      plane=self.plane,
-                                                      soc_increment=soc_increment,
-                                                      max_stages=max_stages,
-                                                      initial_state=start_state,
-                                                      expected_solar_power=expected_solar_w,
-                                                      actual_solar_power=avail_solar_w,
-                                                      whale_probabilities = whale_probabilities
-                                                      )
-            else:
-                raise ValueError(f"Lengths do not match: {len(expected_solar_w)} != {len(avail_solar_w)}")
+            
+            return Autonomy.simulate_mdp_behavior(self,
+                                                    plane=self.plane,
+                                                    soc_increment=soc_increment,
+                                                    max_stages=max_stages,
+                                                    initial_state=start_state,
+                                                    actual_solar_power=avail_solar_w,
+                                                    avail_wind_mag=avail_wind_mag,
+                                                    whale_probabilities = whale_probabilities
+                                                    )
         
         else:
             raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")

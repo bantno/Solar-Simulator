@@ -123,6 +123,84 @@ class WindProcessor:
         weibull_df = pd.DataFrame.from_dict(weibull_params)
         return weibull_df
     
+
+    def get_wind_magnitude_for_year(self, year):
+        """
+        Retrieves wind magnitude data for the specified year.
+        
+        Args:
+            year (int): The year for which wind data is required.
+            
+        Returns:
+            wind_magnitude_data (dict): Dictionary containing wind magnitude data.
+            weibull_params (DataFrame): DataFrame of Weibull distribution parameters.
+        """
+        # Open the GRIB file
+        grbs = pygrib.open(self.grib_file_path)
+        
+        # Initialize placeholders for U and V wind components
+        u_data = {}
+        v_data = {}
+        
+        # Loop through all messages in the GRIB file
+        for grb in tqdm(grbs.select()):
+            # Check the year of the GRIB message
+            if grb.validDate.year == year:
+                # Extract U and V components if they are present
+                if grb.parameterName == '10 metre U wind component':
+                    lats, lons = grb.latlons()
+                    values_u = grb.values
+
+                    # Extract date and time
+                    date = grb.validityDate
+                    hour = grb.validityTime
+                    utc_date = pd.to_datetime(f'{date} {hour:04}', format='%Y%m%d %H%M')
+                    utc_date = utc_date.tz_localize(self.utc_tz)
+                    valid_date = utc_date.astimezone(self.eastern_tz)
+                    day_month_hour = (valid_date.month, valid_date.day, valid_date.hour)
+
+                    for i in range(lats.shape[0]):
+                        for j in range(lons.shape[1]):
+                            lat_lon_pair = (lats[i, j], lons[i, j])
+
+                            if lat_lon_pair not in u_data:
+                                u_data[lat_lon_pair] = {}
+
+                            if day_month_hour not in u_data[lat_lon_pair]:
+                                u_data[lat_lon_pair][day_month_hour] = []
+
+                            u_data[lat_lon_pair][day_month_hour].append(values_u[i, j])
+
+                if grb.parameterName == '10 metre V wind component':
+                    lats, lons = grb.latlons()
+                    values_v = grb.values
+
+                    date = grb.validityDate
+                    hour = grb.validityTime
+                    utc_date = pd.to_datetime(f'{date} {hour:04}', format='%Y%m%d %H%M')
+                    utc_date = utc_date.tz_localize(self.utc_tz)
+                    valid_date = utc_date.astimezone(self.eastern_tz)
+                    day_month_hour = (valid_date.month, valid_date.day, valid_date.hour)
+
+                    for i in range(lats.shape[0]):
+                        for j in range(lons.shape[1]):
+                            lat_lon_pair = (lats[i, j], lons[i, j])
+
+                            if lat_lon_pair not in v_data:
+                                v_data[lat_lon_pair] = {}
+
+                            if day_month_hour not in v_data[lat_lon_pair]:
+                                v_data[lat_lon_pair][day_month_hour] = []
+
+                            v_data[lat_lon_pair][day_month_hour].append(values_v[i, j])
+
+        # Close the GRIB file
+        grbs.close()
+
+        # Calculate wind magnitude
+        wind_magnitude_data = self.calculate_wind_magnitude(u_data, v_data)
+        return pd.DataFrame.from_dict(wind_magnitude_data)
+    
     def plot_wind_magnitude(self, wind_magnitude_data, lat_lon_pair, num_days=3):
         # Extract data for the first num_days in January
         day_limit = (1, num_days)  # From day 1 to the number of days specified
@@ -200,13 +278,15 @@ class WindProcessor:
 if __name__ == "__main__":
     grib_file_path = r'C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\GRIB\January\wind_data.grib'
     processor = WindProcessor(grib_file_path)
-    wind_magnitude_data,weibull_params = processor.process_grib_file()
+    data = processor.get_wind_magnitude_for_year(2022)
+    data.to_pickle("wind_mag_2022.pkl")
+    # wind_magnitude_data,weibull_params = processor.process_grib_file()
     # print(weibull_params[(29.50,-85.25)])
 
     # Example lat-lon pair for plotting
     lat_lon_pair = (29.50, -85.25)  # Replace with a specific latitude and longitude from your data
     # processor.plot_wind_magnitude(wind_magnitude_data, lat_lon_pair)
-    weibull_params.to_pickle("wind_mag_dist.pkl")
+    # weibull_params.to_pickle("wind_mag_dist.pkl")
     # df = pd.read_pickle('wind_mag_dist.pkl')
     # processor.plot_expected_wind(lat_lon_pair)
     print("Done!")

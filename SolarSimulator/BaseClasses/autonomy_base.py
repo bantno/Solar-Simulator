@@ -10,6 +10,7 @@ class Autonomy:
 
     def simulate_simple_behavior(self,
                                  solar_power,
+                                 idle_power,
                                  is_daytime,
                                  cruise_power,
                                  battery_capacity,
@@ -41,7 +42,6 @@ class Autonomy:
         energy_history = []
         state_history = []
         num_takeoffs = 0
-        idle_power = 10
         flight_time = 0
         failure_occurred = False
 
@@ -95,8 +95,8 @@ class Autonomy:
                               soc_increment,
                               max_stages,
                               initial_state,
-                              expected_solar_power,
                               actual_solar_power,
+                              avail_wind_mag,
                               whale_probabilities):
         """
         Simulates plane behavior using an MDP to determine the optimal flight policy.
@@ -115,13 +115,19 @@ class Autonomy:
         vehicle_states = ["moored", "flying"]
         actions = ["float", "fly"]
 
+        start_index = (1, 2, 0)
+        end_index = (1, 3, 23)
+
+
+
         mdp_model = mdp(plane,
                         soc_increment,
                         vehicle_states,
                         max_stages,
                         actions,
-                        expected_solar_power,
-                        whale_probabilities,
+                        start_index=start_index,
+                        end_index=end_index,
+                        whale_prob=whale_probabilities,
                         dt=60
                         )
         

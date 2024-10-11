@@ -23,9 +23,11 @@ class WindProcessor:
         # Open the GRIB file
         grbs = pygrib.open(self.grib_file_path)
         
-        # Initialize placeholders for U and V wind components
+        # Dictionary to hold U component data keyed by (lat, lon, datetime)
         u_data = {}
-        v_data = {}
+        
+        # List to hold rows for DataFrame creation
+        data_rows = []
 
         # Loop through all messages in the GRIB file
         for grb in tqdm(grbs.select()):
@@ -40,46 +42,61 @@ class WindProcessor:
                 utc_date = pd.to_datetime(f'{date} {hour:04}', format='%Y%m%d %H%M')
                 utc_date = utc_date.tz_localize(self.utc_tz)
                 valid_date = utc_date.astimezone(self.eastern_tz)
-                day_month_hour = (valid_date.month, valid_date.day, valid_date.hour)
 
+                # Loop through latitude and longitude arrays
                 for i in range(lats.shape[0]):
                     for j in range(lons.shape[1]):
                         lat_lon_pair = (lats[i, j], lons[i, j])
-                        
-                        if lat_lon_pair not in u_data:
-                            u_data[lat_lon_pair] = {}
-                        
-                        if day_month_hour not in u_data[lat_lon_pair]:
-                            u_data[lat_lon_pair][day_month_hour] = []
-                        
-                        u_data[lat_lon_pair][day_month_hour].append(values_u[i, j])
-            
+                        u_component = values_u[i, j]
+                        key = (lat_lon_pair[0], lat_lon_pair[1], valid_date)
+
+                        # Store U component in dictionary
+                        u_data[key] = u_component
+
             # Extract V component of wind
-            if grb.parameterName == '10 metre V wind component' and grb.validDate.month == 1:
+            elif grb.parameterName == '10 metre V wind component' and grb.validDate.month == 1:
                 lats, lons = grb.latlons()
                 values_v = grb.values
                 
+                # Extract the date and time from the GRIB message
                 date = grb.validityDate
                 hour = grb.validityTime
                 utc_date = pd.to_datetime(f'{date} {hour:04}', format='%Y%m%d %H%M')
                 utc_date = utc_date.tz_localize(self.utc_tz)
                 valid_date = utc_date.astimezone(self.eastern_tz)
-                day_month_hour = (valid_date.month, valid_date.day, valid_date.hour)
 
+                # Loop through latitude and longitude arrays
                 for i in range(lats.shape[0]):
                     for j in range(lons.shape[1]):
                         lat_lon_pair = (lats[i, j], lons[i, j])
-                        
-                        if lat_lon_pair not in v_data:
-                            v_data[lat_lon_pair] = {}
-                        
-                        if day_month_hour not in v_data[lat_lon_pair]:
-                            v_data[lat_lon_pair][day_month_hour] = []
-                        
-                        v_data[lat_lon_pair][day_month_hour].append(values_v[i, j])
-        
+                        v_component = values_v[i, j]
+                        key = (lat_lon_pair[0], lat_lon_pair[1], valid_date)
+
+                        # Check if U component exists for the given key
+                        if key in u_data:
+                            u_component = u_data[key]
+                            # Calculate magnitude
+                            magnitude = np.sqrt(u_component**2 + v_component**2)
+                            data_rows.append((lat_lon_pair[0], lat_lon_pair[1], valid_date, u_component, v_component, magnitude))
+
         grbs.close()
-        return u_data, v_data
+
+        # Create a DataFrame from the collected data
+        df = pd.DataFrame(data_rows, columns=['latitude', 'longitude', 'datetime', 'u_component', 'v_component', 'magnitude'])
+        
+        # Extract month, day, and hour from the datetime column
+        df['month'] = df['datetime'].dt.month
+        df['day'] = df['datetime'].dt.day
+        df['hour'] = df['datetime'].dt.hour
+
+        # Set the index to be a MultiIndex of lat-lon and datetime
+        df.set_index(['latitude', 'longitude', 'datetime'], inplace=True)
+        df.sort_index()
+        
+        return df
+
+
+
     
     def calculate_wind_magnitude(self, u_data, v_data):
         wind_magnitude_data = {}
@@ -100,191 +117,86 @@ class WindProcessor:
         return wind_magnitude_data
     
     def fit_weibull_distributions(self, wind_magnitude_data):
-        weibull_params = {}
+        weibull_ev = {}
         
-        for lat_lon_pair, datetime_dict in tqdm(wind_magnitude_data.items()):
-            for date_time, values in datetime_dict.items():
-                if len(values) > 0:  # Ensure there is data
-                    values = np.array(values)
-                    
-                    # Fit the Weibull distribution
-                    try:
-                        shape, loc, scale = weibull_min.fit(values, floc=0)
-                        expected_value = scale * gamma(1 + 1 / shape)  # Calculate expected value
-                        
-                        if lat_lon_pair not in weibull_params:
-                            weibull_params[lat_lon_pair] = {}
-                        
-                        weibull_params[lat_lon_pair][date_time] = expected_value  # Store the shape, scale, and expected value
-                    except Exception as e:
-                        weibull_params[lat_lon_pair][date_time] = np.nan  # Store NaN for all
-                        print(f"Fitting failed for {lat_lon_pair} at {date_time}: {e}")
-        
-        weibull_df = pd.DataFrame.from_dict(weibull_params)
-        return weibull_df
-    
+        # Group by latitude, longitude, month, day, and hour
+        grouped = wind_magnitude_data.groupby(['latitude', 'longitude', 'month', 'day', 'hour'])
 
-    def get_wind_magnitude_for_year(self, year):
-        """
-        Retrieves wind magnitude data for the specified year.
+        for (lat, lon, month, day, hour), group in tqdm(grouped):
+            values = group['magnitude'].values
+
+            if len(values) > 0:  # Ensure there is data   
+                # Fit the Weibull distribution
+                try:
+                    shape, loc, scale = weibull_min.fit(values, floc=0)
+                    expected_value = scale * gamma(1 + 1 / shape)  # Calculate expected value
+                    weibull_ev[(lat, lon, month, day, hour)] = expected_value  # Store the expected value
+                except Exception as e:
+                    weibull_ev[(lat, lon, month, day, hour)] = np.nan  # Store the expected value
+                    print(f"Fitting failed for {lat, lon, month, day, hour}: {e}")
         
-        Args:
-            year (int): The year for which wind data is required.
+        # Create a new DataFrame to hold expected values indexed by latitude, longitude, month, day, and hour
+        expected_values_df = pd.DataFrame.from_dict(weibull_ev, orient='index', columns=['expected_value'])
+        multi_index = pd.MultiIndex.from_tuples(expected_values_df.index, names=['latitude', 'longitude', 'month', 'day', 'hour'])
+        expected_values_df.index = multi_index
+
+        return expected_values_df
+    
+    def resample_to_timestep(self, df, time_step_minutes=15):
+        # Reset index to work with columns
+        df = df.reset_index()
+
+        # Create a new MultiIndex that includes minutes
+        new_index_tuples = []
+
+        for _, row in df.iterrows():
+            for minute in range(0, 60, time_step_minutes):
+                new_index_tuples.append((row['latitude'], row['longitude'], row['month'], row['day'], row['hour'], minute))
+
+        # Create a new MultiIndex
+        new_multi_index = pd.MultiIndex.from_tuples(new_index_tuples, names=['latitude', 'longitude', 'month', 'day', 'hour', 'minute'])
+
+        # Create a new DataFrame with the new MultiIndex
+        new_df = pd.DataFrame(index=new_multi_index)
+        new_df['expected_value'] = np.nan  # Initialize expected_value column
+
+        # Loop through each latitude, longitude, month, and day
+        for (lat, lon, month, day), group in tqdm(df.groupby(['latitude', 'longitude', 'month', 'day'])):
+            # Get the expected values for each hour
+            hour_values = group.set_index('hour')['expected_value']
             
-        Returns:
-            wind_magnitude_data (dict): Dictionary containing wind magnitude data.
-            weibull_params (DataFrame): DataFrame of Weibull distribution parameters.
-        """
-        # Open the GRIB file
-        grbs = pygrib.open(self.grib_file_path)
-        
-        # Initialize placeholders for U and V wind components
-        u_data = {}
-        v_data = {}
-        
-        # Loop through all messages in the GRIB file
-        for grb in tqdm(grbs.select()):
-            # Check the year of the GRIB message
-            if grb.validDate.year == year:
-                # Extract U and V components if they are present
-                if grb.parameterName == '10 metre U wind component':
-                    lats, lons = grb.latlons()
-                    values_u = grb.values
+            # Interpolate between hours
+            for hour in range(hour_values.index.min(), hour_values.index.max()):
+                if hour in hour_values.index and (hour + 1) in hour_values.index:
+                    # Current and next hour values
+                    current_value = hour_values[hour]
+                    next_value = hour_values[hour + 1]
 
-                    # Extract date and time
-                    date = grb.validityDate
-                    hour = grb.validityTime
-                    utc_date = pd.to_datetime(f'{date} {hour:04}', format='%Y%m%d %H%M')
-                    utc_date = utc_date.tz_localize(self.utc_tz)
-                    valid_date = utc_date.astimezone(self.eastern_tz)
-                    day_month_hour = (valid_date.month, valid_date.day, valid_date.hour)
+                    # Calculate the interpolated values for the new DataFrame
+                    for minute in range(0, 60, time_step_minutes):
+                        # Calculate the proportion of the minute within the hour
+                        proportion = minute / 60
+                        interpolated_value = (1 - proportion) * current_value + proportion * next_value
+                        new_df.loc[(lat, lon, month, day, hour, minute), 'expected_value'] = interpolated_value
 
-                    for i in range(lats.shape[0]):
-                        for j in range(lons.shape[1]):
-                            lat_lon_pair = (lats[i, j], lons[i, j])
-
-                            if lat_lon_pair not in u_data:
-                                u_data[lat_lon_pair] = {}
-
-                            if day_month_hour not in u_data[lat_lon_pair]:
-                                u_data[lat_lon_pair][day_month_hour] = []
-
-                            u_data[lat_lon_pair][day_month_hour].append(values_u[i, j])
-
-                if grb.parameterName == '10 metre V wind component':
-                    lats, lons = grb.latlons()
-                    values_v = grb.values
-
-                    date = grb.validityDate
-                    hour = grb.validityTime
-                    utc_date = pd.to_datetime(f'{date} {hour:04}', format='%Y%m%d %H%M')
-                    utc_date = utc_date.tz_localize(self.utc_tz)
-                    valid_date = utc_date.astimezone(self.eastern_tz)
-                    day_month_hour = (valid_date.month, valid_date.day, valid_date.hour)
-
-                    for i in range(lats.shape[0]):
-                        for j in range(lons.shape[1]):
-                            lat_lon_pair = (lats[i, j], lons[i, j])
-
-                            if lat_lon_pair not in v_data:
-                                v_data[lat_lon_pair] = {}
-
-                            if day_month_hour not in v_data[lat_lon_pair]:
-                                v_data[lat_lon_pair][day_month_hour] = []
-
-                            v_data[lat_lon_pair][day_month_hour].append(values_v[i, j])
-
-        # Close the GRIB file
-        grbs.close()
-
-        # Calculate wind magnitude
-        wind_magnitude_data = self.calculate_wind_magnitude(u_data, v_data)
-        return pd.DataFrame.from_dict(wind_magnitude_data)
-    
-    def plot_wind_magnitude(self, wind_magnitude_data, lat_lon_pair, num_days=3):
-        # Extract data for the first num_days in January
-        day_limit = (1, num_days)  # From day 1 to the number of days specified
-        plot_data = {date_time: values for date_time, values in wind_magnitude_data[lat_lon_pair].items()
-                     if 1 <= date_time[1] <= num_days}  # Filter by the first num_days
-        
-        raw_expected_data = pd.read_pickle('wind_mag_dist.pkl')[lat_lon_pair]
-        expected_data = {date_time: values[2] for date_time, values in raw_expected_data.items()
-                     if 1 <= date_time[1] <= num_days}  # Filter by the first num_days
-
-        if not expected_data:
-            print(f"No data available for {num_days} days.")
-            return
-
-        if not plot_data:
-            print(f"No data available for {num_days} days.")
-            return
-        
-        # Create a sorted list of hours and their corresponding values
-        sorted_data = sorted(plot_data.items(), key=lambda x: (x[0][1], x[0][2]))  # Sort by day and hour
-        data_times = [f"{date_time[1]:02}-{date_time[2]:02}" for date_time, _ in sorted_data]  # "day-hour" format
-        magnitudes = [np.mean(values) for _, values in sorted_data]  # Average magnitudes for each hour
-
-        sorted_expected_data = sorted(expected_data.items(), key=lambda x: (x[0][1], x[0][2]))  # Sort by day and hour
-        expected_times = [f"{date_time[1]:02}-{date_time[2]:02}" for date_time, _ in sorted_data]  # "day-hour" format
-        expected_magnitudes = [np.mean(values) for _, values in sorted_expected_data]  # Average magnitudes for each hour
-        
-        # Plot the data
-        plt.figure(figsize=(10, 6))
-        plt.plot(data_times, magnitudes, marker='o', color="r", label = "Average Value")
-        plt.plot(expected_times, expected_magnitudes, marker='o', color="b", label = "Expected Value")
-        plt.title(f'Wind Magnitude for Latitude {lat_lon_pair[0]}, Longitude {lat_lon_pair[1]} over {num_days} Days')
-        plt.xlabel('Time (Day-Hour)')
-        plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True, prune='lower', nbins=24)) 
-        plt.xticks(rotation=45, ha='right')
-        plt.ylabel('Wind Magnitude (m/s)')
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
-
-    def plot_expected_wind(self, lat_lon_pair, num_days=3):
-        # Extract data for the first num_days in January
-        day_limit = (1, num_days)  # From day 1 to the number of days specified
-        raw_expected_data = pd.read_pickle('wind_mag_dist.pkl')[lat_lon_pair]
-        expected_data = {date_time: values[2] for date_time, values in raw_expected_data.items()
-                     if 1 <= date_time[1] <= num_days}  # Filter by the first num_days
-
-        if not expected_data:
-            print(f"No data available for {num_days} days.")
-            return
-        
-        # Create a sorted list of hours and their corresponding values
-        sorted_data = sorted(expected_data.items(), key=lambda x: (x[0][1], x[0][2]))  # Sort by day and hour
-        times = [f"{date_time[1]:02}-{date_time[2]:02}" for date_time, _ in sorted_data]  # "day-hour" format
-        magnitudes = [np.mean(values) for _, values in sorted_data]  # Average magnitudes for each hour
-        
-        # Plot the data
-        plt.figure(figsize=(10, 6))
-        plt.plot(times, magnitudes, marker='o')
-        plt.title(f'Wind Magnitude for Latitude {lat_lon_pair[0]}, Longitude {lat_lon_pair[1]} over {num_days} Days')
-        plt.xlabel('Time (Day-Hour)')
-        plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True, prune='lower', nbins=24)) 
-        plt.xticks(rotation=45, ha='right')
-        plt.ylabel('Wind Magnitude (m/s)')
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
+        return new_df
     
     def process_grib_file(self):
-        u_data, v_data = self.extract_wind_data()
-        wind_magnitude_data = self.calculate_wind_magnitude(u_data, v_data)
-        weibull_params = self.fit_weibull_distributions(wind_magnitude_data)
-        return wind_magnitude_data,weibull_params
+        data_df = self.extract_wind_data()
+        weibull_ev = self.fit_weibull_distributions(data_df)
+        weibull_resampled = self.resample_to_timestep(weibull_ev)
+        return weibull_resampled
 
 if __name__ == "__main__":
     grib_file_path = r'C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\GRIB\January\wind_data.grib'
     processor = WindProcessor(grib_file_path)
-    data = processor.get_wind_magnitude_for_year(2022)
-    data.to_pickle("wind_mag_2022.pkl")
-    # wind_magnitude_data,weibull_params = processor.process_grib_file()
-    # print(weibull_params[(29.50,-85.25)])
-
+    # data = processor.get_wind_magnitude_for_year(2022)
+    # data.to_pickle("wind_mag_2022.pkl")
+    # wind_magnitude_data = processor.process_grib_file()
+    # wind_magnitude_data.to_pickle("wind_ev_data.pkl")
+    test = pd.read_pickle("wind_ev_data.pkl")
     # Example lat-lon pair for plotting
-    lat_lon_pair = (29.50, -85.25)  # Replace with a specific latitude and longitude from your data
+    # lat_lon_pair = (29.50, -85.25)  # Replace with a specific latitude and longitude from your data
     # processor.plot_wind_magnitude(wind_magnitude_data, lat_lon_pair)
     # weibull_params.to_pickle("wind_mag_dist.pkl")
     # df = pd.read_pickle('wind_mag_dist.pkl')

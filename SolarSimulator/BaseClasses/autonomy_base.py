@@ -9,17 +9,15 @@ class Autonomy:
         pass
 
     def simulate_simple_behavior(self,
-                                 solar_power,
-                                 idle_power,
-                                 is_daytime,
-                                 cruise_power,
-                                 battery_capacity,
-                                 landing_threshold,
-                                 takeoff_threshold,
-                                 timestep_minutes,
-                                 min_flight_minutes,
-                                 takeoff_penalty_fn
-                                 ):
+                                 plane,
+                                 soc_increment,
+                                 start_index,
+                                 end_index,
+                                 max_stages,
+                                 initial_state,
+                                 actual_solar_power,
+                                 avail_wind_mag,
+                                 whale_probabilities):
         """
         Simulates simple plane behavior over time with random failures during state transitions.
 
@@ -37,62 +35,58 @@ class Autonomy:
         Returns:
         tuple: duty_cycle, energy_history, state_history, num_takeoffs, failure_occurred
         """
-        state = "Moored"
-        energy_joules = battery_capacity
-        energy_history = []
-        state_history = []
-        num_takeoffs = 0
-        flight_time = 0
-        failure_occurred = False
 
-        for i in range(len(solar_power)):
-            if state == "Flying":
-                # Flying state logic
-                flight_time += timestep_minutes / 60
-                energy_joules += (solar_power.iloc[i][0]*0.15 - cruise_power - idle_power) * timestep_minutes * 60
+        vehicle_states = ["moored", "flying"]
+        actions = ["float", "fly"]
+        reward = 0
 
-                # Transition to Moored state if energy is too low or it's nighttime
-                if energy_joules <= landing_threshold * battery_capacity or not is_daytime[i]:
-                    # Check if the transition to 'moored' fails
-                    # if random.random() > 0.95:  # Failure probability for "flying" -> "moored"
-                    #     failure_occurred = True
-                    #     break  # End simulation on failure
-                    state = "Moored"
 
-            elif state == "Moored":
-                # Moored state logic
-                energy_joules = min(energy_joules + (solar_power.iloc[i][0]*0.15 - idle_power) * timestep_minutes * 60, battery_capacity)
 
-                # Check if conditions for takeoff are met
-                if energy_joules >= takeoff_threshold * battery_capacity and is_daytime[i]:
-                    # Check for flight feasibility based on available energy and flight time
-                    if energy_joules >= cruise_power * 60 * min_flight_minutes:
-                        # Check if the transition to 'flying' fails
-                        # if random.random() > 0.95:  # Failure probability for "moored" -> "flying"
-                        #     failure_occurred = True
-                        #     break  # End simulation on failure
-
-                        # Take off
-                        state = "Flying"
-                        energy_joules -= takeoff_penalty_fn() + (cruise_power - solar_power.iloc[i][0]*0.15) * timestep_minutes * 60
-                        num_takeoffs += 1
-            state_history.append((energy_joules / battery_capacity * 100,state))
-
-        # Handle the failure case by filling remaining steps with -10 for energy and -1 for state
-        if failure_occurred:
-            remaining_steps = len(solar_power) - (i + 1)  # Ensure correct number of remaining steps
-            energy_history.extend([-10] * remaining_steps)
-            state_history.extend([-1] * remaining_steps)
-            state_history.append(-1)
-            print("Failure")
+        mdp_model = mdp(plane,
+                        soc_increment,
+                        vehicle_states,
+                        max_stages,
+                        actions,
+                        start_index=start_index,
+                        end_index=end_index,
+                        whale_prob=whale_probabilities,
+                        dt=60
+                        )
         
+        state_history_list = [initial_state]
+        solar_power_list = [0.0]
 
-        return state_history, solar_power
+        for k in range(len(actual_solar_power)-1):
+            current_state = state_history_list[-1]
+            solar_power = actual_solar_power.iloc[k][0]
+            if mdp_model.is_action_feasible("fly",current_state,k,solar_power) and mdp_model.is_daytime(0,mdp_model.dt,k):
+                best_action = "fly"
+            else :
+                best_action = "float"
+
+            success_prob,failure_prob = mdp_model.calculate_maneuver_probabilities(current_state=current_state,
+                                                                                   action=best_action,
+                                                                                   stage=k)
+            if np.random.uniform(0,1) > failure_prob and not  mdp_model.is_action_feasible(best_action,current_state,k,solar_power) :
+                new_state = mdp_model.calculate_new_state(state=current_state,
+                                        action=best_action,
+                                        stage=k,
+                                        solar_power=solar_power)
+                reward+=mdp_model.R(current_state,best_action,k)
+
+                state_history_list.append(new_state)
+                solar_power_list.append(solar_power)
+            else:
+                break
+
+        return state_history_list,solar_power_list,reward
 
 
     def simulate_mdp_behavior(self,
                               plane,
                               soc_increment,
+                              start_index,
+                              end_index,
                               max_stages,
                               initial_state,
                               actual_solar_power,
@@ -114,9 +108,7 @@ class Autonomy:
         """
         vehicle_states = ["moored", "flying"]
         actions = ["float", "fly"]
-
-        start_index = (1, 2, 0)
-        end_index = (1, 3, 23)
+        reward = 0
 
 
 
@@ -132,6 +124,7 @@ class Autonomy:
                         )
         
         state_history_list = [initial_state]
+        solar_power_list = [0.0]
         # energy_history = [initial_state[0]]
         # state_history = [1 if initial_state[1] == "Flying" else 0]
         mdp_model.value_iteration()
@@ -140,10 +133,18 @@ class Autonomy:
         for k in range(len(actual_solar_power)-1):
             current_state = state_history_list[-1]
             best_action = optimal_policy.loc[current_state,k]
-
-            new_state = mdp_model.calculate_new_state(state=current_state,
-                                                      action=best_action,
-                                                      stage=k,
-                                                      solar_power=actual_solar_power.iloc[k][0])
-            state_history_list.append(new_state)
-        return state_history_list,actual_solar_power
+            solar_power = actual_solar_power.iloc[k][0]
+            success_prob,failure_prob = mdp_model.calculate_maneuver_probabilities(current_state=current_state,
+                                                                                   action=best_action,
+                                                                                   stage=k)
+            if np.random.uniform(0,1) > failure_prob :
+                new_state = mdp_model.calculate_new_state(state=current_state,
+                                                        action=best_action,
+                                                        stage=k,
+                                                        solar_power=solar_power)
+                reward+=mdp_model.R(current_state,best_action,k)
+                state_history_list.append(new_state)
+                solar_power_list.append(solar_power)
+            else :
+                break
+        return state_history_list,solar_power_list,reward

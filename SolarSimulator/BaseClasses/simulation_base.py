@@ -240,66 +240,33 @@ class Simulation:
             If the lengths of `expected_solar_w` and `avail_solar_w` do not match or if an unknown algorithm is specified.
         """
 
-        
-        def daytime(start_time: int, time_step: int, stage: int = 0) -> int:
-            """
-            Determines if the current stage is during the day or night, accounting for simulations
-            that span multiple days.
-
-            Args:
-                start_time (int): The time in minutes from the start of the day (0-1439).
-                                For example, 0 is 12:00 AM, 720 is 12:00 PM, and 1439 is 11:59 PM.
-                time_step (int): The time step duration in minutes. Default is 10 minutes.
-                stage (int): The current stage of the simulation.
-
-            Returns:
-                int: 1 if the stage is during the day (6 AM to 6 PM), otherwise 0.
-            """
-            # Number of minutes in a day
-            minutes_per_day = 24 * 60
-            
-            # Calculate the current time in minutes, accounting for multiple days
-            total_time = start_time + time_step * stage
-            current_time = total_time % minutes_per_day
-            
-            # Convert minutes to determine day (6:00 AM = 360 minutes, 6:00 PM = 1080 minutes)
-            if 360 <= current_time < 1080:
-                return 1
-            else:
-                return 0
-
         # Ensure weight estimate is accurate
         self.plane.calculate_weight()
-
-        # Calculate required parameters
-        P_cruise = self.plane.get_required_power(U, rho)
-        capacity_j = self.plane.voltage * self.plane.capacity * 3600
 
         solar_file = r"Data\DISTRIBUTIONS\2022_solar_data.pkl"
         avail_solar_w = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
 
         wind_file = r"Data\DISTRIBUTIONS\2022_wind_mag.pkl"
         avail_wind_mag = pd.read_pickle(wind_file)[(29.25,  -85.0)].sort_index().loc[start_index:end_index]
-
-        is_daytime = []
-        for i in range(len(avail_solar_w)):
-            # is_daytime.iloc[i] = daytime(0,10,i)
-            is_daytime.append(daytime(0,dt,i))
-        min_flight_hr = 0.5  # Minimum flight time (hours) after takeoff
         
         if algo == "Greedy":
             # Call the simple behavior for the "Greedy" algorithm
+                        
+            soc_increment = 1  # State of Charge increments
+            max_stages = len(avail_solar_w)-1  # Set max stages based on the length of the solar power data
+            start_state = (100, "moored")  # Initial state (100% SoC, moored)
+            whale_probabilities = WhaleSightingProbability().df
             return Autonomy.simulate_simple_behavior(self,
-                                                     solar_power=avail_solar_w,
-                                                     idle_power=10,
-                                                     is_daytime=is_daytime,
-                                                     cruise_power=P_cruise,
-                                                     battery_capacity=capacity_j,
-                                                     landing_threshold=landing_capacity,
-                                                     takeoff_threshold=takeoff_capacity,
-                                                     timestep_minutes=dt,
-                                                     min_flight_minutes=min_flight_hr,
-                                                     takeoff_penalty_fn=self.plane.calc_takeoff_penalty)
+                                                    plane=self.plane,
+                                                    soc_increment=soc_increment,
+                                                    start_index=start_index,
+                                                    end_index=end_index,
+                                                    max_stages=max_stages,
+                                                    initial_state=start_state,
+                                                    actual_solar_power=avail_solar_w,
+                                                    avail_wind_mag=avail_wind_mag,
+                                                    whale_probabilities = whale_probabilities
+                                                    )
         
         elif algo == "MDP":
 
@@ -308,12 +275,12 @@ class Simulation:
             max_stages = len(avail_solar_w)-1  # Set max stages based on the length of the solar power data
             start_state = (100, "moored")  # Initial state (100% SoC, moored)
             whale_probabilities = WhaleSightingProbability().df
-
-            # Call the mdp_behavior function from the Autonomy class
             
             return Autonomy.simulate_mdp_behavior(self,
                                                     plane=self.plane,
                                                     soc_increment=soc_increment,
+                                                    start_index=start_index,
+                                                    end_index=end_index,
                                                     max_stages=max_stages,
                                                     initial_state=start_state,
                                                     actual_solar_power=avail_solar_w,

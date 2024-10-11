@@ -92,7 +92,7 @@ DAYS = 30
 # capacities = np.linspace(1,18,3).tolist()
 # capacities.append(max_cap)
 plt.close()
-capacities = [10,25]
+capacities = [25]
 fig = -1
 duty_cycle = []
 
@@ -106,16 +106,16 @@ time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 filename = f"SimResults_{year}_{month}_{day}-{days}__{time_string}"
 solar_file = r"Data\DISTRIBUTIONS\2022_solar_data.pkl"
 start_index = (1, 2, 0)
-end_index = (1, 3, 23)
+end_index = (1, 10, 23)
 
 for cap in capacities:
     sim.plane.capacity = cap
     print(f"Required Power: {sim.plane.get_required_power(20,1.2)} W")
     label = f"Greedy: {sim.plane.capacity:.2f} Ah"
-    times,P_solar,states = plotting.run_simulation(sim,solar_file,start_index,end_index,U,rho,algo='Greedy')
+    times,states,P_solar = plotting.run_simulation(sim,solar_file,start_index,end_index,U,rho,algo='Greedy')
     fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)
     label = f"MDP: {sim.plane.capacity:.2f} Ah"
-    times,P_solar,states = plotting.run_simulation(sim,solar_file,start_index,end_index,U,rho,algo='MDP')
+    times,states,P_solar = plotting.run_simulation(sim,solar_file,start_index,end_index,U,rho,algo='MDP')
     fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)
 
 plt.tight_layout()

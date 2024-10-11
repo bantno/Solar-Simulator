@@ -183,7 +183,7 @@ def run_simulation(sim: Simulation,
     # Extract the slice of the DataFrame
     # P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
     # P_solar_expected = pd.read_pickle(r"Data\DISTRIBUTIONS\solar_ev.pkl")[(29.25,  -85.0)].loc[start_index:end_index]
-    state_history,solar_power = sim.simulate_deployment(U=U,
+    state_history,solar_power,reward = sim.simulate_deployment(U=U,
                                                        rho=rho,
                                                        takeoff_capacity=1,
                                                        landing_capacity=.05,
@@ -191,13 +191,13 @@ def run_simulation(sim: Simulation,
                                                        end_index=end_index,
                                                        dt=60,
                                                        algo=algo)
-    
+    print(f"Reward {reward} for algorithm {algo}.")
     times = generate_datetimes(start_index, end_index, timestep=60)
     
     return times, state_history, solar_power
 
     
-def plot_simulation(times,P_solar,state_history,filename=-1, fig = -1, label=""):
+def plot_simulation(times,state_history,P_solar,filename=-1, fig = -1, label=""):
     """Plot results of simulation"""
     num_plots = 2
     if fig == -1:
@@ -208,7 +208,7 @@ def plot_simulation(times,P_solar,state_history,filename=-1, fig = -1, label="")
     xlabel = "Dates"
     ylabels = ["Battery Charge [%]", "Power [W]", "State"]
     soc = [s[0] for s in state_history]
-    solar_power = [p[0] for p in P_solar]
+    solar_power = P_solar
     data = [soc,solar_power]
     for i in range(np.min([len(axes),num_plots])):
         plot_data(axes[i],times,data[i],titles[i],xlabel,ylabels[i],label)

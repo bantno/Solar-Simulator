@@ -291,6 +291,7 @@ class Simulation:
             # Call the simple behavior for the "Greedy" algorithm
             return Autonomy.simulate_simple_behavior(self,
                                                      solar_power=avail_solar_w,
+                                                     idle_power=10,
                                                      is_daytime=is_daytime,
                                                      cruise_power=P_cruise,
                                                      battery_capacity=capacity_j,

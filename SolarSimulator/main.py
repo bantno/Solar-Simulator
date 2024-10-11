@@ -109,11 +109,11 @@ start_index = (1, 2, 0)
 end_index = (1, 3, 23)
 
 for cap in capacities:
-    plane.capacity = cap
-    # print(f"Required Power: {plane.get_required_power(20,1.2)} W")
-    # label = f"Greedy: {plane.capacity:.2f} Ah"
-    # times,P_solar,states = plotting.run_simulation(sim,solar_file,U,rho,algo='Greedy')
-    # fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)
+    sim.plane.capacity = cap
+    print(f"Required Power: {plane.get_required_power(20,1.2)} W")
+    label = f"Greedy: {plane.capacity:.2f} Ah"
+    times,P_solar,states = plotting.run_simulation(sim,solar_file,start_index,end_index,U,rho,algo='Greedy')
+    fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)
     label = f"MDP: {plane.capacity:.2f} Ah"
     times,P_solar,states = plotting.run_simulation(sim,solar_file,start_index,end_index,U,rho,algo='MDP')
     fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)

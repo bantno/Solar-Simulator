@@ -7,8 +7,6 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from tqdm import tqdm
 
-from paretoset import paretoset
-
 from BaseClasses.simulation_base import Simulation
 from BaseClasses.seaplane_base import Seaplane
 from Utilities import ParetoFront
@@ -179,7 +177,6 @@ def run_simulation(sim: Simulation,
     plane.update_plane()
     print(plane.capacity)
     # times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
-
     # Extract the slice of the DataFrame
     # P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
     # P_solar_expected = pd.read_pickle(r"Data\DISTRIBUTIONS\solar_ev.pkl")[(29.25,  -85.0)].loc[start_index:end_index]
@@ -193,10 +190,8 @@ def run_simulation(sim: Simulation,
                                                        algo=algo)
     print(f"Reward {reward} for algorithm {algo}.")
     times = generate_datetimes(start_index, end_index, timestep=60)
-    
     return times, state_history, solar_power
 
-    
 def plot_simulation(times,state_history,P_solar,filename=-1, fig = -1, label=""):
     """Plot results of simulation"""
     num_plots = 2
@@ -232,102 +227,6 @@ def plot_data(ax,x_data,y_data, title:str="", xlabel:str="X Data", ylabel:str="Y
     if not label == "":
         ax.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
     ax.grid(True)
-
-def make_pareto(plane: Seaplane,filename:str = "Pareto"):
-    # Define the bounds for each decision variable
-    bounds = [(3, 25), (1, 1)]  # Example bounds for a 2D problem
-
-    # Define the objective functions
-    def objective_functions(x,plane):
-        """
-        Define your objective functions here.
-        For example, for a two-objective problem:
-
-        """
-        days=31
-        f1,num_takeoffs = battery_sweep(plane,x[0],days=days,month=6)
-        # # TODO: Create an objective function that accounts for the riskiness of taking off
-        f2 = num_takeoffs/days
-
-        # f1 = np.sqrt(1+x[0]**2)
-        # f2 = np.sqrt((1-x[0])**4)*1.5
-        return [f1, f2]
-
-    # Create an instance of ParetoFront
-    pareto_front = ParetoFront.Pareto(objective_functions, bounds)
-
-    # Number of samples for Latin Hypercube Sampling
-    n_samples = 250
-
-    # Calculate the Pareto front using LHS
-    samples,pf,non_dominated_points = pareto_front.generate_pareto_front(n_samples,plane)
-
-    # Extract the objective values for plotting
-    pf = np.array(pf)
-    non_dominated_points = np.array(non_dominated_points)
-
-    # Plot the Pareto front
-    # fig, (ax1,ax2) = plt.subplots(1, 2,figsize=(12,6))
-    # ax1.scatter(samples.iloc[:,0],samples.iloc[:,1])
-    # ax1.set_xlabel("Battery Capacity [Ah]")
-    # ax1.set_title("Samples")
-    
-    # ax2.scatter(non_dominated_points[:, 0], non_dominated_points[:, 1], marker='o', color='grey', label='Non-dominated Points')
-    # ax2.scatter(pf[:, 0], pf[:, 1], marker='o', color='b', label='Pareto Front (LHS)')
-    # ax2.set_xlabel('Percentage of Daylight Hours on Water [%]')
-    # ax2.set_ylabel('Takeoffs Per Day')
-    # ax2.set_title('Pareto Front using Latin Hypercube Sampling')
-
-    plt.scatter(non_dominated_points[:, 0], non_dominated_points[:, 1], marker='o', color='grey', label='Non-dominated Points')
-    plt.scatter(pf[:, 0], pf[:, 1], marker='o', color='b', label='Pareto Front (LHS)')
-    plt.xlabel('Percentage of Daylight Hours on Water [%]')
-    plt.ylabel('Takeoffs Per Day')
-    plt.title('Pareto Front using Latin Hypercube Sampling')\
-
-
-        
-
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plot_path = os.path.join("Figures", f"{filename}.png")
-    plt.savefig(plot_path)
-    plt.close()
-
-def make_pareto_classic(plane: Seaplane,bounds,n_samples: int,filename: str = "ParetoFront"):
-    n_w = 5
-    values = np.zeros((n_w, n_samples))
-    samples = np.random.uniform(low=bounds[0], high=bounds[1], size=n_samples)
-    i = 0
-    
-    for  w in tqdm(np.linspace(0,1,n_w)):
-        j = 0
-        for sample in tqdm(samples):
-            f1,f2 = func(sample,plane)
-            F = f1*w+f2*(1-w)
-            values[i,j] = F
-            j+=1
-        plt.scatter(samples,values[i,:], label = f'W = {w}')
-        i+=1
-
-        
-    
-    # Add a legend
-    plt.legend()
-
-    # Add labels and title
-    plt.xlabel('Battery Capacity')
-    plt.ylabel('Objective Function Value (F)')
-    plt.title('F = DutyCycle*w+NumTakeoff*(1-w)')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
-    plt.grid(True)
-
-    # Show the plot
-    plot_path = os.path.join("Figures", f"{filename}.png")
-    plt.savefig(plot_path)
-
-    return values
 
 def func(x,plane):
     """

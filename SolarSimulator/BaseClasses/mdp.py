@@ -299,19 +299,19 @@ class mdp:
 
         # Base probabilities
         if current_state == "moored" and action == "float":
-            base_success_prob, base_failure_prob = 0.99, 0.01  # High success rate for floating
+            base_success_prob, base_failure_prob = 0.9999, 0.0001  # High success rate for floating
         elif current_state == "moored" and action == "fly":
-            base_success_prob, base_failure_prob = 0.90, 0.10  # Higher failure risk for taking off
+            base_success_prob, base_failure_prob = 0.9995, 0.0005  # Higher failure risk for taking off
         elif current_state == "flying" and action == "float":
-            base_success_prob, base_failure_prob = 0.90, 0.10  # Moderate risk for flying to floating
+            base_success_prob, base_failure_prob = 0.9995, 0.0005  # Moderate risk for flying to floating
         elif current_state == "flying" and action == "fly":
-            base_success_prob, base_failure_prob = 0.95, 0.05  # Low failure risk for continuous flying
+            base_success_prob, base_failure_prob = 0.9997, 0.00025  # Low failure risk for continuous flying
         else:
             return 0.0, 1.0  # Default to guaranteed failure
 
         # Wind speed influence
         # Define thresholds for low and high wind speed ranges
-        low_wind_threshold = 10
+        low_wind_threshold = 5
         high_wind_threshold = 20
 
         # Adjust failure probability based on wind speed in a continuous manner
@@ -324,7 +324,7 @@ class mdp:
             wind_factor = (wind_speed - low_wind_threshold) / (high_wind_threshold - low_wind_threshold)
 
         # Adjust the failure probability continuously based on wind_factor
-        failure_prob = base_failure_prob + wind_factor * (0.5 - base_failure_prob)  # Scale up to a max of 50% failure
+        failure_prob = base_failure_prob + wind_factor * (0.1 - base_failure_prob)  # Scale up to a max of 50% failure
         success_prob = 1 - failure_prob  # Success probability is the complement of failure
 
         return success_prob, failure_prob

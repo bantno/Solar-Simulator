@@ -77,6 +77,7 @@ class Autonomy:
                 state_history_list.append(new_state)
                 solar_power_list.append(solar_power)
             else:
+                print("Failure!")
                 break
 
         return state_history_list,solar_power_list,reward
@@ -129,6 +130,7 @@ class Autonomy:
         # state_history = [1 if initial_state[1] == "Flying" else 0]
         mdp_model.value_iteration()
         optimal_policy = mdp_model.policy_table
+        # mdp_model.plot_surfaces_by_state(mdp_model.plane.capacity,len(mdp_model.expected_solar_power))
 
         for k in range(len(actual_solar_power)-1):
             current_state = state_history_list[-1]
@@ -146,5 +148,6 @@ class Autonomy:
                 state_history_list.append(new_state)
                 solar_power_list.append(solar_power)
             else :
+                print("Failure!")
                 break
         return state_history_list,solar_power_list,reward

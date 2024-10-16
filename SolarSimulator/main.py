@@ -106,7 +106,7 @@ time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 filename = f"SimResults_{year}_{month}_{day}-{days}__{time_string}"
 solar_file = r"Data\DISTRIBUTIONS\2022_solar_data.pkl"
 start_index = (1, 2, 0)
-end_index = (1, 15, 23)
+end_index = (1, 10, 23)
 
 for cap in capacities:
     sim.plane.capacity = cap

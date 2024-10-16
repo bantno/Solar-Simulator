@@ -333,8 +333,58 @@ class mdp:
     @staticmethod
     def is_daytime(start_time, time_step, stage):
         """
-        Determine if it's daytime (6 AM to 6 PM) based on the simulation stage.
+        Check if the current simulation stage is within daytime hours (6 AM to 6 PM).
+
+        Args:
+            start_time (int): Start time of the simulation in minutes from midnight (0-1439).
+            time_step (int): Duration of each simulation step in minutes.
+            stage (int): The current stage of the simulation.
+
+        Returns:
+            bool: True if the time falls between 6:00 AM (360) and 6:00 PM (1080), 
+                otherwise False.
         """
         minutes_per_day = 1440
         current_time = (start_time + time_step * stage) % minutes_per_day
         return 360 <= current_time < 1080
+    
+    @staticmethod
+    def calculate_step_transition_prob(period_min, failure_probability, step_length_min):
+        """
+        Calculate the stepwise transition probability for each step within a specified period.
+
+        This method computes the probability of failure for a single step given the total 
+        failure probability over a period and the number of steps within that period. 
+        It ensures that the compounded stepwise failure matches the specified total failure 
+        probability over the entire period.
+
+        Args:
+            period_min (float): The total length of the period in minutes.
+            failure_probability (float): The overall failure probability for the entire period 
+                (value between 0 and 1).
+            step_length_min (float): The length of each step in minutes.
+
+        Returns:
+            float: The stepwise failure probability for each individual step.
+
+        Example:
+            If the total period is 60 minutes with a failure probability of 0.5 and 
+            step length is 15 minutes, this method returns the stepwise probability for 
+            each 15-minute interval.
+
+        Raises:
+            ValueError: If any input is non-positive or the failure_probability is not in [0, 1].
+        """
+        # Validate inputs
+        if period_min <= 0:
+            raise ValueError("Period_min must be a positive number.")
+        if not (0 <= failure_probability <= 1):
+            raise ValueError("Failure_probability must be between 0 and 1, inclusive.")
+        if step_length_min <= 0:
+            raise ValueError("Step_length_min must be a positive number.")
+
+        # Calculate the number of steps and the stepwise failure probability
+        num_steps = np.ceil(period_min / step_length_min)
+        stepwise_failure_probability = failure_probability ** (1 / num_steps)
+
+        return stepwise_failure_probability

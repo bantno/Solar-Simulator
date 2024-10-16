@@ -9,7 +9,6 @@ from tqdm import tqdm
 
 from BaseClasses.simulation_base import Simulation
 from BaseClasses.seaplane_base import Seaplane
-from Utilities import ParetoFront
 
 def day_to_month_day(day_number, year):
     day_number = int(day_number)

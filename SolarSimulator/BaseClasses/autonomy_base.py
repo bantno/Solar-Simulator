@@ -5,8 +5,10 @@ import random
 class Autonomy:
     """Represents the autonomy module for a solar-powered seaplane."""
 
-    def __init__(self):
-        pass
+    def __init__(self,dt,actual_solar_power,whale_probabilities):
+        self.solar_power_actual = actual_solar_power
+        self.whale_prob_table = whale_probabilities
+        self.dt = dt
 
     def simulate_simple_behavior(self,
                                  plane,
@@ -17,7 +19,9 @@ class Autonomy:
                                  initial_state,
                                  actual_solar_power,
                                  avail_wind_mag,
-                                 whale_probabilities):
+                                 whale_probabilities,
+                                 no_fail_prob,
+                                 simulate_failure = False):
         """
         Simulates simple plane behavior over time with random failures during state transitions.
 
@@ -50,7 +54,8 @@ class Autonomy:
                         start_index=start_index,
                         end_index=end_index,
                         whale_prob=whale_probabilities,
-                        dt=60
+                        dt=60,
+                        no_failure_prob=no_fail_prob
                         )
         
         state_history_list = [initial_state]
@@ -59,14 +64,17 @@ class Autonomy:
         for k in range(len(actual_solar_power)-1):
             current_state = state_history_list[-1]
             solar_power = actual_solar_power.iloc[k][0]
-            if mdp_model.is_action_feasible("fly",current_state,k,solar_power) and mdp_model.is_daytime(0,mdp_model.dt,k) :
+            if mdp_model.is_action_feasible("fly",current_state,k,solar_power) and self.R(current_state,"fly",k)>25 and current_state[0] > 30 :
                 best_action = "fly"
             else :
                 best_action = "float"
 
-            success_prob,failure_prob = mdp_model.calculate_maneuver_probabilities(current_state=current_state[1],
-                                                                                   action=best_action,
-                                                                                   stage=k)
+            if simulate_failure:
+                success_prob,failure_prob = mdp_model.calculate_maneuver_probabilities(current_state=current_state[1],
+                                                                                    action=best_action,
+                                                                                    stage=k)
+            else:
+                failure_prob = -1
             if np.random.uniform(0,1) > failure_prob and mdp_model.is_action_feasible(best_action,current_state,k,solar_power) :
                 new_state = mdp_model.calculate_new_state(state=current_state,
                                         action=best_action,
@@ -92,7 +100,9 @@ class Autonomy:
                               initial_state,
                               actual_solar_power,
                               avail_wind_mag,
-                              whale_probabilities):
+                              whale_probabilities,
+                              no_fail_prob,
+                              simulate_failure = False):
         """
         Simulates plane behavior using an MDP to determine the optimal flight policy.
 
@@ -121,33 +131,78 @@ class Autonomy:
                         start_index=start_index,
                         end_index=end_index,
                         whale_prob=whale_probabilities,
-                        dt=60
+                        dt=60,
+                        no_failure_prob=no_fail_prob
                         )
-        
         state_history_list = [initial_state]
         solar_power_list = [0.0]
-        # energy_history = [initial_state[0]]
-        # state_history = [1 if initial_state[1] == "Flying" else 0]
-        mdp_model.value_iteration()
+
+        mdp_model.create_ev_table()
+        # mdp_model.value_iteration()
+        
         optimal_policy = mdp_model.policy_table
-        # mdp_model.plot_surfaces_by_state(mdp_model.plane.capacity,len(mdp_model.expected_solar_power))
 
         for k in range(len(actual_solar_power)-1):
             current_state = state_history_list[-1]
             best_action = optimal_policy.loc[current_state,k]
             solar_power = actual_solar_power.iloc[k][0]
-            success_prob,failure_prob = mdp_model.calculate_maneuver_probabilities(current_state=current_state[1],
-                                                                                   action=best_action,
-                                                                                   stage=k)
-            if np.random.uniform(0,1) > failure_prob :
+
+            if simulate_failure :
+                success_prob,failure_prob = mdp_model.calculate_maneuver_probabilities(current_state=current_state[1],
+                                                                                    action=best_action,
+                                                                                    stage=k)
+            else:
+                failure_prob = -1
+
+            if np.random.uniform(0,1) > failure_prob and mdp_model.is_action_feasible(best_action,current_state,k,solar_power) :
                 new_state = mdp_model.calculate_new_state(state=current_state,
                                                         action=best_action,
                                                         stage=k,
                                                         solar_power=solar_power)
-                reward+=mdp_model.R(current_state,best_action,k)
+                reward+=self.R(current_state,best_action,k)
                 state_history_list.append(new_state)
                 solar_power_list.append(solar_power)
             else :
+                reward = reward-50
                 print("Failure!")
                 break
         return state_history_list,solar_power_list,reward
+    
+
+    def R(self,state,action,stage):
+        """
+        Calculates the reward for performing the given action in the current state at the current stage.
+        Includes stochastic rewards based on the probability of finding whales (time-dependent) and wind speed.
+        
+        Parameters:
+        - state: Current state as a tuple (SoC, vehicle_state)
+        - action: The action being taken ('float', 'fly')
+        - stage: The current stage in the simulation
+        - wind_speed: Expected wind speed at the current stage
+        - whale_prob_table: Table that maps the time of day to the probability of finding whales
+        
+        Returns:
+        - Reward value considering both deterministic and stochastic factors.
+        """
+    
+        minutes = (self.dt * stage) % 1440
+        whale_prob = self.whale_prob_table.loc[minutes // 120]["Sighting Probability"]
+        whale_reward = 0
+
+        # Determine whale sighting probability based on time of day
+        if self.solar_power_actual.iloc[stage][0]>0:
+            # Calculate rewards based on the action
+            if action == 'float':
+                pass
+            elif action == 'fly':
+                # Whale reward based on probability of finding whale during survey, assume 5 for now
+                if np.random.uniform(0,1) < whale_prob:
+                    whale_reward = 100
+        else: # Night time
+            if action == 'float':
+                pass
+            elif action == 'fly':
+                pass
+
+        return whale_reward
+

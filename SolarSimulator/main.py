@@ -52,7 +52,7 @@ plane = Seaplane(
 
 plane_AIAA = plane
 
-sim = Simulation(plane, lat, lon, tz, cs=True)
+
 
 # # Create Pareto Plots
 # plotting.make_pareto_classic(plane,(1,25),250)
@@ -91,8 +91,55 @@ DAYS = 30
 # Run simulation for optimal battery size(s)
 # capacities = np.linspace(1,18,3).tolist()
 # capacities.append(max_cap)
+
+
+# plt.close()
+
+# sim = Simulation(plane, lat, lon, tz, cs=False)
+# capacities = [50]
+# fig = -1
+# duty_cycle = []
+
+# year = 2022
+# month = 1
+# day = 2
+# days = 2
+
+# current_time = datetime.datetime.now()
+# time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+# filename = f"SimResults_{year}_{month}_{day}-{days}__{time_string}"
+# solar_file = r"Data\DISTRIBUTIONS\2022_solar_data.pkl"
+# start_index = (1, 2, 0)
+# end_index = (1, 10, 23)
+
+# for cap in capacities:
+#     sim.plane.capacity = cap
+#     print(f"Required Power: {sim.plane.get_required_power(20,1.2)} W")
+
+#     solar_data_expected,solar_data_actual,wind_data_expected,wind_data_actual = sim.get_weather_data(start_index,end_index)
+    
+#     # Greedy Simulation
+#     times,states,P_solar, reward = sim.run_simulation(solar_file,start_index,end_index,U,rho,algo='Greedy')
+#     label = f"Greedy: {sim.plane.capacity:.2f} Ah, R: {round(reward)}"
+#     fig = plotting.plot_simulation_results(times,states,solar_data_expected,solar_data_actual,filename,fig=fig,label=label)
+
+#     # MDP Simulation
+#     times,states,P_solar, reward = sim.run_simulation(solar_file,start_index,end_index,U,rho,algo='MDP')
+#     label = f"MDP: {sim.plane.capacity:.2f} Ah, R: {round(reward)}"
+#     fig = plotting.plot_simulation_results(times,states,solar_data_expected,solar_data_actual,filename,fig=fig,label=label)
+
+# plt.tight_layout()
+# plot_path = os.path.join("Figures", f"{filename}.png")
+# plt.savefig(plot_path)
+
+
+
+
+
 plt.close()
-capacities = [25]
+
+sim = Simulation(plane, lat, lon, tz, cs=False)
+capacities = [50]
 fig = -1
 duty_cycle = []
 
@@ -106,21 +153,60 @@ time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 filename = f"SimResults_{year}_{month}_{day}-{days}__{time_string}"
 solar_file = r"Data\DISTRIBUTIONS\2022_solar_data.pkl"
 start_index = (1, 2, 0)
-end_index = (1, 10, 23)
+end_index = (1, 30, 23)
 
 for cap in capacities:
     sim.plane.capacity = cap
     print(f"Required Power: {sim.plane.get_required_power(20,1.2)} W")
-    label = f"Greedy: {sim.plane.capacity:.2f} Ah"
-    times,states,P_solar = plotting.run_simulation(sim,solar_file,start_index,end_index,U,rho,algo='Greedy')
-    fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)
-    label = f"MDP: {sim.plane.capacity:.2f} Ah"
-    times,states,P_solar = plotting.run_simulation(sim,solar_file,start_index,end_index,U,rho,algo='MDP')
-    fig = plotting.plot_simulation(times,states,P_solar,filename,fig=fig,label=label)
+
+    solar_data_expected,solar_data_actual,wind_data_expected,wind_data_actual = sim.get_weather_data(start_index,end_index)
+    
+    # # MDP Simulation
+    # success_prob=0.5
+    # times,states,P_solar, reward = sim.run_simulation(solar_file,start_index,end_index,U,rho,algo='MDP',success_prob=success_prob)
+    # label = f"MDP: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward)}"
+    # fig = plotting.plot_simulation_results(times,states,solar_data_expected,solar_data_actual,filename,fig=fig,label=label)
+
+    # MDP Simulation
+    success_prob=1.0
+    times,states,P_solar, reward = sim.run_simulation(solar_file,start_index,end_index,U,rho,algo='MDP',success_prob=success_prob)
+    label = f"MDP: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward)}"
+    fig = plotting.plot_simulation_results(times,states,solar_data_expected,solar_data_actual,filename,fig=fig,label=label)
 
 plt.tight_layout()
 plot_path = os.path.join("Figures", f"{filename}.png")
 plt.savefig(plot_path)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # TODO: Make Function

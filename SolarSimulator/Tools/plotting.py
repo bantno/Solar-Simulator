@@ -146,50 +146,6 @@ def plot_battery_sweep(cap,duty,label = "",filename=-1,fig = -1,title=""):
         plt.show()
     
     return fig
-    
-
-def run_simulation(sim: Simulation,
-                   solar_file,
-                    start_index,
-                   end_index,
-                   U=20,
-                   rho=1.1,
-                   algo="MDP"):
-    
-    """
-    Simulates and plots the duty cycle for the given plane, solar data file, cruise speed, air density, and algorithm.
-    
-    Parameters:
-    -----------
-    plane: Seaplane
-        Seaplane object which is to be simulated
-    year: int
-        Year in which simulation is to start
-    month: int
-        Month in which simulation is to start
-    day: int
-        Day in which simulation is to start
-    days: int
-        Number of days to simulate
-    """
-    plane = sim.plane
-    plane.update_plane()
-    print(plane.capacity)
-    # times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
-    # Extract the slice of the DataFrame
-    # P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
-    # P_solar_expected = pd.read_pickle(r"Data\DISTRIBUTIONS\solar_ev.pkl")[(29.25,  -85.0)].loc[start_index:end_index]
-    state_history,solar_power,reward = sim.simulate_deployment(U=U,
-                                                       rho=rho,
-                                                       takeoff_capacity=1,
-                                                       landing_capacity=.05,
-                                                       start_index=start_index,
-                                                       end_index=end_index,
-                                                       dt=60,
-                                                       algo=algo)
-    print(f"Reward {reward} for algorithm {algo}.")
-    times = generate_datetimes(start_index, end_index, timestep=60)
-    return times, state_history, solar_power
 
 def plot_simulation(times,state_history,P_solar,filename=-1, fig = -1, label=""):
     """Plot results of simulation"""
@@ -198,7 +154,7 @@ def plot_simulation(times,state_history,P_solar,filename=-1, fig = -1, label="")
         fig, axes = plt.subplots(num_plots, 1,figsize=(12,6))
     if isinstance(fig,Figure):
         axes = fig.axes
-    titles = ["Battery Charge Level", "Collected Solar Power", "Vehicle State"]
+    titles = ["Battery Charge Level", "Solar Power", "Vehicle State"]
     xlabel = "Dates"
     ylabels = ["Battery Charge [%]", "Power [W]", "State"]
     soc = [s[0] for s in state_history]
@@ -217,12 +173,45 @@ def plot_simulation(times,state_history,P_solar,filename=-1, fig = -1, label="")
         plt.show()
 
     return fig
+
+def plot_simulation_results(times,state_history,expected_solar_power,actual_solar_power,filename=-1, fig = -1, label=""):
+    """Plot results of simulation"""
+    num_plots = 2
+    if fig == -1:
+        fig, axes = plt.subplots(num_plots, 1,figsize=(12,6))
+    if isinstance(fig,Figure):
+        axes = fig.axes
+    titles = ["Battery Charge Level", "Solar Power", "Vehicle State"]
+    xlabel = "Dates"
+    ylabels = ["Battery Charge [%]", "Power [W/m\u00B2]", "State"]
+    
+    # Plot state of charge
+    soc = [s[0] for s in state_history]
+    plot_data(axes[0],times[0:len(soc)],soc,titles[0],xlabel,ylabels[0],label)
+
+    actual_solar_power = [p[0] for p in actual_solar_power]
+    # Plot solar power
+    axes[1].cla()
+    plot_data(axes[1],times[0:len(expected_solar_power)],expected_solar_power,titles[1],xlabel,ylabels[1],"Expected Solar Power")
+    plot_data(axes[1],times[0:len(actual_solar_power)],actual_solar_power,titles[1],xlabel,ylabels[1],"Actual Solar Power")
+
+    plt.tight_layout() 
+
+    if not filename==-1:
+        plot_path = os.path.join("Figures", f"{filename}.png")
+        plt.savefig(plot_path)
+        
+    else:
+        plt.show()
+
+    return fig
     
 def plot_data(ax,x_data,y_data, title:str="", xlabel:str="X Data", ylabel:str="Y Data",label:str=""):
     ax.plot(x_data,y_data,label=label)
     # ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    ax.set_title(title)
     if not label == "":
         ax.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
     ax.grid(True)

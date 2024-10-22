@@ -105,7 +105,7 @@ class mdp:
         """
 
         prob_success, prob_failure = self.calculate_maneuver_probabilities(state[1], action, stage)
-        survival_reward = prob_success * 0.0 + prob_failure * (-50)
+        survival_reward = prob_success * 0.0 + prob_failure * (-500)
         minutes = (self.start_time + self.dt * stage) % 1440
         whale_prob = self.whale_prob_table.loc[minutes // 120]["Sighting Probability"]
 
@@ -256,11 +256,11 @@ class mdp:
         base_failure_prob = self.stepwise_failure_prob
         # Base probabilities
         if current_state == "moored" and action == "float":
-            state_action_factor = 0.75  # High success rate for floating
+            state_action_factor = 1.0  # High success rate for floating
         elif current_state == "moored" and action == "fly":
-            state_action_factor = 2  # Higher failure risk for taking off
+            state_action_factor = 2.0  # Higher failure risk for taking off
         elif current_state == "flying" and action == "float":
-            state_action_factor = 2  # Moderate risk for flying to floating
+            state_action_factor = 2.0  # Moderate risk for flying to floating
         elif current_state == "flying" and action == "fly":
             state_action_factor = 1.5  # Low failure risk for continuous flying
         else:

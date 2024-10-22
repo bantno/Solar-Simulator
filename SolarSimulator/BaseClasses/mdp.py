@@ -51,7 +51,7 @@ class mdp:
         expected_solar_power = solar_table.loc[start_index:end_index]
 
         # Verify expected solar power length
-        if len(expected_solar_power)-1 != max_stages :
+        if len(expected_solar_power) != max_stages :
             raise ValueError(f"Expected length {max_stages}, but got {len(expected_solar_power)-1}.")
         self.expected_solar_power = expected_solar_power
         self.whale_prob_table = whale_prob
@@ -155,7 +155,7 @@ class mdp:
         """
 
         # print("Creating expected value table...\n")
-        iterator = tqdm(range(self.max_stages-1, -1, -1)) if self.show_progress else range(self.max_stages-1, -1, -1)
+        iterator = tqdm(range(self.max_stages-1, -1, -1),desc="Processing EV") if self.show_progress else range(self.max_stages-1, -1, -1)
         
         for stage in iterator:
             w = self.is_daytime(self.start_time, self.dt, stage)

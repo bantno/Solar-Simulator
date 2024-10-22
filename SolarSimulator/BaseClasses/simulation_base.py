@@ -35,6 +35,7 @@ from pvlib.bifacial.pvfactors import pvfactors_timeseries
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
+from BaseClasses.mdp import mdp
 from BaseClasses.whale_sighting_base import WhaleSightingProbability
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.autonomy_base import Autonomy
@@ -377,13 +378,53 @@ class Simulation:
         """
         self.plane.calculate_weight()
         solar_data, wind_data = self._load_weather_data(start_index, end_index)
-
+        vehicle_states = ["moored", "flying"]
+        actions = ["float", "fly"]
+        mdp_model = mdp(self.plane,
+                        soc_increment=1,
+                        vehicle_states=vehicle_states,
+                        max_stages=len(solar_data),
+                        actions=actions,
+                        start_index=start_index,
+                        end_index=end_index,
+                        whale_prob=WhaleSightingProbability().df,
+                        dt=60,
+                        no_failure_prob=success_prob
+                        )
+        
+        auto = Autonomy(60,solar_data,WhaleSightingProbability().df)
+        mdp_model.show_progress=True
         if algo == "Greedy":
-            return self._simulate_greedy_behavior(solar_data, wind_data, start_index, end_index, success_prob)
+            return self._simulate_greedy_behavior(mdp_model=mdp_model,
+                                                  auto=auto,
+                                                  solar_data=solar_data,
+                                                  wind_data=wind_data
+                                                  )
         elif algo == "MDP":
-            return self._simulate_mdp_behavior(solar_data, wind_data, start_index, end_index, success_prob)
+            mdp_model.create_ev_table()
+            return self._simulate_mdp_behavior(mdp_model=mdp_model,
+                                               auto=auto,
+                                               solar_data=solar_data,
+                                               wind_data=wind_data
+                                               )
         else:
             raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")
+        
+    def _simulate_greedy_behavior(self, mdp_model, auto, solar_data, wind_data):
+        """Simulate the 'Greedy' behavior."""
+        return auto.simulate_simple_behavior(mdp_model,
+                                            initial_state=(100,"moored"),
+                                            actual_solar_power=solar_data,
+                                            avail_wind_mag = wind_data,
+                                            simulate_failure = True)
+
+    def _simulate_mdp_behavior(self, mdp_model, auto, solar_data, wind_data):
+        """Simulate the 'MDP' behavior."""  
+        return auto.simulate_mdp_behavior(mdp_model,
+                                            initial_state=(100,"moored"),
+                                            actual_solar_power=solar_data,
+                                            avail_wind_mag = wind_data,
+                                            simulate_failure = True)
         
     def get_weather_data(self,start_index,end_index):
         """Return expected and actual solar and wind data for given indices."""
@@ -409,31 +450,7 @@ class Simulation:
         wind_data = pd.read_pickle(wind_file)[(29.25, -85.0)].sort_index().loc[start_index:end_index]
         return solar_data, wind_data
 
-    def _simulate_greedy_behavior(self, solar_data, wind_data, start_index, end_index, success_prob):
-        """Simulate the 'Greedy' behavior."""
-        auto = Autonomy(60,solar_data,WhaleSightingProbability().df)
-        
-        return auto.simulate_simple_behavior(
-            self, plane=self.plane, soc_increment=1, start_index=start_index,
-            end_index=end_index, max_stages=len(solar_data) - 1,
-            initial_state=(100, "moored"), actual_solar_power=solar_data,
-            avail_wind_mag=wind_data, whale_probabilities=WhaleSightingProbability().df,
-            no_fail_prob=success_prob,
-            simulate_failure=True
-        )
 
-    def _simulate_mdp_behavior(self, solar_data, wind_data, start_index, end_index, success_prob):
-        """Simulate the 'MDP' behavior."""
-        auto = Autonomy(60,solar_data,WhaleSightingProbability().df)
-        
-        return auto.simulate_mdp_behavior(
-            plane=self.plane, soc_increment=1, start_index=start_index,
-            end_index=end_index, max_stages=len(solar_data) - 1,
-            initial_state=(100, "moored"), actual_solar_power=solar_data,
-            avail_wind_mag=wind_data, whale_probabilities=WhaleSightingProbability().df,
-            no_fail_prob=success_prob,
-            simulate_failure=True
-        )
 
     @staticmethod
     def generate_datetimes(start_index, end_index, timestep):

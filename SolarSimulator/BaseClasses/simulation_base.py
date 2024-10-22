@@ -1,31 +1,9 @@
-# import warnings
-
-# import numpy as np
-# import pandas as pd
-
-# from scipy.stats import weibull_min
-# from scipy.stats import beta as beta_dist
-
-# from BaseClasses.whale_sighting_base import WhaleSightingProbability
-
-# from pvlib import location, tracking, temperature, pvsystem
-# from pvlib.bifacial.pvfactors import pvfactors_timeseries
-
-# import sys
-# import os
-
-# # Add the project root directory to the Python path
-# project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-# sys.path.insert(0, project_root)
-# from BaseClasses.seaplane_base import Seaplane
-# from BaseClasses.autonomy_base import Autonomy
-# from BaseClasses.solar_grib_base import SolarRadiationProcessor
-
 import os
 import sys
 import warnings
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from datetime import datetime, timedelta
 from scipy.stats import weibull_min, beta as beta_dist
 from pvlib import location, tracking, temperature, pvsystem
@@ -130,13 +108,11 @@ class Simulation:
         return wthr.get(param, default) if not cs and wthr is not None else default
     
     def run_simulation(self,
-                   solar_file,
                     start_index,
-                   end_index,
-                   U=20,
-                   rho=1.1,
-                   algo="MDP",
-                   success_prob=0):
+                    end_index,
+                    algo="MDP",
+                    success_prob=0,
+                    runs=1):
     
         """
         Simulates and plots the duty cycle for the given plane, solar data file, cruise speed, air density, and algorithm.
@@ -161,16 +137,21 @@ class Simulation:
         # Extract the slice of the DataFrame
         # P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
         # P_solar_expected = pd.read_pickle(r"Data\DISTRIBUTIONS\solar_ev.pkl")[(29.25,  -85.0)].loc[start_index:end_index]
-        state_history,solar_power,reward = self.simulate_deployment(
-                                                        start_index=start_index,
-                                                        end_index=end_index,
-                                                        dt=60,
-                                                        algo=algo,
-                                                        success_prob=success_prob)
-        print(f"Reward {reward} for algorithm {algo}.")
+        data = self.simulate_deployment(
+                start_index=start_index,
+                end_index=end_index,
+                dt=60,
+                algo=algo,
+                success_prob=success_prob,
+                num_runs=runs)
         times = self.generate_datetimes(start_index, end_index, timestep=60)
-        self.generate_simulation_summary_table(start_index,end_index,total_failure_prob=(1-success_prob),time_step=60)
-        return times, state_history, solar_power, reward
+        if runs == 1:
+            reward = data["Reward"][0]
+            state_history = data["StateHistory"]
+            print(f"Reward {reward} for algorithm {algo}.")
+            
+            self.generate_simulation_summary_table(start_index,end_index,total_failure_prob=(1-success_prob),time_step=60)
+        return times,data
 
     def calculate_collected_energy(self, year, month, day, periods, frequency, cs: bool):
         """
@@ -346,32 +327,7 @@ class Simulation:
         return summary_table
 
 
-    def simulate_deployment(self,start_index, end_index, dt, algo: str, success_prob):
-        """
-        Simulate the vehicle's deployment and determine its duty cycle.
-
-        This method calculates the vehicle's duty cycle based on the specified algorithm
-        ('Greedy' or 'MDP') and the weather data (solar and wind) within the given time frame.
-
-        Parameters:
-        - U (float): The maximum velocity of the vehicle.
-        - rho (float): The air density (kg/m^3) to be used in the simulation.
-        - takeoff_capacity (float): The maximum weight capacity for takeoff (kg).
-        - landing_capacity (float): The maximum weight capacity for landing (kg).
-        - start_index (int): The index in the weather data where the simulation starts.
-        - end_index (int): The index in the weather data where the simulation ends.
-        - dt (float): The time step for the simulation (in seconds).
-        - algo (str): The algorithm to be used for the simulation. Options are "Greedy" or "MDP".
-
-        Returns:
-        - list: A list containing the results of the simulation. The structure of the list 
-        will depend on the chosen algorithm. Each entry typically includes data about 
-        the vehicle's duty cycle during the specified time frame.
-
-        Raises:
-        - ValueError: If the specified algorithm is not recognized. Only 'Greedy' or 'MDP'
-        are accepted.
-        """
+    def simulate_deployment(self,start_index, end_index, dt, algo: str, success_prob, num_runs):
         self.plane.calculate_weight()
         solar_data, wind_data = self._load_weather_data(start_index, end_index)
         vehicle_states = ["moored", "flying"]
@@ -391,18 +347,38 @@ class Simulation:
         auto = Autonomy(60,solar_data,WhaleSightingProbability().df)
         mdp_model.show_progress=True
         if algo == "Greedy":
-            return self._simulate_greedy_behavior(mdp_model=mdp_model,
-                                                  auto=auto,
-                                                  solar_data=solar_data,
-                                                  wind_data=wind_data
-                                                  )
+            data = []
+            for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation"):
+                state_history_list,reward,last_step = self._simulate_greedy_behavior(mdp_model=mdp_model,
+                                                            auto=auto,
+                                                            solar_data=solar_data,
+                                                            wind_data=wind_data
+                                                            )
+                data.append({
+                    "Iteration": i,
+                    "StateHistory": state_history_list,
+                    "Reward": reward,
+                    "LastStep": last_step
+                })
+            df = pd.DataFrame(data)
+            return df
         elif algo == "MDP":
             mdp_model.create_ev_table()
-            return self._simulate_mdp_behavior(mdp_model=mdp_model,
-                                               auto=auto,
-                                               solar_data=solar_data,
-                                               wind_data=wind_data
-                                               )
+            data = []
+            for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation"):
+                state_history_list,reward,last_step = self._simulate_mdp_behavior(mdp_model=mdp_model,
+                                                            auto=auto,
+                                                            solar_data=solar_data,
+                                                            wind_data=wind_data
+                                                            )
+                data.append({
+                    "Iteration": i,
+                    "StateHistory": state_history_list,
+                    "Reward": reward,
+                    "LastStep": last_step
+                })
+            df = pd.DataFrame(data)
+            return df
         else:
             raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")
         

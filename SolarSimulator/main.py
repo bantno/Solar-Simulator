@@ -154,24 +154,26 @@ filename = f"SimResults_{year}_{month}_{day}-{days}__{time_string}"
 solar_file = r"Data\DISTRIBUTIONS\2022_solar_data.pkl"
 start_index = (1, 2, 0)
 end_index = (1, 30, 23)
+solar_data_expected,solar_data_actual,wind_data_expected,wind_data_actual = sim.get_weather_data(start_index,end_index)
+success_prob=0.9
+NUM_RUNS = 1000
 
 for cap in capacities:
     sim.plane.capacity = cap
     print(f"Required Power: {sim.plane.get_required_power(20,1.2)} W")
-
-    solar_data_expected,solar_data_actual,wind_data_expected,wind_data_actual = sim.get_weather_data(start_index,end_index)
-    
-    # # MDP Simulation
-    # success_prob=0.5
-    # times,states,P_solar, reward = sim.run_simulation(solar_file,start_index,end_index,U,rho,algo='MDP',success_prob=success_prob)
-    # label = f"MDP: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward)}"
-    # fig = plotting.plot_simulation_results(times,states,solar_data_expected,solar_data_actual,filename,fig=fig,label=label)
+    # Greedy Simulation
+    success_prob=0.95
+    times,data = sim.run_simulation(start_index,end_index,algo='Greedy',success_prob=success_prob,runs=NUM_RUNS)
+    data.to_pickle("Greedy_Data.pkl")
 
     # MDP Simulation
-    success_prob=1.0
-    times,states,P_solar, reward = sim.run_simulation(solar_file,start_index,end_index,U,rho,algo='MDP',success_prob=success_prob)
-    label = f"MDP: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward)}"
-    fig = plotting.plot_simulation_results(times,states,solar_data_expected,solar_data_actual,filename,fig=fig,label=label)
+    times,data = sim.run_simulation(start_index,end_index,algo='MDP',success_prob=success_prob,runs=NUM_RUNS)
+    data.to_pickle("MDP_Data.pkl")
+
+    # reward = data["Reward"]
+    # state_history = data["StateHistory"]
+    # label = f"MDP: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward)}"
+    # fig = plotting.plot_simulation_results(times,state_history,solar_data_expected,solar_data_actual,filename,fig=fig,label=label)
 
 plt.tight_layout()
 plot_path = os.path.join("Figures", f"{filename}.png")

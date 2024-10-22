@@ -1,5 +1,6 @@
 import numpy as np
 import random
+from tqdm import tqdm
 
 class Autonomy:
     """Represents the autonomy module for a solar-powered seaplane."""
@@ -43,7 +44,7 @@ class Autonomy:
         for k in range(len(actual_solar_power)-1):
             current_state = state_history_list[-1]
             solar_power = actual_solar_power.iloc[k][0]
-            if mdp_model.is_action_feasible("fly",current_state,k,solar_power) and self.R(current_state,"fly",k)>25 and current_state[0] > 30 :
+            if mdp_model.is_action_feasible("fly",current_state,k,solar_power) and self.R(current_state,"fly",k)>25 and current_state[0] > 40 :
                 best_action = "fly"
             else :
                 best_action = "float"
@@ -65,10 +66,10 @@ class Autonomy:
                 solar_power_list.append(solar_power)
             else:
                 reward = reward-500
-                print("Failure!")
+                # tqdm.write("Failure!")
                 break
 
-        return state_history_list,solar_power_list,reward
+        return state_history_list,reward,k
 
 
     def simulate_mdp_behavior(self,
@@ -121,9 +122,9 @@ class Autonomy:
                 solar_power_list.append(solar_power)
             else :
                 reward = reward-500
-                print("Failure!")
+                # tqdm.write("Failure!")
                 break
-        return state_history_list,solar_power_list,reward
+        return state_history_list,reward,k
     
 
     def R(self,state,action,stage):

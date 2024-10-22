@@ -161,10 +161,7 @@ class Simulation:
         # Extract the slice of the DataFrame
         # P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
         # P_solar_expected = pd.read_pickle(r"Data\DISTRIBUTIONS\solar_ev.pkl")[(29.25,  -85.0)].loc[start_index:end_index]
-        state_history,solar_power,reward = self.simulate_deployment(U=U,
-                                                        rho=rho,
-                                                        takeoff_capacity=1,
-                                                        landing_capacity=.05,
+        state_history,solar_power,reward = self.simulate_deployment(
                                                         start_index=start_index,
                                                         end_index=end_index,
                                                         dt=60,
@@ -349,8 +346,7 @@ class Simulation:
         return summary_table
 
 
-    def simulate_deployment(self, U, rho, takeoff_capacity, landing_capacity,
-                            start_index, end_index, dt, algo: str, success_prob):
+    def simulate_deployment(self,start_index, end_index, dt, algo: str, success_prob):
         """
         Simulate the vehicle's deployment and determine its duty cycle.
 
@@ -388,7 +384,7 @@ class Simulation:
                         start_index=start_index,
                         end_index=end_index,
                         whale_prob=WhaleSightingProbability().df,
-                        dt=60,
+                        dt=dt,
                         no_failure_prob=success_prob
                         )
         

@@ -47,15 +47,15 @@ def run_simulation(capacity, success_prob, run_id):
     sim.plane.capacity = capacity
     
     start_index = (1, 2, 0)
-    end_index = (1, 10, 23)
+    end_index = (1, 30, 23)
     solar_file = r"Data\DISTRIBUTIONS\2022_solar_data.pkl"
     
-    _, states, _, reward = sim.run_simulation(solar_file, start_index, end_index, 
+    _, states, _, reward = sim.run_simulation(solar_file, start_index, end_index,
                                          U, rho, algo='MDP', success_prob=success_prob)
     
     return {"RunID": run_id, "Capacity": capacity, "SuccessProb": success_prob, "Reward": reward, "Failure Step": len(states)}
 
-def run_batch(capacity, success_prob, num_runs, batch_size=8):
+def run_batch(capacity, success_prob, num_runs, batch_size=7):
     """Run simulations in batches and write results to disk periodically."""
     results = []  # Store results in memory
 
@@ -73,17 +73,17 @@ def run_batch(capacity, success_prob, num_runs, batch_size=8):
                 results.extend(batch_results)
 
                 # Write to CSV after each batch completes
-                append_to_csv(batch_results, filename="simulation_results.csv")
+                append_to_csv(batch_results, filename=filename)
 
                 # Check for shutdown request
                 if shutdown_flag:
                     print("Shutdown requested. Writing remaining results to disk...")
-                    append_to_csv(results, filename="simulation_results.csv")
+                    append_to_csv(results, filename=filename)
                     return
 
     except KeyboardInterrupt:
         print("KeyboardInterrupt detected. Writing remaining results to disk...")
-        append_to_csv(results, filename="simulation_results.csv")
+        append_to_csv(results, filename=filename)
         return
 
     print("All simulations completed successfully.")
@@ -100,12 +100,12 @@ if __name__ == "__main__":
     # Simulation parameters
     capacity = 50  # Example capacity in Ah
     success_prob = 0.9  # Example success probability
-    num_runs = 16  # Total number of simulations to run
+    num_runs = 50  # Total number of simulations to run
 
-    # Create a timestamped results file
+    # Create a timestamped results file based on capacity and success probability
     current_time = datetime.datetime.now()
     time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"simulation_results_{time_string}.csv"
+    filename = f"simulation_results_capacity{capacity}_success{int(success_prob*100)}_{time_string}.csv"
 
     print(f"Starting {num_runs} simulations with capacity={capacity} Ah and success_prob={success_prob}...")
 

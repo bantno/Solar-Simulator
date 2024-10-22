@@ -344,18 +344,7 @@ class Simulation:
 
         # Create a DataFrame from the dictionary
         summary_table = pd.DataFrame(summary_data)
-
-        # # Apply formatting for a clean presentation (optional)
-        # summary_table = summary_table.style.set_properties(**{
-        #     'text-align': 'left',
-        #     'border': '1px solid black',
-        #     'font-size': '12pt'
-        # }).set_table_styles([{
-        #     'selector': 'th',
-        #     'props': [('font-size', '14pt'), ('text-align', 'left')]
-        # }])
-        print(summary_table)
-        print(WhaleSightingProbability().df)
+        # print(summary_table)
         return summary_table
 
 

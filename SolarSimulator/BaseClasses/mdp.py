@@ -30,7 +30,7 @@ class mdp:
                  wind_mag_filename=r"Data\DISTRIBUTIONS\wind_mag_ev.pkl",
                  expected_solar_power_filename = r"Data\DISTRIBUTIONS\solar_ev.pkl"):
         
-
+        self.show_progress = False
         self.vehicle_states = vehicle_states
         self.plane = plane
         self.soc_increment = soc_increment
@@ -155,7 +155,9 @@ class mdp:
         """
 
         # print("Creating expected value table...\n")
-        for stage in tqdm(range(self.max_stages-1, -1, -1)):
+        iterator = tqdm(range(self.max_stages-1, -1, -1)) if self.show_progress else range(self.max_stages-1, -1, -1)
+        
+        for stage in iterator:
             w = self.is_daytime(self.start_time, self.dt, stage)
             for state in self.states:
                 max_reward = -np.inf
@@ -184,10 +186,10 @@ class mdp:
             columns=range(self.max_stages),
             dtype=object
         )
-
+        iterator = tqdm(range(self.ev_table.shape[1])) if self.show_progress else range(self.ev_table.shape[1])
         for iteration in range(max_iterations):
             delta = 0
-            for stage in tqdm(range(self.ev_table.shape[1])):
+            for stage in iterator:
                 for state in self.states:
                     v = self.ev_table.loc[state, stage]
                     max_reward = -np.inf
@@ -206,7 +208,6 @@ class mdp:
 
             if delta < self.epsilon:
                 print(f"Convergence achieved after {iteration+1} iterations.")
-                print(self.policy_table)
                 break
         else:
             print(f"Value iteration terminated after reaching max iterations ({max_iterations}).")
@@ -273,15 +274,15 @@ class mdp:
 
         # Adjust failure probability based on wind speed in a continuous manner
         if wind_speed <= low_wind_threshold:
-            wind_factor = 0  # No adjustment for low wind (below or equal to threshold)
+            wind_factor = 1  # No adjustment for low wind (below or equal to threshold)
         elif wind_speed >= high_wind_threshold:
-            wind_factor = 1  # Max adjustment for high wind (above or equal to threshold)
+            wind_factor = 1.2  # Max adjustment for high wind (above or equal to threshold)
         else:
             # Linearly scale between the low and high wind thresholds
-            wind_factor = (wind_speed - low_wind_threshold) / (high_wind_threshold - low_wind_threshold)
+            wind_factor = 1+(wind_speed - low_wind_threshold) / (high_wind_threshold - low_wind_threshold)
 
         # Adjust the failure probability continuously based on wind_factor
-        failure_prob = base_failure_prob * wind_factor * (0.2 - base_failure_prob)  # Scale up to a max of 20% failure
+        failure_prob = base_failure_prob * wind_factor  # Scale up to a max of 20% failure
         success_prob = 1 - failure_prob  # Success probability is the complement of failure
 
         return success_prob, failure_prob

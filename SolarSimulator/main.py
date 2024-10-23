@@ -139,7 +139,7 @@ DAYS = 30
 plt.close()
 
 sim = Simulation(plane, lat, lon, tz, cs=False)
-capacities = [50]
+capacities = [25,50,75,100]
 fig = -1
 duty_cycle = []
 
@@ -155,29 +155,32 @@ solar_file = r"Data\DISTRIBUTIONS\2022_solar_data.pkl"
 start_index = (1, 2, 0)
 end_index = (1, 30, 23)
 solar_data_expected,solar_data_actual,wind_data_expected,wind_data_actual = sim.get_weather_data(start_index,end_index)
+
 success_prob=0.9
-NUM_RUNS = 1000
+mdp_probs = [0.5, 0.75, 0.9, 1.0]
+
+NUM_RUNS = 10000
 
 for cap in capacities:
-    sim.plane.capacity = cap
-    print(f"Required Power: {sim.plane.get_required_power(20,1.2)} W")
-    # Greedy Simulation
-    success_prob=0.95
-    times,data = sim.run_simulation(start_index,end_index,algo='Greedy',success_prob=success_prob,runs=NUM_RUNS)
-    data.to_pickle("Greedy_Data.pkl")
+    for mdp_success_prob in mdp_probs:
+        sim.plane.capacity = cap
+        # Greedy Simulation
+        success_prob=0.90
+        times,data = sim.run_simulation(start_index,end_index,algo='Greedy',mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
+        data.to_pickle(f"Greedy_Data_c{cap}_p{mdp_success_prob}.pkl")
 
-    # MDP Simulation
-    times,data = sim.run_simulation(start_index,end_index,algo='MDP',success_prob=success_prob,runs=NUM_RUNS)
-    data.to_pickle("MDP_Data.pkl")
+        # MDP Simulation
+        times,data = sim.run_simulation(start_index,end_index,algo='MDP',mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
+        data.to_pickle(f"MDP_Data_c{cap}_p{mdp_success_prob}.pkl")
 
     # reward = data["Reward"]
     # state_history = data["StateHistory"]
     # label = f"MDP: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward)}"
     # fig = plotting.plot_simulation_results(times,state_history,solar_data_expected,solar_data_actual,filename,fig=fig,label=label)
 
-plt.tight_layout()
-plot_path = os.path.join("Figures", f"{filename}.png")
-plt.savefig(plot_path)
+# plt.tight_layout()
+# plot_path = os.path.join("Figures", f"{filename}.png")
+# plt.savefig(plot_path)
 
 
 

@@ -111,7 +111,8 @@ class Simulation:
                     start_index,
                     end_index,
                     algo="MDP",
-                    success_prob=0,
+                    mdp_success_prob=0,
+                    true_success_prob=0,
                     runs=1):
     
         """
@@ -133,16 +134,14 @@ class Simulation:
         plane = self.plane
         plane.update_plane()
         print(f"Capacity in Ah: {plane.capacity}")
-        # times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
-        # Extract the slice of the DataFrame
-        # P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
-        # P_solar_expected = pd.read_pickle(r"Data\DISTRIBUTIONS\solar_ev.pkl")[(29.25,  -85.0)].loc[start_index:end_index]
+        print(f"Required Power: {plane.get_required_power(20,1.2)} W")
         data = self.simulate_deployment(
                 start_index=start_index,
                 end_index=end_index,
                 dt=60,
                 algo=algo,
-                success_prob=success_prob,
+                mdp_success_prob=mdp_success_prob,
+                true_success_prob=true_success_prob,
                 num_runs=runs)
         times = self.generate_datetimes(start_index, end_index, timestep=60)
         if runs == 1:
@@ -150,7 +149,7 @@ class Simulation:
             state_history = data["StateHistory"]
             print(f"Reward {reward} for algorithm {algo}.")
             
-            self.generate_simulation_summary_table(start_index,end_index,total_failure_prob=(1-success_prob),time_step=60)
+            self.generate_simulation_summary_table(start_index,end_index,total_failure_prob=(1-mdp_success_prob),time_step=60)
         return times,data
 
     def calculate_collected_energy(self, year, month, day, periods, frequency, cs: bool):
@@ -327,7 +326,7 @@ class Simulation:
         return summary_table
 
 
-    def simulate_deployment(self,start_index, end_index, dt, algo: str, success_prob, num_runs):
+    def simulate_deployment(self,start_index, end_index, dt, algo: str, mdp_success_prob, true_success_prob, num_runs):
         self.plane.calculate_weight()
         solar_data, wind_data = self._load_weather_data(start_index, end_index)
         vehicle_states = ["moored", "flying"]
@@ -341,7 +340,7 @@ class Simulation:
                         end_index=end_index,
                         whale_prob=WhaleSightingProbability().df,
                         dt=dt,
-                        no_failure_prob=success_prob
+                        no_failure_prob=mdp_success_prob
                         )
         
         auto = Autonomy(60,solar_data,WhaleSightingProbability().df)
@@ -351,6 +350,7 @@ class Simulation:
             for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation"):
                 state_history_list,reward,last_step = self._simulate_greedy_behavior(mdp_model=mdp_model,
                                                             auto=auto,
+                                                            true_success_prob=true_success_prob,
                                                             solar_data=solar_data,
                                                             wind_data=wind_data
                                                             )
@@ -368,6 +368,7 @@ class Simulation:
             for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation"):
                 state_history_list,reward,last_step = self._simulate_mdp_behavior(mdp_model=mdp_model,
                                                             auto=auto,
+                                                            true_success_prob=true_success_prob,
                                                             solar_data=solar_data,
                                                             wind_data=wind_data
                                                             )
@@ -382,20 +383,22 @@ class Simulation:
         else:
             raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")
         
-    def _simulate_greedy_behavior(self, mdp_model, auto, solar_data, wind_data):
+    def _simulate_greedy_behavior(self, mdp_model, auto, true_success_prob, solar_data, wind_data):
         """Simulate the 'Greedy' behavior."""
         return auto.simulate_simple_behavior(mdp_model,
                                             initial_state=(100,"moored"),
                                             actual_solar_power=solar_data,
                                             avail_wind_mag = wind_data,
+                                            true_success_prob = true_success_prob,
                                             simulate_failure = True)
 
-    def _simulate_mdp_behavior(self, mdp_model, auto, solar_data, wind_data):
+    def _simulate_mdp_behavior(self, mdp_model, auto, true_success_prob, solar_data, wind_data):
         """Simulate the 'MDP' behavior."""  
         return auto.simulate_mdp_behavior(mdp_model,
                                             initial_state=(100,"moored"),
                                             actual_solar_power=solar_data,
                                             avail_wind_mag = wind_data,
+                                            true_success_prob = true_success_prob,
                                             simulate_failure = True)
         
     def get_weather_data(self,start_index,end_index):

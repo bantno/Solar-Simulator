@@ -139,43 +139,54 @@ DAYS = 30
 plt.close()
 
 sim = Simulation(plane, lat, lon, tz, cs=False)
-capacities = [25,50,75,100]
 fig = -1
 duty_cycle = []
 
-year = 2022
-month = 1
-day = 2
-days = 2
-
 current_time = datetime.datetime.now()
 time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
-filename = f"SimResults_{year}_{month}_{day}-{days}__{time_string}"
+
 solar_file = r"Data\DISTRIBUTIONS\2022_solar_data.pkl"
 start_index = (1, 2, 0)
 end_index = (1, 30, 23)
+
+filename = f"SimResults_{2022}_{start_index[0]}_{start_index[1]}-{end_index[1]-start_index[1]}__{time_string}"
 solar_data_expected,solar_data_actual,wind_data_expected,wind_data_actual = sim.get_weather_data(start_index,end_index)
 
+
+capacities = [10,20,30,40,50,60,70,80,90,100]
+mdp_probs = [0.5,0.9,1.0]
 success_prob=0.9
-mdp_probs = [0.5, 0.75, 0.9, 1.0]
 
 NUM_RUNS = 10000
 
-for cap in capacities:
-    for mdp_success_prob in mdp_probs:
-        sim.plane.capacity = cap
-        # Greedy Simulation
-        success_prob=0.90
-        times,data = sim.run_simulation(start_index,end_index,algo='Greedy',mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
-        data.to_pickle(f"Greedy_Data_c{cap}_p{mdp_success_prob}.pkl")
-
+for cap in tqdm(capacities, desc="Processing capacities"):
+    sim.plane.capacity = cap
+    # Greedy Simulation
+    algo='Greedy'
+    times,data = sim.run_simulation(start_index,end_index,algo=algo,mdp_success_prob=0.9,true_success_prob=success_prob,runs=NUM_RUNS)
+    data.to_pickle(f"Greedy_Data_c{cap}_p{0.9}.pkl")
+    
+    # reward = data["Reward"]
+    # state_history = data["StateHistory"]
+    # times = sim.generate_datetimes(start_index,end_index,timestep=60)
+    # label = f"{algo}: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward[0])}"
+    # fig = plotting.plot_simulation_results(times,state_history,solar_data_expected,solar_data_actual,filename,fig=fig,label=label)
+    for mdp_success_prob in tqdm(mdp_probs, desc=f"Processing probabilities for cap={cap}", leave=False):
         # MDP Simulation
-        times,data = sim.run_simulation(start_index,end_index,algo='MDP',mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
+        algo='MDP'
+        times,data = sim.run_simulation(start_index,end_index,algo=algo,mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
         data.to_pickle(f"MDP_Data_c{cap}_p{mdp_success_prob}.pkl")
+        
+        # reward = data["Reward"]
+        # state_history = data["StateHistory"]
+        # times = sim.generate_datetimes(start_index,end_index,timestep=60)
+        # label = f"{algo}: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward[0])}"
+        # fig = plotting.plot_simulation_results(times,state_history,solar_data_expected,solar_data_actual,filename,fig=fig,label=label)
 
     # reward = data["Reward"]
     # state_history = data["StateHistory"]
-    # label = f"MDP: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward)}"
+    # times = sim.generate_datetimes(start_index,end_index,timestep=60)
+    # label = f"{algo}: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward[0])}"
     # fig = plotting.plot_simulation_results(times,state_history,solar_data_expected,solar_data_actual,filename,fig=fig,label=label)
 
 # plt.tight_layout()

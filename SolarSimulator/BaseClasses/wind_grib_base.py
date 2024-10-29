@@ -32,7 +32,7 @@ class WindProcessor:
         # Loop through all messages in the GRIB file
         for grb in tqdm(grbs.select()):
             # Extract U component of wind
-            if grb.parameterName == '10 metre U wind component' and grb.validDate.month == 1:
+            if grb.parameterName == '10 metre U wind component':
                 lats, lons = grb.latlons()
                 values_u = grb.values
                 
@@ -54,7 +54,7 @@ class WindProcessor:
                         u_data[key] = u_component
 
             # Extract V component of wind
-            elif grb.parameterName == '10 metre V wind component' and grb.validDate.month == 1:
+            elif grb.parameterName == '10 metre V wind component':
                 lats, lons = grb.latlons()
                 values_v = grb.values
                 

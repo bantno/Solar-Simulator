@@ -158,18 +158,19 @@ class mdp:
         iterator = tqdm(range(self.max_stages-1, -1, -1),desc="Processing EV") if self.show_progress else range(self.max_stages-1, -1, -1)
         
         for stage in iterator:
-            w = self.is_daytime(self.start_time, self.dt, stage)
             for state in self.states:
-                max_reward = -np.inf
-                best_action = None
+                best_action = None # TODO: check this
+                i=0
+                reward_list = [-10000,-10000]
                 for action in self.actions:
                     if self.is_action_feasible(action, state, stage, self.expected_solar_power.iloc[stage].values[0]):
                         reward = self.R(state, action, stage)
                         future_reward = self.get_future_reward(state, action, stage)
                         total_reward = reward + self.gamma * future_reward
-                        if total_reward > max_reward:
-                            max_reward = total_reward
-                            best_action = action
+                        reward_list[i] = total_reward
+                    i+=1
+                max_reward = np.max(reward_list)
+                best_action = self.actions[np.argmax(reward_list)]
                 self.ev_table.loc[state, stage] = max_reward
                 self.policy_table.loc[state, stage] = best_action
         # print("Done!")
@@ -242,8 +243,8 @@ class mdp:
         else :
             raise ValueError(f"Expected action 'float' or 'fly'. Got {action}.")
 
-        avionics_power = 8
-        net_power = solar_power*panel_efficiency - required_power - avionics_power
+        avionics_power = self.plane.idle_power
+        net_power = solar_power*panel_efficiency*self.plane.S - required_power - avionics_power
         energy_change = net_power * dt * 60  # Convert power (W) to energy (Joules)
         soc_change = energy_change / (plane.voltage * plane.capacity * 3600) * 100
         return self.soc_increment * round(soc_change / self.soc_increment)

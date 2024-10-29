@@ -347,7 +347,7 @@ class Simulation:
         mdp_model.show_progress=True
         if algo == "Greedy":
             data = []
-            for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation"):
+            for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation",leave=False):
                 state_history_list,reward,last_step = self._simulate_greedy_behavior(mdp_model=mdp_model,
                                                             auto=auto,
                                                             true_success_prob=true_success_prob,

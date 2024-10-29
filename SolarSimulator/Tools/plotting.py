@@ -186,14 +186,14 @@ def plot_simulation_results(times,state_history,expected_solar_power,actual_sola
     ylabels = ["Battery Charge [%]", "Power [W/m\u00B2]", "State"]
     
     # Plot state of charge
-    soc = [s[0] for s in state_history]
+    soc = [s[0] for s in state_history[0]]
     plot_data(axes[0],times[0:len(soc)],soc,titles[0],xlabel,ylabels[0],label)
 
     actual_solar_power = [p[0] for p in actual_solar_power]
     # Plot solar power
     axes[1].cla()
-    plot_data(axes[1],times[0:len(expected_solar_power)],expected_solar_power,titles[1],xlabel,ylabels[1],"Expected Solar Power")
-    plot_data(axes[1],times[0:len(actual_solar_power)],actual_solar_power,titles[1],xlabel,ylabels[1],"Actual Solar Power")
+    plot_data(axes[1],times[0:len(soc)],expected_solar_power[0:len(soc)],titles[1],xlabel,ylabels[1],"Expected Solar Power")
+    plot_data(axes[1],times[0:len(soc)],actual_solar_power[0:len(soc)],titles[1],xlabel,ylabels[1],"Actual Solar Power")
 
     plt.tight_layout() 
 

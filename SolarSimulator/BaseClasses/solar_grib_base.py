@@ -20,7 +20,7 @@ class SolarRadiationProcessor:
 
         # Loop through all messages in the GRIB file
         for grb in tqdm(grbs.select()):
-            if grb.parameterName == 'Surface solar radiation downwards' and grb.validDate.month == 1:
+            if grb.parameterName == 'Surface solar radiation downwards' :
                 lats, lons = grb.latlons()
                 values = grb.values
                 
@@ -131,16 +131,16 @@ class SolarRadiationProcessor:
         beta_fitted_df = self.fit_beta_distributions(normalized_df)  # Fit beta distributions to the data
 
         # Resample to 15-minute intervals
-        solar_ev_resampled = self.resample_to_timestep(beta_fitted_df)
-        return solar_ev_resampled
+        # solar_ev_resampled = self.resample_to_timestep(beta_fitted_df)
+        return beta_fitted_df
 
 if __name__ == "__main__":
-    # grib_file_path = r'C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\GRIB\January\solar_radiation.grib'
-    # processor = SolarRadiationProcessor(grib_file_path)
+    grib_file_path = r'C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\janfeb.grib'
+    processor = SolarRadiationProcessor(grib_file_path)
 
-    # # Process and resample
-    # solar_ev_resampled = processor.process_grib_file()
-    # solar_ev_resampled.to_pickle("solar_ev_resampled.pkl")
+    # Process and resample
+    solar_ev_resampled = processor.process_grib_file()
+    solar_ev_resampled.to_pickle("solar_ev.pkl")
     # test = pd.read_pickle(r"solar_ev_resampled.pkl")
 
     print("Done!")

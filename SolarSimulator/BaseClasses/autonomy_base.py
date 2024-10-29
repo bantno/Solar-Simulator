@@ -20,19 +20,31 @@ class Autonomy:
 
         reward = 0
         max_stages = len(actual_solar_power)-1
+
         self.stepwise_failure_prob = self.calculate_step_transition_prob(self.dt*max_stages,true_success_prob,self.dt)
         self.wind_speed_table = avail_wind_mag
         
+        night_hours = 12
+        nightly_idle_soc = np.ceil((mdp_model.plane.idle_power*night_hours*3600)/(mdp_model.plane.capacity*mdp_model.plane.voltage*3600)*100)
+        single_flight_soc = np.ceil(mdp_model.plane.get_required_power(20,1.2)*self.dt*60/(mdp_model.plane.capacity*mdp_model.plane.voltage*3600)*100)
+
+        # print(f"Nightly Energy Usage: {nightly_idle_soc}")
+        battery_capacity_J = mdp_model.plane.capacity*mdp_model.plane.voltage*3600
         state_history_list = [initial_state]
+        energy_history_list = [initial_state[0]/100*battery_capacity_J]
         solar_power_list = [0.0]
 
         for k in range(max_stages):
             current_state = state_history_list[-1]
+            current_energy = energy_history_list[-1]
             solar_power_wpm2 = actual_solar_power.iloc[k][0]
+            minutes = (self.dt * k) % 1440
+            whale_prob = self.whale_prob_table.loc[minutes // 120]["Sighting Probability"]
+            # print(whale_prob)
 
             is_flying_feasible = mdp_model.is_action_feasible("fly",current_state,k,solar_power_wpm2)
-            is_reward_sufficient = self.R(current_state,"fly",k)>0 # TODO: figure out smart way to set reward threshold
-            is_battery_sufficient = current_state[0] > 60 # TODO: Create better way to determine this
+            is_reward_sufficient = whale_prob>0.1 and solar_power_wpm2>0
+            is_battery_sufficient = current_state[0] > nightly_idle_soc*2 + single_flight_soc # TODO: Create better way to determine this
 
             if is_flying_feasible and is_reward_sufficient and is_battery_sufficient:
                 best_action = "fly"
@@ -40,7 +52,7 @@ class Autonomy:
                 best_action = "float"
 
             if simulate_failure:
-                _,failure_prob = mdp_model.calculate_maneuver_probabilities(current_state=current_state[1],
+                _,failure_prob = self.calculate_maneuver_probabilities(current_state=current_state[1],
                                                                                     action=best_action,
                                                                                     stage=k)
             else:
@@ -50,17 +62,14 @@ class Autonomy:
             is_action_feasible = mdp_model.is_action_feasible(best_action,current_state,k,solar_power_wpm2)
             
             if is_action_successful and is_action_feasible :
-                new_state = mdp_model.calculate_new_state(state=current_state,
-                                        action=best_action,
-                                        stage=k,
-                                        solar_power=solar_power_wpm2)
+                new_energy = current_energy + self.calculate_energy_update(mdp_model.plane,best_action,self.dt,solar_power_wpm2)
+                new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
                 reward+=self.R(current_state,best_action,k)
-
                 state_history_list.append(new_state)
+                energy_history_list.append(new_energy)
                 solar_power_list.append(solar_power_wpm2)
             else:
                 reward = reward-5
-                # tqdm.write("Failure!")
                 break
 
         return state_history_list,reward,k
@@ -74,8 +83,9 @@ class Autonomy:
                               true_success_prob,
                               simulate_failure = False):
 
-
+        battery_capacity_J = mdp_model.plane.capacity*mdp_model.plane.voltage*3600
         state_history_list = [initial_state]
+        energy_history_list = [initial_state[0]/100*battery_capacity_J]
         solar_power_list = [0.0]
         reward = 0
         max_stages = len(actual_solar_power)-1
@@ -85,6 +95,7 @@ class Autonomy:
 
         for k in range(max_stages):
             current_state = state_history_list[-1]
+            current_energy = energy_history_list[-1]
             best_action = optimal_policy.loc[current_state,k]
             solar_power = actual_solar_power.iloc[k][0]
 
@@ -96,12 +107,11 @@ class Autonomy:
                 failure_prob = -1
 
             if np.random.uniform(0,1) > failure_prob and mdp_model.is_action_feasible(best_action,current_state,k,solar_power) :
-                new_state = mdp_model.calculate_new_state(state=current_state,
-                                                        action=best_action,
-                                                        stage=k,
-                                                        solar_power=solar_power)
+                new_energy = current_energy + self.calculate_energy_update(mdp_model.plane,best_action,self.dt,solar_power)
+                new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
                 reward+=self.R(current_state,best_action,k)
                 state_history_list.append(new_state)
+                energy_history_list.append(new_energy)
                 solar_power_list.append(solar_power)
             else :
                 reward = reward-5
@@ -147,6 +157,16 @@ class Autonomy:
 
         return whale_reward
     
+    def calculate_new_state(self,best_action,energy,max_capacity):
+        if best_action == "float":
+            state = "moored"
+        elif best_action=="fly":
+            state = "flying"
+        soc = min(round(energy/max_capacity*100),100)
+        soc= max(0,soc)
+        return (soc,state)
+
+
     def calculate_maneuver_probabilities(self,current_state,action,stage):
         """
         Calculate the success and failure probabilities for the given maneuver, adjusting continuously based on wind speed.
@@ -226,4 +246,21 @@ class Autonomy:
         stepwise_failure_probability = 1 - (no_failure_probability ** (1 / num_steps))
         # print(stepwise_failure_probability)
         return stepwise_failure_probability
+    
+    def calculate_energy_update(self, plane, action, dt, solar_power):
+        """
+        Calculates the change in SoC after performing the given action.
+        """
+        panel_efficiency = 0.15 # TODO: use PVWATTS FOR THIS
+        if action == "float":
+            required_power = 0
+        elif action == "fly":
+            required_power = plane.get_required_power(20, 1.2)  # Assumed constants for flight
+        else :
+            raise ValueError(f"Expected action 'float' or 'fly'. Got {action}.")
+
+        avionics_power = plane.idle_power
+        net_power = solar_power*panel_efficiency*plane.S - required_power - avionics_power
+        energy_change = net_power * dt * 60  # Convert power (W) to energy (Joules)
+        return energy_change
 

@@ -91,14 +91,14 @@ class PickleDataProcessor:
         plt.title("Mean Reward vs Capacity for All Algorithms and Probabilities")
         plt.xlabel("Capacity")
         plt.ylabel("Mean Reward")
-        plt.legend(title="Algorithm (Probability)", bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.legend(title="Algorithm (Probability)", loc='best')
         plt.grid(True)
         plt.tight_layout()  # Adjust layout to prevent overlap
         plt.show()
 
 # Example usage
 if __name__ == "__main__":
-    processor = PickleDataProcessor(directory=".")  # Use "." for the current directory
+    processor = PickleDataProcessor(directory=r"Results\11-3\Jan2-Jun2-1000")  # Use "." for the current directory
     processor.process_files()
 
     results_df = processor.get_results_df()

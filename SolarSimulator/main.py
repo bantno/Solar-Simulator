@@ -64,8 +64,8 @@ actual_data, expected_data = sim.get_weather_data(start_date,end_date)
 
 
 # capacities = [5,10,20,30,40,50,60,70,80,90,100]
-capacities = [10,55,70,100]
-mdp_probs = [0.5,0.9,1.0]
+capacities = [25,35,45,65,75,85,95]
+mdp_probs = [0.9]
 success_prob=0.9
 visualize = False
 

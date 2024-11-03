@@ -71,7 +71,7 @@ class Autonomy:
                 reward = reward-5
                 break
 
-        return state_history_list,reward,k
+        return state_history_list,solar_power_list,reward,k
 
 
     def simulate_mdp_behavior(self,
@@ -113,7 +113,7 @@ class Autonomy:
                 reward = reward-5
                 # tqdm.write("Failure!")
                 break
-        return state_history_list,reward,k
+        return state_history_list,solar_power_list,reward,k
     
 
     def R(self,state,action,stage):

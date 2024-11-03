@@ -187,12 +187,11 @@ class Simulation:
         if algo == "Greedy":
             data = []
             for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation",leave=False):
-                state_history_list,reward,last_step = self._simulate_greedy_behavior(mdp_model=mdp_model,
-                                                            auto=auto,
-                                                            true_success_prob=true_success_prob)
+                state_history_list,solar_list,reward,last_step = self._simulate_greedy_behavior(auto=auto,true_success_prob=true_success_prob)
                 data.append({
                     "Iteration": i,
                     "StateHistory": state_history_list,
+                    "SolarHistory": solar_list,
                     "Reward": reward,
                     "LastStep": last_step
                 })
@@ -202,13 +201,11 @@ class Simulation:
             mdp_model.create_ev_table()
             data = []
             for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation"):
-                state_history_list,reward,last_step = self._simulate_mdp_behavior(mdp_model=mdp_model,
-                                                            auto=auto,
-                                                            true_success_prob=true_success_prob
-                                                            )
+                state_history_list,solar_list,reward,last_step = self._simulate_mdp_behavior(auto=auto,true_success_prob=true_success_prob)
                 data.append({
                     "Iteration": i,
                     "StateHistory": state_history_list,
+                    "SolarHistory":solar_list,
                     "Reward": reward,
                     "LastStep": last_step
                 })
@@ -217,13 +214,13 @@ class Simulation:
         else:
             raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")
         
-    def _simulate_greedy_behavior(self, mdp_model, auto, true_success_prob):
+    def _simulate_greedy_behavior(self, auto, true_success_prob):
         """Simulate the 'Greedy' behavior."""
         return auto.simulate_simple_behavior(initial_state=(100,"moored"),
                                             true_success_prob = true_success_prob,
                                             simulate_failure = True)
 
-    def _simulate_mdp_behavior(self, mdp_model, auto, true_success_prob):
+    def _simulate_mdp_behavior(self, auto, true_success_prob):
         """Simulate the 'MDP' behavior."""  
         return auto.simulate_mdp_behavior(initial_state=(100,"moored"),
                                             true_success_prob = true_success_prob,

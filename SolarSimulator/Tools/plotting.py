@@ -174,34 +174,37 @@ def plot_simulation(times,state_history,P_solar,filename=-1, fig = -1, label="")
 
     return fig
 
-def plot_simulation_results(times,state_history,expected_solar, actual_solar,filename=-1, fig = -1, label=""):
+def plot_simulation_results(times, state_history, expected_solar, actual_solar, filename=-1, fig=-1, label=""):
     """Plot results of simulation"""
     num_plots = 2
     if fig == -1:
-        fig, axes = plt.subplots(num_plots, 1,figsize=(12,6))
-    if isinstance(fig,Figure):
+        fig, axes = plt.subplots(num_plots, 1, figsize=(12, 6))
+    if isinstance(fig, Figure):
         axes = fig.axes
-    titles = ["Battery Charge Level", "Solar Power", "Vehicle State"]
+    titles = ["Battery Charge Level", "Solar Power"]
     xlabel = "Dates"
-    ylabels = ["Battery Charge [%]", "Power [W/m\u00B2]", "State"]
-    
+    ylabels = ["Battery Charge [%]", "Power [W/m\u00B2]"]
+
+    # Ensure all data series are aligned by trimming to the shortest length
+    min_length = min(len(times), len(state_history), len(expected_solar), len(actual_solar))
+    times = times[:min_length]
+    soc = [s[0] for s in state_history[:min_length]]  # Correct indexing to avoid extra dimension
+    expected_solar = expected_solar[:min_length]
+    actual_solar = actual_solar[:min_length]
+
+    # Debugging output to check data lengths
+    print(f"Data lengths after trimming: times={len(times)}, soc={len(soc)}, expected_solar={len(expected_solar)}, actual_solar={len(actual_solar)}")
+
     # Plot state of charge
-    soc = [s[0] for s in state_history[0]]
-    data = [soc,expected_solar,actual_solar]
-    
-    plot_data(axes[0],times[0:len(data[0])],data[0],titles[0],xlabel,ylabels[0],label)
-    axes[1].cla()
-    plot_data(axes[1],times,data[1][0:len(times)],titles[1],xlabel,ylabels[1],label="Expected Solar Power")
-    plot_data(axes[1],times,data[2][0:len(times)],titles[1],xlabel,ylabels[1],label="Actual Solar Power")
+    plot_data(axes[0], times[:len(soc)], soc, titles[0], xlabel, ylabels[0], label)
+    plot_data(axes[1], times[:len(actual_solar)], expected_solar, titles[1], xlabel, ylabels[1], label="Expected Solar Power")
+    plot_data(axes[1], times[:len(actual_solar)], actual_solar, titles[1], xlabel, ylabels[1], label="Actual Solar Power")
 
-    
+    plt.tight_layout()
 
-    plt.tight_layout() 
-
-    if not filename==-1:
+    if filename != -1:
         plot_path = os.path.join("Figures", f"{filename}.png")
         plt.savefig(plot_path)
-        
     else:
         plt.show()
 

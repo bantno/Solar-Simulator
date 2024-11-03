@@ -98,7 +98,8 @@ class PickleDataProcessor:
 
 # Example usage
 if __name__ == "__main__":
-    processor = PickleDataProcessor(directory=r"Results\11-3\Jan2-Jun2-1000")  # Use "." for the current directory
+    # processor = PickleDataProcessor(directory=r"Results\11-3\Jan2-Jun2-1000")  # Use "." for the current directory
+    processor = PickleDataProcessor(directory=r".")  # Use "." for the current directory
     processor.process_files()
 
     results_df = processor.get_results_df()

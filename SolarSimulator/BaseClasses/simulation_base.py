@@ -17,7 +17,6 @@ from BaseClasses.mdp import mdp
 from BaseClasses.whale_sighting_base import WhaleSightingProbability
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.autonomy_base import Autonomy
-from BaseClasses.solar_grib_base import SolarRadiationProcessor
 
 
 
@@ -79,37 +78,11 @@ class Simulation:
         self.lon = lon
         self.tz = tz
         self.cs = cs
-        self.location = self.set_location(lat, lon, tz)
+        self.whale_table = WhaleSightingProbability().df
 
-    def set_location(self, latitude: float, longitude: float, timezone: str) -> location.Location:
-        """Set the simulation's location using latitude, longitude, and timezone."""
-        return location.Location(latitude, longitude, tz=timezone)
-
-    def generate_datetime_index(self, years, months, days, hours, minutes) -> pd.DatetimeIndex:
-        """Generate a DateTimeIndex for the provided date components."""
-        dates = [
-            pd.to_datetime(f"{y}-{m}-{d} {h}:{min:02d}:00")
-            for y, m, d, h, min in zip(years, months, days, hours, minutes)
-        ]
-        return pd.DatetimeIndex(dates)
-
-    def get_weather(self, cs: bool, times=-1):
-        """Retrieve clearsky or TMY weather data."""
-        if cs and times != -1:
-            return self.location.get_clearsky(times)
-        raise NotImplementedError("Non-clearsky weather data is not yet implemented.")
-
-    def get_azimuth(self, cs: bool, wthr) -> float:
-        """Get the azimuthal position of the plane based on weather data."""
-        return np.mod(wthr['wind_direction'] + 90, 360) if not cs and wthr is not None else 0
-
-    def get_weather_param(self, cs: bool, wthr, param: str, default=0) -> float:
-        """Retrieve specific weather parameters, returning defaults if unavailable."""
-        return wthr.get(param, default) if not cs and wthr is not None else default
-    
     def run_simulation(self,
-                    start_index,
-                    end_index,
+                    start_date:datetime,
+                    end_date:datetime,
                     algo="MDP",
                     mdp_success_prob=0,
                     true_success_prob=0,
@@ -117,162 +90,28 @@ class Simulation:
     
         """
         Simulates and plots the duty cycle for the given plane, solar data file, cruise speed, air density, and algorithm.
-        
-        Parameters:
-        -----------
-        plane: Seaplane
-            Seaplane object which is to be simulated
-        year: int
-            Year in which simulation is to start
-        month: int
-            Month in which simulation is to start
-        day: int
-            Day in which simulation is to start
-        days: int
-            Number of days to simulate
-        """
+        """        
+
         plane = self.plane
         plane.update_plane()
         print(f"Capacity in Ah: {plane.capacity}")
         print(f"Required Power: {plane.get_required_power(20,1.2)} W")
         data = self.simulate_deployment(
-                start_index=start_index,
-                end_index=end_index,
+                start_date=start_date,
+                end_date=end_date,
                 dt=60,
                 algo=algo,
                 mdp_success_prob=mdp_success_prob,
                 true_success_prob=true_success_prob,
                 num_runs=runs)
-        times = self.generate_datetimes(start_index, end_index, timestep=60)
+        times = pd.date_range(start_date,end_date,periods=len(data["StateHistory"][0]))
         if runs == 1:
             reward = data["Reward"][0]
             state_history = data["StateHistory"]
             print(f"Reward {reward} for algorithm {algo}.")
             
-            self.generate_simulation_summary_table(start_index,end_index,total_failure_prob=(1-mdp_success_prob),time_step=60)
+            # self.generate_simulation_summary_table(start_date,end_date,total_failure_prob=(1-mdp_success_prob),time_step=60)
         return times,data
-
-    def calculate_collected_energy(self, year, month, day, periods, frequency, cs: bool):
-        """
-        Calculate the energy collected by the solar array over a given period.
-
-        This method retrieves the solar position data, calculates the orientation of 
-        the solar array, retrieves weather data, and computes the energy output from 
-        the solar panels based on the irradiance and temperature conditions.
-
-        Parameters
-        ----------
-        year : int
-            The year for which to calculate the collected energy.
-        month : int
-            The month for which to calculate the collected energy.
-        day : int
-            The day for which to calculate the collected energy.
-        periods : int
-            The number of periods to simulate for energy collection.
-        frequency : str
-            The frequency of the time intervals for the simulation (e.g., '1H' for hourly).
-        cs : bool
-            A flag indicating whether to use clearsky weather data (True) or real weather data (False).
-
-        Returns
-        -------
-        tuple
-            A tuple containing:
-            - times : pd.DatetimeIndex
-                A DatetimeIndex object representing the times for which energy collection is calculated.
-            - pdc : pd.Series
-                A Pandas Series representing the direct current (DC) power output of the solar array 
-                over the specified period, with values set to 0 for times with no energy collection.
-
-        Notes
-        -----
-        This method utilizes the `pvlib` library for solar position calculations, irradiance 
-        modeling, and DC power output calculations. It requires a properly initialized `location`
-        attribute and assumes the `plane` attribute has properties like `pdc0` and `gamma` 
-        defined.
-        """
-
-        times = self._get_simulation_times(year, month, day, periods, frequency, cs)
-        solar_position = self.location.get_solarposition(times)
-
-        orientation = tracking.singleaxis(
-            solar_position['apparent_zenith'], solar_position['azimuth'],
-            max_angle=0, backtrack=True, gcr=0.01
-        )
-
-        wthr = self.get_weather(cs, times)
-        irrad = self._calculate_irradiance(solar_position, orientation, wthr)
-
-        temp_air = self.get_weather_param(cs, wthr, 'temp_air', 25)
-        wind_speed = self.get_weather_param(cs, wthr, 'wind_speed')
-        temp_cell = temperature.faiman(irrad['total_abs_front'], temp_air, wind_speed)
-
-        pdc = pvsystem.pvwatts_dc(
-            irrad['total_abs_front'], temp_cell,
-            self.plane.pdc0, gamma_pdc=self.plane.gamma
-        ).fillna(0)
-
-        return times, pdc
-
-    def _get_simulation_times(self, year, month, day, periods, frequency, cs):
-        """Generate simulation times based on the input parameters."""
-        if cs:
-            start = f"{year[0]}-{month[0]}-{day[0]}"
-            return pd.date_range(start, periods=periods, freq=frequency, tz=self.tz)
-        wthr = self.get_weather(cs)
-        wthr.query('Month >= @month[0] and Month <= @month[1]', inplace=True)
-        wthr.query('Day >= @day[0] and Day <= @day[1]', inplace=True)
-        return wthr.index
-
-    def _calculate_irradiance(self, solar_position, orientation, wthr):
-        """
-        Calculate the irradiance on the solar array using PVFactors.
-
-        This method computes the total irradiance received by the solar array based on
-        the solar position, array orientation, and weather data. It utilizes the 
-        `pvfactors_timeseries` function to model the effects of direct normal irradiance (DNI),
-        diffuse horizontal irradiance (DHI), and other parameters.
-
-        Parameters
-        ----------
-        solar_position : pd.DataFrame
-            A DataFrame containing the solar position data, which must include:
-            - 'azimuth': The azimuth angle of the sun.
-            - 'apparent_zenith': The apparent zenith angle of the sun.
-
-        orientation : pd.DataFrame
-            A DataFrame containing the orientation data of the solar array, which must include:
-            - 'surface_azimuth': The azimuth angle of the solar array surface.
-            - 'surface_tilt': The tilt angle of the solar array surface.
-
-        wthr : pd.DataFrame
-            A DataFrame containing weather data with the following columns:
-            - 'dni': Direct normal irradiance (W/m²).
-            - 'dhi': Diffuse horizontal irradiance (W/m²).
-            The index should represent time.
-
-        Returns
-        -------
-        pd.DataFrame
-            A DataFrame containing the calculated irradiance on the solar array, 
-            which includes the components of irradiance based on the provided solar position,
-            orientation, and weather data.
-
-        Notes
-        -----
-        The method uses fixed parameters such as ground cover ratio (gcr), row height, 
-        row width, albedo, number of PV rows, and the index of the observed PV row. 
-        These parameters may need to be adjusted based on the specific configuration 
-        of the solar installation.
-        """
-        return pvfactors_timeseries(
-            solar_position['azimuth'], solar_position['apparent_zenith'],
-            orientation['surface_azimuth'], orientation['surface_tilt'],
-            self.get_azimuth(self.cs, wthr), wthr.index,
-            wthr['dni'], wthr['dhi'], gcr=0.01, pvrow_height=10, pvrow_width=10,
-            albedo=0.06, n_pvrows=1, index_observed_pvrow=0
-            ).pipe(pd.concat, axis=1)
     
     def generate_simulation_summary_table(self, start_date: tuple, end_date: tuple, 
                                     total_failure_prob: float,time_step: int) -> pd.DataFrame:
@@ -326,34 +165,31 @@ class Simulation:
         return summary_table
 
 
-    def simulate_deployment(self,start_index, end_index, dt, algo: str, mdp_success_prob, true_success_prob, num_runs):
+    def simulate_deployment(self,start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs):
         self.plane.calculate_weight()
-        solar_data, wind_data = self._load_weather_data(start_index, end_index)
+        actual_data, expected_data = self.get_weather_data(start_date, end_date) # move this outside loop
         vehicle_states = ["moored", "flying"]
         actions = ["float", "fly"]
         mdp_model = mdp(self.plane,
                         soc_increment=1,
                         vehicle_states=vehicle_states,
-                        max_stages=len(solar_data),
                         actions=actions,
-                        start_index=start_index,
-                        end_index=end_index,
-                        whale_prob=WhaleSightingProbability().df,
+                        start_date=start_date,
+                        end_date=end_date,
+                        expected_data=expected_data,
+                        whale_prob=self.whale_table,
                         dt=dt,
-                        no_failure_prob=mdp_success_prob
+                        mission_success_prob=mdp_success_prob
                         )
         
-        auto = Autonomy(60,solar_data,WhaleSightingProbability().df)
+        auto = Autonomy(dt,mdp_model=mdp_model,data=actual_data,whale_probabilities=self.whale_table)
         mdp_model.show_progress=True
         if algo == "Greedy":
             data = []
             for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation",leave=False):
                 state_history_list,reward,last_step = self._simulate_greedy_behavior(mdp_model=mdp_model,
                                                             auto=auto,
-                                                            true_success_prob=true_success_prob,
-                                                            solar_data=solar_data,
-                                                            wind_data=wind_data
-                                                            )
+                                                            true_success_prob=true_success_prob)
                 data.append({
                     "Iteration": i,
                     "StateHistory": state_history_list,
@@ -368,9 +204,7 @@ class Simulation:
             for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation"):
                 state_history_list,reward,last_step = self._simulate_mdp_behavior(mdp_model=mdp_model,
                                                             auto=auto,
-                                                            true_success_prob=true_success_prob,
-                                                            solar_data=solar_data,
-                                                            wind_data=wind_data
+                                                            true_success_prob=true_success_prob
                                                             )
                 data.append({
                     "Iteration": i,
@@ -383,75 +217,61 @@ class Simulation:
         else:
             raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")
         
-    def _simulate_greedy_behavior(self, mdp_model, auto, true_success_prob, solar_data, wind_data):
+    def _simulate_greedy_behavior(self, mdp_model, auto, true_success_prob):
         """Simulate the 'Greedy' behavior."""
-        return auto.simulate_simple_behavior(mdp_model,
-                                            initial_state=(100,"moored"),
-                                            actual_solar_power=solar_data,
-                                            avail_wind_mag = wind_data,
+        return auto.simulate_simple_behavior(initial_state=(100,"moored"),
                                             true_success_prob = true_success_prob,
                                             simulate_failure = True)
 
-    def _simulate_mdp_behavior(self, mdp_model, auto, true_success_prob, solar_data, wind_data):
+    def _simulate_mdp_behavior(self, mdp_model, auto, true_success_prob):
         """Simulate the 'MDP' behavior."""  
-        return auto.simulate_mdp_behavior(mdp_model,
-                                            initial_state=(100,"moored"),
-                                            actual_solar_power=solar_data,
-                                            avail_wind_mag = wind_data,
+        return auto.simulate_mdp_behavior(initial_state=(100,"moored"),
                                             true_success_prob = true_success_prob,
                                             simulate_failure = True)
         
-    def get_weather_data(self,start_index,end_index):
+    def get_weather_data(self,start_date:datetime,end_date:datetime):
         """Return expected and actual solar and wind data for given indices."""
-        solar_data_actual, wind_data_actual = self._load_weather_data(start_index,end_index)
-        solar_data_expected, wind_data_expected = self._load_expected_weather_data(start_index,end_index)
-        return solar_data_expected, solar_data_actual, wind_data_expected, wind_data_actual
+        actual_data = self._load_weather_data()
+        actual_data = actual_data.loc[start_date:end_date]
+        df = self._load_expected_weather_data()
+        # Define start and end dates (month, day, hour, minute)
+        start_month = start_date.month
+        start_day = start_date.day
+        start_hour = start_date.hour
+        start_minute = start_date.minute
 
-    def _load_weather_data(self, start_index, end_index):
+        end_month = end_date.month
+        end_day = end_date.day
+        end_hour = end_date.hour
+        end_minute = end_date.minute
+
+        # Filter the DataFrame by checking each component of the date individually
+        expected_data = df[
+            ((df['month'] > start_month) | 
+            ((df['month'] == start_month) & (df['day'] > start_day)) |
+            ((df['month'] == start_month) & (df['day'] == start_day) & (df['hour'] > start_hour)) |
+            ((df['month'] == start_month) & (df['day'] == start_day) & (df['hour'] == start_hour) & (df['minute'] >= start_minute))
+            ) & 
+            ((df['month'] < end_month) | 
+            ((df['month'] == end_month) & (df['day'] < end_day)) |
+            ((df['month'] == end_month) & (df['day'] == end_day) & (df['hour'] < end_hour)) |
+            ((df['month'] == end_month) & (df['day'] == end_day) & (df['hour'] == end_hour) & (df['minute'] <= end_minute))
+            ) &
+            ~((df['month'] == 2) & (df['day'] == 29))  # Exclude leap day
+        ]
+        if len(actual_data) != len(expected_data):
+            raise ValueError(f"Actual data and expected data have different lengths. Actual: {len(actual_data)}, Expected: {len(expected_data)}")
+        
+        return actual_data,expected_data
+
+    def _load_weather_data(self):
         """Load solar and wind data from pickle files."""
-        solar_file = r"Data\DISTRIBUTIONS\2022_solar_data.pkl"
-        wind_file = r"Data\DISTRIBUTIONS\2022_wind_mag.pkl"
-
-        solar_data = pd.read_pickle(solar_file)[(29.25, -85.0)].loc[start_index:end_index]
-        wind_data = pd.read_pickle(wind_file)[(29.25, -85.0)].sort_index().loc[start_index:end_index]
-        return solar_data, wind_data
+        actual_file = r"Data\HISTORICAL_DATA\data_hourly.pkl"
+        actual_data = pd.read_pickle(actual_file)
+        return actual_data
     
-    def _load_expected_weather_data(self, start_index, end_index):
+    def _load_expected_weather_data(self):
         """Load solar and wind data from pickle files."""
-        solar_file = r"Data\DISTRIBUTIONS\solar_ev.pkl"
-        wind_file = r"Data\DISTRIBUTIONS\wind_mag_ev.pkl"
-
-        solar_data = pd.read_pickle(solar_file)[(29.25, -85.0)].loc[start_index:end_index]
-        wind_data = pd.read_pickle(wind_file)[(29.25, -85.0)].sort_index().loc[start_index:end_index]
-        return solar_data, wind_data
-
-
-
-    @staticmethod
-    def generate_datetimes(start_index, end_index, timestep):
-        """
-        Generates a list of datetime objects between start_index and end_index.
-        
-        :param start_index: Tuple representing (month, day, hour)
-        :param end_index: Tuple representing (month, day, hour)
-        :param timestep: Time difference between consecutive datetimes (in minutes)
-        :return: List of datetime objects
-        """
-        # Unpack the tuples (month, day, hour)
-        start_month, start_day, start_hour = start_index
-        end_month, end_day, end_hour = end_index
-        
-        # Create the starting and ending datetime objects
-        start_datetime = datetime(year=2024, month=start_month, day=start_day, hour=start_hour)
-        end_datetime = datetime(year=2024, month=end_month, day=end_day, hour=end_hour)
-
-        # List to store the generated datetime objects
-        datetime_list = []
-        
-        # Use a timedelta of `timestep` minutes to increment between start and end
-        current_datetime = start_datetime
-        while current_datetime <= end_datetime:
-            datetime_list.append(current_datetime)
-            current_datetime += timedelta(minutes=timestep)
-
-        return datetime_list
+        expected_file = r"Data\EXPECTED_DATA\data_expected.pkl"
+        expected_data = pd.read_pickle(expected_file)
+        return expected_data

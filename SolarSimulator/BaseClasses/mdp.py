@@ -17,18 +17,16 @@ class mdp:
                  plane,
                  soc_increment,
                  vehicle_states,
-                 max_stages,
                  actions,
-                 start_index,
-                 end_index,
+                 start_date: datetime,
+                 end_date: datetime,
+                 expected_data,
                  whale_prob,
                  dt,
-                 no_failure_prob,
-                 start_time=0,
+                 mission_success_prob,
                  gamma=1.0,
-                 epsilon=1e-3,
-                 wind_mag_filename=r"Data\DISTRIBUTIONS\wind_mag_ev.pkl",
-                 expected_solar_power_filename = r"Data\DISTRIBUTIONS\solar_ev.pkl"):
+                 epsilon=1e-3
+                 ):
         
         self.show_progress = False
         self.vehicle_states = vehicle_states
@@ -39,22 +37,21 @@ class mdp:
         self.dt = dt
         self.gamma = gamma
         self.epsilon = epsilon
-        self.start_time = start_time
-        self.max_stages = max_stages
-        self.stepwise_failure_prob = self.calculate_step_transition_prob(max_stages*dt,no_failure_prob,dt)
+
+        
+        expected_data.sort_index()
+        self.expected_solar_power = expected_data["expected_solar_rad"]
+        self.expected_wind_speed = expected_data["expected_wind_speed"]
+        self.max_stages = len(self.expected_solar_power)
+
+        max_stages = len(self.expected_solar_power)-1
+        
+        self.stepwise_failure_prob = self.calculate_step_transition_prob(max_stages*dt,mission_success_prob,dt)
         print(f"Step failure probability: {self.stepwise_failure_prob}")
-
-        lat_lon_pair = [(29.25,  -85.0)] # TODO: make this not hard coded
-        wind_table = pd.read_pickle(wind_mag_filename)[lat_lon_pair].sort_index()
-        self.wind_speed_table = wind_table.loc[start_index:end_index]
-        solar_table = pd.read_pickle(expected_solar_power_filename)[lat_lon_pair].sort_index()
-        expected_solar_power = solar_table.loc[start_index:end_index]
-
-        # Verify expected solar power length
-        if len(expected_solar_power) != max_stages :
-            raise ValueError(f"Expected length {max_stages}, but got {len(expected_solar_power)-1}.")
-        self.expected_solar_power = expected_solar_power
         self.whale_prob_table = whale_prob
+
+
+        self.start_time = start_date.minute+60*start_date.hour
 
         # Initialize tables
         self.ev_table = pd.DataFrame(
@@ -85,23 +82,13 @@ class mdp:
         """
         success_prob, failure_prob = self.calculate_maneuver_probabilities(state[1], action, stage)
         new_state_success = self.calculate_new_state(state, action, stage, self.expected_solar_power.iloc[stage])
-        new_state_failure = state  # Stay in the same state on failure
+        new_state_failure = (-1,"Broken")  # Stay in the same state on failure
         return [(success_prob, new_state_success), (failure_prob, new_state_failure)]
 
     def R(self, state, action, stage):
         """
         Calculates the reward for performing the given action in the current state at the current stage.
         Includes stochastic rewards based on the probability of finding whales (time-dependent) and wind speed.
-        
-        Parameters:
-        - state: Current state as a tuple (SoC, vehicle_state)
-        - action: The action being taken ('float', 'fly')
-        - stage: The current stage in the simulation
-        - wind_speed: Expected wind speed at the current stage
-        - whale_prob_table: Table that maps the time of day to the probability of finding whales
-        
-        Returns:
-        - Reward value considering both deterministic and stochastic factors.
         """
 
         prob_success, prob_failure = self.calculate_maneuver_probabilities(state[1], action, stage)
@@ -111,20 +98,15 @@ class mdp:
 
         # Determine whale sighting probability based on time of day
         if self.is_daytime(self.start_time, self.dt, stage):
-            # Calculate rewards based on the action
             if action == 'float':
-                # Whale reward based on probability of randomly finding whale using hydrophone, assume 0 for now
                 whale_reward = whale_prob * 0
             
             elif action == 'fly':
-                # Whale reward based on probability of finding whale during survey, assume 5 for now
                 whale_reward = whale_prob * 100
         else: # Night time
             if action == 'float':
-                # Whale reward based on probability of randomly finding whale using hydrophone, assume 0 for now
                 whale_reward = whale_prob * 0
             elif action == 'fly':
-                # Whale reward based on probability of finding whale during flight, assume 0 because we cant see at night
                 whale_reward = whale_prob * 0
 
         return survival_reward + whale_reward
@@ -163,7 +145,7 @@ class mdp:
                 i=0
                 reward_list = [-10000,-10000]
                 for action in self.actions:
-                    if self.is_action_feasible(action, state, stage, self.expected_solar_power.iloc[stage].values[0]):
+                    if self.is_action_feasible(action, state, stage, self.expected_solar_power.iloc[stage]):
                         reward = self.R(state, action, stage)
                         future_reward = self.get_future_reward(state, action, stage)
                         total_reward = reward + self.gamma * future_reward
@@ -220,7 +202,7 @@ class mdp:
         next_stage = stage + 1
         if next_stage not in self.ev_table.columns:
             return 0  # No future reward beyond the last stage
-        new_state = self.calculate_new_state(state, action,stage, self.expected_solar_power.iloc[stage].values[0])
+        new_state = self.calculate_new_state(state, action,stage, self.expected_solar_power.iloc[stage])
         return self.ev_table.loc[new_state, next_stage]
 
     def is_action_feasible(self, action, state, stage, solar_power):
@@ -253,7 +235,7 @@ class mdp:
         """
         Calculate the success and failure probabilities for the given maneuver, adjusting continuously based on wind speed.
         """
-        wind_speed = self.wind_speed_table.iloc[stage].values[0]  # Retrieve wind speed for the current stage
+        wind_speed = self.expected_wind_speed.iloc[stage]  # Retrieve wind speed for the current stage
         base_failure_prob = self.stepwise_failure_prob
         # Base probabilities
         if current_state == "moored" and action == "float":

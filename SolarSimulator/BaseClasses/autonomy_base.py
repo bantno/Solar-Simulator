@@ -5,31 +5,30 @@ from tqdm import tqdm
 class Autonomy:
     """Represents the autonomy module for a solar-powered seaplane."""
 
-    def __init__(self,dt,actual_solar_power,whale_probabilities):
-        self.solar_power_actual = actual_solar_power
-        self.whale_prob_table = whale_probabilities
+    def __init__(self,dt,mdp_model,data,whale_probabilities):
+        self.actual_environmental_data = data
         self.dt = dt
+        self.mdp_model = mdp_model
+        self.data = data
+        self.whale_prob = whale_probabilities
 
     def simulate_simple_behavior(self,
-                                 mdp_model,
                                  initial_state,
-                                 actual_solar_power,
-                                 avail_wind_mag,
                                  true_success_prob,
                                  simulate_failure = False):
 
         reward = 0
-        max_stages = len(actual_solar_power)-1
+        max_stages = len(self.data)-1
 
         self.stepwise_failure_prob = self.calculate_step_transition_prob(self.dt*max_stages,true_success_prob,self.dt)
-        self.wind_speed_table = avail_wind_mag
+        self.wind_speed_table = self.data["wind_speed_10m"]
         
         night_hours = 12
-        nightly_idle_soc = np.ceil((mdp_model.plane.idle_power*night_hours*3600)/(mdp_model.plane.capacity*mdp_model.plane.voltage*3600)*100)
-        single_flight_soc = np.ceil(mdp_model.plane.get_required_power(20,1.2)*self.dt*60/(mdp_model.plane.capacity*mdp_model.plane.voltage*3600)*100)
+        nightly_idle_soc = np.ceil((self.mdp_model.plane.idle_power*night_hours*3600)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
+        single_flight_soc = np.ceil(self.mdp_model.plane.get_required_power(20,1.2)*self.dt*60/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
 
         # print(f"Nightly Energy Usage: {nightly_idle_soc}")
-        battery_capacity_J = mdp_model.plane.capacity*mdp_model.plane.voltage*3600
+        battery_capacity_J = self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600
         state_history_list = [initial_state]
         energy_history_list = [initial_state[0]/100*battery_capacity_J]
         solar_power_list = [0.0]
@@ -37,12 +36,12 @@ class Autonomy:
         for k in range(max_stages):
             current_state = state_history_list[-1]
             current_energy = energy_history_list[-1]
-            solar_power_wpm2 = actual_solar_power.iloc[k][0]
+            solar_power_wpm2 = self.data["shortwave_radiation"].iloc[k]
             minutes = (self.dt * k) % 1440
-            whale_prob = self.whale_prob_table.loc[minutes // 120]["Sighting Probability"]
+            whale_prob = self.whale_prob.loc[minutes // 120]["Sighting Probability"]
             # print(whale_prob)
 
-            is_flying_feasible = mdp_model.is_action_feasible("fly",current_state,k,solar_power_wpm2)
+            is_flying_feasible = self.mdp_model.is_action_feasible("fly",current_state,k,solar_power_wpm2)
             is_reward_sufficient = whale_prob>0.1 and solar_power_wpm2>0
             is_battery_sufficient = current_state[0] > nightly_idle_soc*2 + single_flight_soc # TODO: Create better way to determine this
 
@@ -59,10 +58,10 @@ class Autonomy:
                 failure_prob = -1
 
             is_action_successful = np.random.uniform(0,1) > failure_prob
-            is_action_feasible = mdp_model.is_action_feasible(best_action,current_state,k,solar_power_wpm2)
+            is_action_feasible = self.mdp_model.is_action_feasible(best_action,current_state,k,solar_power_wpm2)
             
             if is_action_successful and is_action_feasible :
-                new_energy = current_energy + self.calculate_energy_update(mdp_model.plane,best_action,self.dt,solar_power_wpm2)
+                new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,best_action,self.dt,solar_power_wpm2)
                 new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
                 reward+=self.R(current_state,best_action,k)
                 state_history_list.append(new_state)
@@ -76,28 +75,25 @@ class Autonomy:
 
 
     def simulate_mdp_behavior(self,
-                              mdp_model,
                               initial_state,
-                              actual_solar_power,
-                              avail_wind_mag,
                               true_success_prob,
                               simulate_failure = False):
 
-        battery_capacity_J = mdp_model.plane.capacity*mdp_model.plane.voltage*3600
+        battery_capacity_J = self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600
         state_history_list = [initial_state]
         energy_history_list = [initial_state[0]/100*battery_capacity_J]
         solar_power_list = [0.0]
         reward = 0
-        max_stages = len(actual_solar_power)-1
+        max_stages = len(self.data)-1
         self.stepwise_failure_prob = self.calculate_step_transition_prob(self.dt*max_stages,true_success_prob,self.dt)
-        self.wind_speed_table = avail_wind_mag
-        optimal_policy = mdp_model.policy_table
+        self.wind_speed_table = self.data["wind_speed_10m"]
+        optimal_policy = self.mdp_model.policy_table
 
         for k in range(max_stages):
             current_state = state_history_list[-1]
             current_energy = energy_history_list[-1]
             best_action = optimal_policy.loc[current_state,k]
-            solar_power = actual_solar_power.iloc[k][0]
+            solar_power_wpm2 = self.data["shortwave_radiation"].iloc[k]
 
             if simulate_failure :
                 _,failure_prob = self.calculate_maneuver_probabilities(current_state=current_state[1],
@@ -106,13 +102,13 @@ class Autonomy:
             else:
                 failure_prob = -1
 
-            if np.random.uniform(0,1) > failure_prob and mdp_model.is_action_feasible(best_action,current_state,k,solar_power) :
-                new_energy = current_energy + self.calculate_energy_update(mdp_model.plane,best_action,self.dt,solar_power)
+            if np.random.uniform(0,1) > failure_prob and self.mdp_model.is_action_feasible(best_action,current_state,k,solar_power_wpm2) :
+                new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,best_action,self.dt,solar_power_wpm2)
                 new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
                 reward+=self.R(current_state,best_action,k)
                 state_history_list.append(new_state)
                 energy_history_list.append(new_energy)
-                solar_power_list.append(solar_power)
+                solar_power_list.append(solar_power_wpm2)
             else :
                 reward = reward-5
                 # tqdm.write("Failure!")
@@ -137,11 +133,11 @@ class Autonomy:
         """
     
         minutes = (self.dt * stage) % 1440
-        whale_prob = self.whale_prob_table.loc[minutes // 120]["Sighting Probability"]
+        whale_prob = self.whale_prob.loc[minutes // 120]["Sighting Probability"]
         whale_reward = 0
 
         # Determine whale sighting probability based on time of day
-        if self.solar_power_actual.iloc[stage][0]>0:
+        if self.data["shortwave_radiation"].iloc[stage]>0:
             # Calculate rewards based on the action
             if action == 'float':
                 pass
@@ -171,7 +167,7 @@ class Autonomy:
         """
         Calculate the success and failure probabilities for the given maneuver, adjusting continuously based on wind speed.
         """
-        wind_speed = self.wind_speed_table.iloc[stage][0]  # Retrieve wind speed for the current stage
+        wind_speed = self.wind_speed_table.iloc[stage]  # Retrieve wind speed for the current stage
         base_failure_prob = self.stepwise_failure_prob
         # Base probabilities
         if current_state == "moored" and action == "float":

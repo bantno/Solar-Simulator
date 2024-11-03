@@ -174,7 +174,7 @@ def plot_simulation(times,state_history,P_solar,filename=-1, fig = -1, label="")
 
     return fig
 
-def plot_simulation_results(times,state_history,expected_solar_power,actual_solar_power,filename=-1, fig = -1, label=""):
+def plot_simulation_results(times,state_history,expected_solar, actual_solar,filename=-1, fig = -1, label=""):
     """Plot results of simulation"""
     num_plots = 2
     if fig == -1:
@@ -187,13 +187,14 @@ def plot_simulation_results(times,state_history,expected_solar_power,actual_sola
     
     # Plot state of charge
     soc = [s[0] for s in state_history[0]]
-    plot_data(axes[0],times[0:len(soc)],soc,titles[0],xlabel,ylabels[0],label)
-
-    actual_solar_power = [p[0] for p in actual_solar_power]
-    # Plot solar power
+    data = [soc,expected_solar,actual_solar]
+    
+    plot_data(axes[0],times[0:len(data[0])],data[0],titles[0],xlabel,ylabels[0],label)
     axes[1].cla()
-    plot_data(axes[1],times[0:len(soc)],expected_solar_power[0:len(soc)],titles[1],xlabel,ylabels[1],"Expected Solar Power")
-    plot_data(axes[1],times[0:len(soc)],actual_solar_power[0:len(soc)],titles[1],xlabel,ylabels[1],"Actual Solar Power")
+    plot_data(axes[1],times,data[1][0:len(times)],titles[1],xlabel,ylabels[1],label="Expected Solar Power")
+    plot_data(axes[1],times,data[2][0:len(times)],titles[1],xlabel,ylabels[1],label="Actual Solar Power")
+
+    
 
     plt.tight_layout() 
 

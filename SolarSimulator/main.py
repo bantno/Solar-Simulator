@@ -1,12 +1,13 @@
-from datetime import datetime, timedelta, timezone
-
 import pandas as pd
-
+from datetime import datetime, timedelta, timezone
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.simulation_base import Simulation
-import matplotlib.pyplot as plt
+from BaseClasses.plotting_base import SolarChargePlotter
+
+
 from Tools import plotting, stl_slice
 
 
@@ -56,24 +57,21 @@ duty_cycle = []
 current_time = datetime.now()
 time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 
-utc_offset = timezone(timedelta(hours=-5))
+utc_offset = timezone(timedelta(hours=-6))
 start_date = pd.to_datetime(datetime(2019,1,2).replace(tzinfo=utc_offset))
-end_date = pd.to_datetime(datetime(2019,1,10).replace(tzinfo=utc_offset))
+end_date = pd.to_datetime(datetime(2019,6,2).replace(tzinfo=utc_offset))
 
 filename = f"SimResults_{time_string}"
 actual_data, expected_data = sim.get_weather_data(start_date,end_date)
-# plt.plot(range(len(actual_data["shortwave_radiation"])),actual_data["shortwave_radiation"])
-# plt.plot(range(len(actual_data["shortwave_radiation"])),expected_data["expected_solar_rad"])
-# plt.show()
-
 
 # capacities = [5,10,20,30,40,50,60,70,80,90,100]
 capacities = [35]
 mdp_probs = [0.9]
-success_prob=0.5
+success_prob=1.0
 visualize = True
+NUM_RUNS = 100
 
-NUM_RUNS = 5
+# Run simulation
 for cap in tqdm(capacities, desc="Processing capacities"):
     sim.plane.capacity = cap
     solar_data_expected = expected_data["expected_solar_rad"].values
@@ -83,21 +81,14 @@ for cap in tqdm(capacities, desc="Processing capacities"):
     algo='Greedy'
     times,data = sim.run_simulation(start_date,end_date,algo=algo,mdp_success_prob=0.9,true_success_prob=success_prob,runs=NUM_RUNS)
     data.to_pickle(f"Greedy_Data_c{cap}_p{0.9}.pkl")
-    
-    if visualize :
-        reward = data["Reward"]
-        state_history = data["StateHistory"][0]
-        label = f"{algo}: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward[0])}"
-        fig = plotting.plot_simulation_results(times,state_history,solar_data_expected,data["SolarHistory"][0],filename,fig=fig,label=label)
 
     for mdp_success_prob in tqdm(mdp_probs, desc=f"Processing probabilities for cap={cap}", leave=False):
         # MDP Simulation
         algo='MDP'
         times,data = sim.run_simulation(start_date,end_date,algo=algo,mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
         data.to_pickle(f"MDP_Data_c{cap}_p{mdp_success_prob}.pkl")
-        
-        if visualize :
-            reward = data["Reward"]
-            state_history = data["StateHistory"][0]
-            label = f"{algo}: {sim.plane.capacity:.2f} Ah, P(S)={success_prob}, R: {round(reward[0])}"
-            fig = plotting.plot_simulation_results(times,state_history,solar_data_expected,data["SolarHistory"][0],filename,fig=-1,label=label)
+
+
+if visualize:
+    plotter = SolarChargePlotter(".",start_date=start_date,time_step="h")
+    plotter.plot_data()

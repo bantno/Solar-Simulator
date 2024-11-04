@@ -69,7 +69,7 @@ capacities = [35]
 mdp_probs = [0.9]
 success_prob=1.0
 visualize = True
-NUM_RUNS = 100
+NUM_RUNS = 1
 
 # Run simulation
 for cap in tqdm(capacities, desc="Processing capacities"):

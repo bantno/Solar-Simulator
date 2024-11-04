@@ -30,7 +30,7 @@ class Seaplane:
         self.gamma = gamma
         self.collected_energy = 0 #kWh
         self.cs = cs
-        self.idle_power = 0.5 # W
+        self.idle_power = 0.0 # W
 
         # Define airframe and motion parameters
         self.cd0 = cd0

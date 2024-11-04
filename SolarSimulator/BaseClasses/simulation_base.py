@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import warnings
 import numpy as np
 import pandas as pd
@@ -83,6 +84,7 @@ class Simulation:
     def run_simulation(self,
                     start_date:datetime,
                     end_date:datetime,
+                    dt,
                     algo="MDP",
                     mdp_success_prob=0,
                     true_success_prob=0,
@@ -99,7 +101,7 @@ class Simulation:
         data = self.simulate_deployment(
                 start_date=start_date,
                 end_date=end_date,
-                dt=60,
+                dt=dt,
                 algo=algo,
                 mdp_success_prob=mdp_success_prob,
                 true_success_prob=true_success_prob,
@@ -167,7 +169,7 @@ class Simulation:
 
     def simulate_deployment(self,start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs):
         self.plane.calculate_weight()
-        actual_data, expected_data = self.get_weather_data(start_date, end_date) # move this outside loop
+        actual_data, expected_data = self.get_weather_data(start_date, end_date, dt) # move this outside loop
         vehicle_states = ["moored", "flying"]
         actions = ["float", "fly"]
         mdp_model = mdp(self.plane,
@@ -226,11 +228,11 @@ class Simulation:
                                             true_success_prob = true_success_prob,
                                             simulate_failure = True)
         
-    def get_weather_data(self,start_date:datetime,end_date:datetime):
+    def get_weather_data(self,start_date:datetime,end_date:datetime,dt:int):
         """Return expected and actual solar and wind data for given indices."""
-        actual_data = self._load_weather_data()
+        actual_data = self._load_weather_data(dt)
         actual_data = actual_data.loc[start_date:end_date]
-        df = self._load_expected_weather_data()
+        df = self._load_expected_weather_data(dt)
         # Define start and end dates (month, day, hour, minute)
         start_month = start_date.month
         start_day = start_date.day
@@ -261,14 +263,38 @@ class Simulation:
         
         return actual_data,expected_data
 
-    def _load_weather_data(self):
-        """Load solar and wind data from pickle files."""
-        actual_file = r"Data\HISTORICAL_DATA\data_hourly.pkl"
-        actual_data = pd.read_pickle(actual_file)
-        return actual_data
-    
-    def _load_expected_weather_data(self):
-        """Load solar and wind data from pickle files."""
-        expected_file = r"Data\EXPECTED_DATA\data_expected.pkl"
-        expected_data = pd.read_pickle(expected_file)
-        return expected_data
+    def _load_weather_data(self, dt: int, directory: str=r"Data\HISTORICAL_DATA"):
+        """Load actual solar and wind data from pickle files with a specific timestep in the filename."""
+        # Create regex pattern to match files with the specified timestep (in minutes)
+        pattern = rf"data_{dt}min\.pkl$"
+        
+        # Search for the file in the specified directory
+        actual_file = None
+        for file in os.listdir(directory):
+            if re.search(pattern, file):
+                actual_file = os.path.join(directory, file)
+                break
+
+        if actual_file:
+            actual_data = pd.read_pickle(actual_file)
+            return actual_data
+        else:
+            raise FileNotFoundError(f"No file found in '{directory}' with timestep '{dt}' minutes.")
+
+    def _load_expected_weather_data(self, dt: int, directory: str=r"Data\EXPECTED_DATA"):
+        """Load expected solar and wind data from pickle files with a specific timestep in the filename."""
+        # Create regex pattern to match files with the specified timestep (in minutes)
+        pattern = rf"data_expected_{dt}min\.pkl$"
+        
+        # Search for the file in the specified directory
+        expected_file = None
+        for file in os.listdir(directory):
+            if re.search(pattern, file):
+                expected_file = os.path.join(directory, file)
+                break
+
+        if expected_file:
+            expected_data = pd.read_pickle(expected_file)
+            return expected_data
+        else:
+            raise FileNotFoundError(f"No file found in '{directory}' with timestep '{dt}' minutes.")

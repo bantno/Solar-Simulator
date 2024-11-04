@@ -13,11 +13,12 @@ class PickleDataProcessor:
         """Read all pickle files and store their mean results."""
         for filename in os.listdir(self.directory):
             if filename.endswith(".pkl"):
-                match = re.match(r"(\w+)_Data_c(\d+)_p([\d.]+)\.pkl", filename)
+                match = re.match(r"(\w+)_Data_c(\d+)_p([\d.]+)_(\d+)min\.pkl", filename)
                 if match:
-                    algo, cap, prob = match.groups()
+                    algo, cap, prob, dt = match.groups()
                     cap = int(cap)
                     prob = float(prob)
+                    dt = int(dt)
 
                     mean_reward, mean_failure_step = self.calculate_mean_rewards_and_failures(
                         os.path.join(self.directory, filename)
@@ -27,6 +28,7 @@ class PickleDataProcessor:
                     self.results.append({
                         "Algorithm": algo,
                         "Capacity": cap,
+                        "Timestep": dt,
                         "Probability": prob,
                         "MeanReward": mean_reward,
                         "MeanFailureStep": mean_failure_step

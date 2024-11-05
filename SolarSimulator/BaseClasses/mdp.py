@@ -42,6 +42,7 @@ class mdp:
         expected_data.sort_index()
         self.expected_solar_power = expected_data["expected_solar_rad"]
         self.expected_wind_speed = expected_data["expected_wind_speed"]
+<<<<<<< HEAD
         self.max_stages = len(pd.date_range(start_date,end_date,freq=f"{dt}min"))
         if len(self.expected_solar_power)!=len(self.expected_wind_speed):
             raise ValueError(f"Solar and wind data lengths do not match. {len(self.expected_solar_power)}!={len(self.expected_wind_speed)}")
@@ -49,6 +50,13 @@ class mdp:
             raise ValueError(f"Max stages and data lengths do not match. {self.max_stages}!={len(self.expected_wind_speed)}")
         
         self.stepwise_failure_prob = self.calculate_step_transition_prob(self.max_stages*dt,mission_success_prob,dt)
+=======
+        self.max_stages = len(self.expected_solar_power)
+
+        max_stages = len(self.expected_solar_power)-1
+        
+        self.stepwise_failure_prob = self.calculate_step_transition_prob(max_stages*dt,mission_success_prob,dt)
+>>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
         print(f"Step failure probability: {self.stepwise_failure_prob}")
         self.whale_prob_table = whale_prob
 

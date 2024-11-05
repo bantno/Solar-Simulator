@@ -92,7 +92,11 @@ class SolarChargePlotter:
 
         plt.title('Solar History Over Time')
         plt.xlabel('Datetime')
+<<<<<<< HEAD
         plt.ylabel('Solar Power (W/$m^2$)')
+=======
+        plt.ylabel('Solar Power (arbitrary units)')
+>>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
         plt.legend()
         plt.grid(True)
 

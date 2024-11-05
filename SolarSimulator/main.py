@@ -62,6 +62,7 @@ start_date = pd.to_datetime(datetime(2019,1,2).replace(tzinfo=utc_offset))
 end_date = pd.to_datetime(datetime(2019,6,2).replace(tzinfo=utc_offset))
 
 filename = f"SimResults_{time_string}"
+<<<<<<< HEAD
 
 
 capacities = [20,50,80]
@@ -93,4 +94,35 @@ NUM_RUNS = 1000
 
 if visualize:
     plotter = SolarChargePlotter(r".",start_date=start_date,time_step=f"{dt}min")
+=======
+actual_data, expected_data = sim.get_weather_data(start_date,end_date)
+
+# capacities = [5,10,20,30,40,50,60,70,80,90,100]
+capacities = [35]
+mdp_probs = [0.9]
+success_prob=1.0
+visualize = True
+NUM_RUNS = 100
+
+# Run simulation
+for cap in tqdm(capacities, desc="Processing capacities"):
+    sim.plane.capacity = cap
+    solar_data_expected = expected_data["expected_solar_rad"].values
+    solar_data_actual = actual_data["shortwave_radiation"].values
+    
+    # Greedy Simulation
+    algo='Greedy'
+    times,data = sim.run_simulation(start_date,end_date,algo=algo,mdp_success_prob=0.9,true_success_prob=success_prob,runs=NUM_RUNS)
+    data.to_pickle(f"Greedy_Data_c{cap}_p{0.9}.pkl")
+
+    for mdp_success_prob in tqdm(mdp_probs, desc=f"Processing probabilities for cap={cap}", leave=False):
+        # MDP Simulation
+        algo='MDP'
+        times,data = sim.run_simulation(start_date,end_date,algo=algo,mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
+        data.to_pickle(f"MDP_Data_c{cap}_p{mdp_success_prob}.pkl")
+
+
+if visualize:
+    plotter = SolarChargePlotter(".",start_date=start_date,time_step="h")
+>>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
     plotter.plot_data()

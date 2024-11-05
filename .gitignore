@@ -2,7 +2,11 @@ SolarSimulator/BaseClasses/__pycache__/Seaplane_base.cpython-311.pyc
 SolarSimulator/Tools/__pycache__/__init__.cpython-311.pyc
 SolarSimulator/Tools/__pycache__/plotting.cpython-311.pyc
 SolarSimulator/Utilities/__pycache__/ParetoFront.cpython-311.pyc
+<<<<<<< HEAD
 Results/
+=======
+
+>>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
 solar_ev.pkl
 SolarSimulator/BaseClasses/__pycache__/Seaplane_base.cpython-311.pyc
 SolarSimulator/Utilities/__pycache__/ParetoFront.cpython-311.pyc

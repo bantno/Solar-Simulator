@@ -1,3 +1,0 @@
-,Algorithm,Capacity,Timestep,Probability,MeanReward,MeanFailureStep
-0,Greedy,50,10,0.9,306.664,20105
-1,MDP,50,10,0.9,72.368,5334

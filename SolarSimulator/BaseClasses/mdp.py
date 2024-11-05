@@ -143,16 +143,16 @@ class mdp:
         
         for stage in iterator:
             for state in self.states:
-                best_action = None # TODO: check this
-                i=0
-                reward_list = [-10000,-10000]
-                for action in self.actions:
+                best_action = None
+                reward_list = np.full(len(self.actions), -10000)  # Preallocate with the right size
+                
+                for idx, action in enumerate(self.actions):
                     if self.is_action_feasible(action, state, stage, self.expected_solar_power.iloc[stage]):
                         reward = self.R(state, action, stage)
                         future_reward = self.get_future_reward(state, action, stage)
                         total_reward = reward + self.gamma * future_reward
-                        reward_list[i] = total_reward
-                    i+=1
+                        reward_list[idx] = total_reward
+
                 max_reward = np.max(reward_list)
                 best_action = self.actions[np.argmax(reward_list)]
                 self.ev_table.loc[state, stage] = max_reward

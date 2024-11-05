@@ -33,44 +33,6 @@ class Simulation:
     and behavioral algorithms. The class handles the initialization of the simulation 
     environment, retrieves weather data, calculates solar energy collection, and 
     simulates the vehicle's deployment.
-
-    Attributes
-    ----------
-    plane : Seaplane
-        An instance of the Seaplane class representing the vehicle.
-    lat : float
-        The latitude of the simulation location.
-    lon : float
-        The longitude of the simulation location.
-    tz : str
-        The timezone of the simulation location (e.g., 'UTC', 'US/Eastern').
-    cs : bool
-        A flag indicating whether to use clearsky weather data (default is False).
-    location : pvlib.location.Location
-        A pvlib Location object initialized with the provided latitude, longitude, 
-        and timezone.
-
-    Methods
-    -------
-    set_location(latitude: float, longitude: float, timezone: str) -> pvlib.location.Location
-        Sets the location for the simulation based on provided latitude, longitude, 
-        and timezone.
-    get_DateTimeIndex(years, months, days, hours, minutes) -> pd.DatetimeIndex
-        Creates a DateTimeIndex from provided date components.
-    get_weather(cs: bool, times=-1) -> pd.DataFrame
-        Retrieves weather data based on the specified parameters.
-    get_azimuth(cs: bool, weather: pd.DataFrame) -> float
-        Determines the azimuthal position of the plane based on the weather data.
-    get_windspeed(cs: bool, weather: pd.DataFrame) -> float
-        Retrieves the wind speed from the weather data.
-    get_air_temp(cs: bool, weather: pd.DataFrame) -> float
-        Retrieves the air temperature from the weather data.
-    calc_collected_energy(year, month, day, periods, frequency, cs: bool) -> tuple
-        Calculates the solar energy collected during the specified period.
-    simulate_deployment(U, rho, takeoff_capacity, landing_capacity, start_index, 
-                        end_index, dt, algo) -> tuple
-        Simulates the deployment of the vehicle and determines its duty cycle based 
-        on the specified parameters and chosen algorithm.
     """
 
     def __init__(self, plane: Seaplane, lat: float, lon: float, tz: str, cs: bool = False) -> None:
@@ -187,28 +149,31 @@ class Simulation:
         auto = Autonomy(dt,mdp_model=mdp_model,data=actual_data,whale_probabilities=self.whale_table)
         mdp_model.show_progress=True
         if algo == "Greedy":
-            data = []
-            for i in tqdm(range(num_runs),desc=f"{algo} Simulation",leave=False):
-                # state_history_list,solar_list,reward,last_step = self._simulate_greedy_behavior(auto=auto,true_success_prob=true_success_prob)
-                # data.append({
-                #     "Iteration": i,
-                #     "StateHistory": state_history_list,
-                #     "SolarHistory": solar_list,
-                #     "Reward": reward,
-                #     "LastStep": last_step
-                # })
-                reward,last_step = self._simulate_greedy_behavior(auto=auto,true_success_prob=true_success_prob)
-                data.append({
-                    "Iteration": i,
+            data = {}
+
+            # Loop over the number of runs with tqdm progress bar
+            for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
+                # Simulate the behavior
+                reward, last_step = auto.simulate_simple_behavior(
+                    initial_state=(100, "moored"),
+                    true_success_prob=true_success_prob,
+                    simulate_failure=True
+                )
+
+                # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
+                data[i] = {
                     "Reward": reward,
                     "LastStep": last_step
-                })
-            df = pd.DataFrame(data)
+                }
+
+            # Convert the multilevel dictionary to a DataFrame
+            df = pd.DataFrame.from_dict(data, orient='index')  # 'index' means the outer keys become the rows
+            
             return df
         
         elif algo == "MDP":
             mdp_model.create_ev_table()
-            data = []
+            data = {}
             for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation"):
                 # state_history_list,solar_list,reward,last_step = self._simulate_mdp_behavior(auto=auto,true_success_prob=true_success_prob)
                 # data.append({
@@ -218,28 +183,17 @@ class Simulation:
                 #     "Reward": reward,
                 #     "LastStep": last_step
                 # })
-                reward,last_step = self._simulate_mdp_behavior(auto=auto,true_success_prob=true_success_prob)
-                data.append({
-                    "Iteration": i,
+                reward,last_step = auto.simulate_mdp_behavior(initial_state=(100,"moored"),
+                                            true_success_prob = true_success_prob,
+                                            simulate_failure = True)
+                data[i] = {
                     "Reward": reward,
                     "LastStep": last_step
-                })
+                }
             df = pd.DataFrame(data)
             return df
         else:
             raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")
-        
-    def _simulate_greedy_behavior(self, auto, true_success_prob):
-        """Simulate the 'Greedy' behavior."""
-        return auto.simulate_simple_behavior(initial_state=(100,"moored"),
-                                            true_success_prob = true_success_prob,
-                                            simulate_failure = True)
-
-    def _simulate_mdp_behavior(self, auto, true_success_prob):
-        """Simulate the 'MDP' behavior."""  
-        return auto.simulate_mdp_behavior(initial_state=(100,"moored"),
-                                            true_success_prob = true_success_prob,
-                                            simulate_failure = True)
         
     def get_weather_data(self,start_date:datetime,end_date:datetime,dt:int):
         """Return expected and actual solar and wind data for given indices."""

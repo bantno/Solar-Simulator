@@ -10,7 +10,7 @@ class Autonomy:
         self.dt = dt
         self.mdp_model = mdp_model
         self.data = data
-        self.whale_prob = whale_probabilities
+        self.whale_prob = whale_probabilities["Sighting Probability"]
 
     def simulate_simple_behavior(self,
                                  initial_state,
@@ -45,7 +45,7 @@ class Autonomy:
             current_energy = energy_history_list[k]
             solar_power_wpm2 = shortwave_radiation[k]
             minutes = (self.dt * k) % 1440
-            whale_prob = self.whale_prob.loc[minutes // 120]["Sighting Probability"]
+            whale_prob = self.whale_prob.loc[minutes // 120]
             is_flying_feasible = self.mdp_model.is_action_feasible("fly",current_state,k,solar_power_wpm2)
             is_reward_sufficient = whale_prob>0.1 and solar_power_wpm2>0
             is_battery_sufficient = current_state[0] > nightly_idle_soc*2 + single_flight_soc # TODO: Create better way to determine this
@@ -150,7 +150,7 @@ class Autonomy:
         """
     
         minutes = (self.dt * stage) % 1440
-        whale_prob = self.whale_prob.loc[minutes // 120]["Sighting Probability"]
+        whale_prob = self.whale_prob.loc[minutes // 120]
         whale_reward = 0
 
         # Determine whale sighting probability based on time of day

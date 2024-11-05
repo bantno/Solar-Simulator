@@ -96,8 +96,8 @@ class Simulation:
 
         plane = self.plane
         plane.update_plane()
-        print(f"Capacity in Ah: {plane.capacity}")
-        print(f"Required Power: {plane.get_required_power(20,1.2)} W")
+        # print(f"Capacity in Ah: {plane.capacity}")
+        # print(f"Required Power: {plane.get_required_power(20,1.2)} W")
         data = self.simulate_deployment(
                 start_date=start_date,
                 end_date=end_date,

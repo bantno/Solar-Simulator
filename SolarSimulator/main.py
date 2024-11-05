@@ -64,14 +64,14 @@ end_date = pd.to_datetime(datetime(2019,6,2).replace(tzinfo=utc_offset))
 filename = f"SimResults_{time_string}"
 
 
-capacities = [20,50,80]
+capacities = [60,80]
 # capacities = [50]
 mdp_probs = [0.5,0.9,1.0]
 success_prob=0.9
 visualize = True
-dt=60
+dt=10
 actual_data, expected_data = sim.get_weather_data(start_date,end_date,dt=dt)
-NUM_RUNS = 1
+NUM_RUNS = 1000
 
 # Run simulation
 for cap in tqdm(capacities, desc="Processing capacities"):

@@ -49,7 +49,7 @@ class mdp:
             raise ValueError(f"Max stages and data lengths do not match. {self.max_stages}!={len(self.expected_wind_speed)}")
         
         self.stepwise_failure_prob = self.calculate_step_transition_prob(self.max_stages*dt,mission_success_prob,dt)
-        print(f"Step failure probability: {self.stepwise_failure_prob}")
+        # print(f"Step failure probability: {self.stepwise_failure_prob}")
         self.whale_prob_table = whale_prob
 
 

@@ -13,20 +13,12 @@ class PickleDataProcessor:
         """Read all pickle files and store their mean results."""
         for filename in os.listdir(self.directory):
             if filename.endswith(".pkl"):
-<<<<<<< HEAD
                 match = re.match(r"(\w+)_Data_c(\d+)_p([\d.]+)_(\d+)min\.pkl", filename)
                 if match:
                     algo, cap, prob, dt = match.groups()
                     cap = int(cap)
                     prob = float(prob)
                     dt = int(dt)
-=======
-                match = re.match(r"(\w+)_Data_c(\d+)_p([\d.]+)\.pkl", filename)
-                if match:
-                    algo, cap, prob = match.groups()
-                    cap = int(cap)
-                    prob = float(prob)
->>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
 
                     mean_reward, mean_failure_step = self.calculate_mean_rewards_and_failures(
                         os.path.join(self.directory, filename)
@@ -36,10 +28,7 @@ class PickleDataProcessor:
                     self.results.append({
                         "Algorithm": algo,
                         "Capacity": cap,
-<<<<<<< HEAD
                         "Timestep": dt,
-=======
->>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
                         "Probability": prob,
                         "MeanReward": mean_reward,
                         "MeanFailureStep": mean_failure_step
@@ -111,13 +100,8 @@ class PickleDataProcessor:
 
 # Example usage
 if __name__ == "__main__":
-<<<<<<< HEAD
     processor = PickleDataProcessor(directory=r".")  # Use "." for the current directory
     # processor = PickleDataProcessor(directory=r"Results\11-3\Jan2-Jun2-1000")  # Use "." for the current directory
-=======
-    # processor = PickleDataProcessor(directory=r"Results\11-3\Jan2-Jun2-1000")  # Use "." for the current directory
-    processor = PickleDataProcessor(directory=r".")  # Use "." for the current directory
->>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
     processor.process_files()
 
     results_df = processor.get_results_df()

@@ -73,22 +73,22 @@ dt=10
 actual_data, expected_data = sim.get_weather_data(start_date,end_date,dt=dt)
 NUM_RUNS = 1000
 
-# # Run simulation
-# for cap in tqdm(capacities, desc="Processing capacities"):
-#     sim.plane.capacity = cap
-#     solar_data_expected = expected_data["expected_solar_rad"].values
-#     solar_data_actual = actual_data["shortwave_radiation"].values
+# Run simulation
+for cap in tqdm(capacities, desc="Processing capacities"):
+    sim.plane.capacity = cap
+    solar_data_expected = expected_data["expected_solar_rad"].values
+    solar_data_actual = actual_data["shortwave_radiation"].values
     
-#     # Greedy Simulation
-#     algo='Greedy'
-#     times,data = sim.run_simulation(start_date,end_date,dt,algo=algo,mdp_success_prob=0.9,true_success_prob=success_prob,runs=NUM_RUNS)
-#     data.to_pickle(f"Greedy_Data_c{cap}_p{0.9}_{dt}min.pkl")
+    # Greedy Simulation
+    algo='Greedy'
+    times,data = sim.run_simulation(start_date,end_date,dt,algo=algo,mdp_success_prob=0.9,true_success_prob=success_prob,runs=NUM_RUNS)
+    data.to_pickle(f"Greedy_Data_c{cap}_p{0.9}_{dt}min.pkl")
 
-#     for mdp_success_prob in tqdm(mdp_probs, desc=f"Processing probabilities for cap={cap}", leave=False):
-#         # MDP Simulation
-#         algo='MDP'
-#         times,data = sim.run_simulation(start_date,end_date,dt,algo=algo,mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
-#         data.to_pickle(f"MDP_Data_c{cap}_p{mdp_success_prob}_{dt}min.pkl")
+    for mdp_success_prob in tqdm(mdp_probs, desc=f"Processing probabilities for cap={cap}", leave=False):
+        # MDP Simulation
+        algo='MDP'
+        times,data = sim.run_simulation(start_date,end_date,dt,algo=algo,mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
+        data.to_pickle(f"MDP_Data_c{cap}_p{mdp_success_prob}_{dt}min.pkl")
 
 
 if visualize:

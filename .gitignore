@@ -10,3 +10,5 @@ SampleData/OldVersions/C3-2.0001.ipt
 SampleData/C3-2.ipt
 SolarSimulator/BaseClasses/__pycache__/Seaplane_base.cpython-311.pyc
 SolarSimulator/Utilities/__pycache__/ParetoFront.cpython-311.pyc
+.gitignore
+Results/

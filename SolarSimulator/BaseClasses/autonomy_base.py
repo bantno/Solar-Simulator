@@ -26,21 +26,26 @@ class Autonomy:
         night_hours = 12
         nightly_idle_soc = np.ceil((self.mdp_model.plane.idle_power*night_hours*3600)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
         single_flight_soc = np.ceil(self.mdp_model.plane.get_required_power(20,1.2)*self.dt*60/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
-
-        # print(f"Nightly Energy Usage: {nightly_idle_soc}")
         battery_capacity_J = self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600
         state_history_list = [initial_state]
         energy_history_list = [initial_state[0]/100*battery_capacity_J]
-        solar_power_list = [0.0]
+        # Preallocate arrays with a fixed size
+        state_history_list = np.empty(max_stages,dtype=tuple)  # Adjust dimensions based on the state size
+        energy_history_list = np.empty(max_stages)
+        solar_power_list = np.empty(max_stages)
 
-        for k in range(max_stages):
-            current_state = state_history_list[-1]
-            current_energy = energy_history_list[-1]
-            solar_power_wpm2 = self.data["shortwave_radiation"].iloc[k]
+        # Initialize the first elements
+        state_history_list[0] = initial_state
+        energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
+        solar_power_list[0] = 0.0
+        shortwave_radiation = self.data["shortwave_radiation"].values
+
+        for k in range(max_stages-1):
+            current_state = state_history_list[k]
+            current_energy = energy_history_list[k]
+            solar_power_wpm2 = shortwave_radiation[k]
             minutes = (self.dt * k) % 1440
             whale_prob = self.whale_prob.loc[minutes // 120]["Sighting Probability"]
-            # print(whale_prob)
-
             is_flying_feasible = self.mdp_model.is_action_feasible("fly",current_state,k,solar_power_wpm2)
             is_reward_sufficient = whale_prob>0.1 and solar_power_wpm2>0
             is_battery_sufficient = current_state[0] > nightly_idle_soc*2 + single_flight_soc # TODO: Create better way to determine this
@@ -64,14 +69,15 @@ class Autonomy:
                 new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,best_action,self.dt,solar_power_wpm2)
                 new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
                 reward+=self.R(current_state,best_action,k)
-                state_history_list.append(new_state)
-                energy_history_list.append(new_energy)
-                solar_power_list.append(solar_power_wpm2)
+                state_history_list[k+1]=new_state
+                energy_history_list[k+1]=new_energy
+                # solar_power_list.append(solar_power_wpm2)
             else:
                 reward = reward-5
                 break
 
-        return state_history_list,solar_power_list,reward,k
+        # return reward, k, state_history_list[:k + 1], solar_power_list[:k + 1]
+        return reward,k
 
 
     def simulate_mdp_behavior(self,
@@ -89,6 +95,11 @@ class Autonomy:
         self.wind_speed_table = self.data["wind_speed_10m"]
         optimal_policy = self.mdp_model.policy_table
 
+        night_hours = 12
+        nightly_idle_soc = np.ceil((self.mdp_model.plane.idle_power*night_hours*3600)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
+        single_flight_soc = np.ceil(self.mdp_model.plane.get_required_power(20,1.2)*self.dt*60/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
+        
+
         for k in range(max_stages):
             current_state = state_history_list[-1]
             current_energy = energy_history_list[-1]
@@ -102,18 +113,24 @@ class Autonomy:
             else:
                 failure_prob = -1
 
+            is_battery_sufficient = current_state[0] > nightly_idle_soc*2 + single_flight_soc # TODO: Create better way to determine this
+
+            if not is_battery_sufficient :
+                best_action = "float"
+
             if np.random.uniform(0,1) > failure_prob and self.mdp_model.is_action_feasible(best_action,current_state,k,solar_power_wpm2) :
                 new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,best_action,self.dt,solar_power_wpm2)
                 new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
                 reward+=self.R(current_state,best_action,k)
                 state_history_list.append(new_state)
                 energy_history_list.append(new_energy)
-                solar_power_list.append(solar_power_wpm2)
+                # solar_power_list.append(solar_power_wpm2)
             else :
                 reward = reward-5
                 # tqdm.write("Failure!")
                 break
-        return state_history_list,solar_power_list,reward,k
+        # return state_history_list,solar_power_list,reward,k
+        return reward,k
     
 
     def R(self,state,action,stage):

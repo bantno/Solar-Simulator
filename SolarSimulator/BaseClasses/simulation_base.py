@@ -1,9 +1,6 @@
 import os
 import sys
-<<<<<<< HEAD
 import re
-=======
->>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
 import warnings
 import numpy as np
 import pandas as pd
@@ -87,10 +84,7 @@ class Simulation:
     def run_simulation(self,
                     start_date:datetime,
                     end_date:datetime,
-<<<<<<< HEAD
                     dt,
-=======
->>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
                     algo="MDP",
                     mdp_success_prob=0,
                     true_success_prob=0,
@@ -107,19 +101,15 @@ class Simulation:
         data = self.simulate_deployment(
                 start_date=start_date,
                 end_date=end_date,
-<<<<<<< HEAD
                 dt=dt,
-=======
-                dt=60,
->>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
                 algo=algo,
                 mdp_success_prob=mdp_success_prob,
                 true_success_prob=true_success_prob,
                 num_runs=runs)
-        times = pd.date_range(start_date,end_date,periods=len(data["StateHistory"][0]))
+        times = pd.date_range(start_date,end_date,freq=f"{dt}min")
         if runs == 1:
             reward = data["Reward"][0]
-            state_history = data["StateHistory"]
+            # state_history = data["StateHistory"]
             print(f"Reward {reward} for algorithm {algo}.")
             
             # self.generate_simulation_summary_table(start_date,end_date,total_failure_prob=(1-mdp_success_prob),time_step=60)
@@ -179,11 +169,7 @@ class Simulation:
 
     def simulate_deployment(self,start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs):
         self.plane.calculate_weight()
-<<<<<<< HEAD
         actual_data, expected_data = self.get_weather_data(start_date, end_date, dt) # move this outside loop
-=======
-        actual_data, expected_data = self.get_weather_data(start_date, end_date) # move this outside loop
->>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
         vehicle_states = ["moored", "flying"]
         actions = ["float", "fly"]
         mdp_model = mdp(self.plane,
@@ -202,26 +188,39 @@ class Simulation:
         mdp_model.show_progress=True
         if algo == "Greedy":
             data = []
-            for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation",leave=False):
-                state_history_list,solar_list,reward,last_step = self._simulate_greedy_behavior(auto=auto,true_success_prob=true_success_prob)
+            for i in tqdm(range(num_runs),desc=f"{algo} Simulation",leave=False):
+                # state_history_list,solar_list,reward,last_step = self._simulate_greedy_behavior(auto=auto,true_success_prob=true_success_prob)
+                # data.append({
+                #     "Iteration": i,
+                #     "StateHistory": state_history_list,
+                #     "SolarHistory": solar_list,
+                #     "Reward": reward,
+                #     "LastStep": last_step
+                # })
+                reward,last_step = self._simulate_greedy_behavior(auto=auto,true_success_prob=true_success_prob)
                 data.append({
                     "Iteration": i,
-                    "StateHistory": state_history_list,
-                    "SolarHistory": solar_list,
                     "Reward": reward,
                     "LastStep": last_step
                 })
             df = pd.DataFrame(data)
             return df
+        
         elif algo == "MDP":
             mdp_model.create_ev_table()
             data = []
             for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation"):
-                state_history_list,solar_list,reward,last_step = self._simulate_mdp_behavior(auto=auto,true_success_prob=true_success_prob)
+                # state_history_list,solar_list,reward,last_step = self._simulate_mdp_behavior(auto=auto,true_success_prob=true_success_prob)
+                # data.append({
+                #     "Iteration": i,
+                #     "StateHistory": state_history_list,
+                #     "SolarHistory":solar_list,
+                #     "Reward": reward,
+                #     "LastStep": last_step
+                # })
+                reward,last_step = self._simulate_mdp_behavior(auto=auto,true_success_prob=true_success_prob)
                 data.append({
                     "Iteration": i,
-                    "StateHistory": state_history_list,
-                    "SolarHistory":solar_list,
                     "Reward": reward,
                     "LastStep": last_step
                 })
@@ -242,19 +241,11 @@ class Simulation:
                                             true_success_prob = true_success_prob,
                                             simulate_failure = True)
         
-<<<<<<< HEAD
     def get_weather_data(self,start_date:datetime,end_date:datetime,dt:int):
         """Return expected and actual solar and wind data for given indices."""
         actual_data = self._load_weather_data(dt)
         actual_data = actual_data.loc[start_date:end_date]
         df = self._load_expected_weather_data(dt)
-=======
-    def get_weather_data(self,start_date:datetime,end_date:datetime):
-        """Return expected and actual solar and wind data for given indices."""
-        actual_data = self._load_weather_data()
-        actual_data = actual_data.loc[start_date:end_date]
-        df = self._load_expected_weather_data()
->>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
         # Define start and end dates (month, day, hour, minute)
         start_month = start_date.month
         start_day = start_date.day
@@ -285,7 +276,6 @@ class Simulation:
         
         return actual_data,expected_data
 
-<<<<<<< HEAD
     def _load_weather_data(self, dt: int, directory: str=r"Data\HISTORICAL_DATA"):
         """Load actual solar and wind data from pickle files with a specific timestep in the filename."""
         # Create regex pattern to match files with the specified timestep (in minutes)
@@ -321,16 +311,4 @@ class Simulation:
             return expected_data
         else:
             raise FileNotFoundError(f"No file found in '{directory}' with timestep '{dt}' minutes.")
-=======
-    def _load_weather_data(self):
-        """Load solar and wind data from pickle files."""
-        actual_file = r"Data\HISTORICAL_DATA\data_hourly.pkl"
-        actual_data = pd.read_pickle(actual_file)
-        return actual_data
-    
-    def _load_expected_weather_data(self):
-        """Load solar and wind data from pickle files."""
-        expected_file = r"Data\EXPECTED_DATA\data_expected.pkl"
-        expected_data = pd.read_pickle(expected_file)
-        return expected_data
->>>>>>> 255344c5e08cfb4d772612923fec16f8e17059ff
+

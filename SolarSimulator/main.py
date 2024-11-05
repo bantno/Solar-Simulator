@@ -69,9 +69,9 @@ capacities = [20,50,80]
 mdp_probs = [0.5,0.9,1.0]
 success_prob=0.9
 visualize = True
-dt=10
+dt=60
 actual_data, expected_data = sim.get_weather_data(start_date,end_date,dt=dt)
-NUM_RUNS = 1000
+NUM_RUNS = 1
 
 # Run simulation
 for cap in tqdm(capacities, desc="Processing capacities"):

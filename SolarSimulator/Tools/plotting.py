@@ -7,11 +7,8 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from tqdm import tqdm
 
-from paretoset import paretoset
-
 from BaseClasses.simulation_base import Simulation
 from BaseClasses.seaplane_base import Seaplane
-from Utilities import ParetoFront
 
 def day_to_month_day(day_number, year):
     day_number = int(day_number)
@@ -149,69 +146,22 @@ def plot_battery_sweep(cap,duty,label = "",filename=-1,fig = -1,title=""):
         plt.show()
     
     return fig
-    
 
-def run_simulation(sim: Simulation,
-                   solar_file,
-                    start_index,
-                   end_index,
-                   U=20,
-                   rho=1.1,
-                   algo="MDP"):
-    
-    """
-    Simulates and plots the duty cycle for the given plane, solar data file, cruise speed, air density, and algorithm.
-    
-    Parameters:
-    -----------
-    plane: Seaplane
-        Seaplane object which is to be simulated
-    year: int
-        Year in which simulation is to start
-    month: int
-        Month in which simulation is to start
-    day: int
-        Day in which simulation is to start
-    days: int
-        Number of days to simulate
-    """
-    plane = sim.plane
-    plane.update_plane()
-    print(plane.capacity)
-    # times, P_solar = sim.calc_collected_energy((year,year),(month,month),(day,day),periods=6*24*days,frequency='10min',cs=sim.cs)
-
-    # Extract the slice of the DataFrame
-    # P_solar_actual = pd.read_pickle(solar_file)[(29.25,  -85.0)].loc[start_index:end_index]
-    # P_solar_expected = pd.read_pickle(r"Data\DISTRIBUTIONS\solar_ev.pkl")[(29.25,  -85.0)].loc[start_index:end_index]
-    state_history,solar_power = sim.simulate_deployment(U=U,
-                                                       rho=rho,
-                                                       takeoff_capacity=1,
-                                                       landing_capacity=.05,
-                                                       start_index=start_index,
-                                                       end_index=end_index,
-                                                       dt=60,
-                                                       algo=algo)
-    
-    times = generate_datetimes(start_index, end_index, timestep=60)
-    
-    return times, state_history, solar_power
-
-    
-def plot_simulation(times,P_solar,state_history,filename=-1, fig = -1, label=""):
+def plot_simulation(times,state_history,P_solar,filename=-1, fig = -1, label=""):
     """Plot results of simulation"""
     num_plots = 2
     if fig == -1:
         fig, axes = plt.subplots(num_plots, 1,figsize=(12,6))
     if isinstance(fig,Figure):
         axes = fig.axes
-    titles = ["Battery Charge Level", "Collected Solar Power", "Vehicle State"]
+    titles = ["Battery Charge Level", "Solar Power", "Vehicle State"]
     xlabel = "Dates"
     ylabels = ["Battery Charge [%]", "Power [W]", "State"]
     soc = [s[0] for s in state_history]
-    solar_power = [p[0] for p in P_solar]
+    solar_power = P_solar
     data = [soc,solar_power]
     for i in range(np.min([len(axes),num_plots])):
-        plot_data(axes[i],times,data[i],titles[i],xlabel,ylabels[i],label)
+        plot_data(axes[i],times[0:len(data[i])],data[i],titles[i],xlabel,ylabels[i],label)
 
     plt.tight_layout() 
 
@@ -223,111 +173,52 @@ def plot_simulation(times,P_solar,state_history,filename=-1, fig = -1, label="")
         plt.show()
 
     return fig
+
+def plot_simulation_results(times, state_history, expected_solar, actual_solar, filename=-1, fig=-1, label=""):
+    """Plot results of simulation"""
+    num_plots = 2
+    if fig == -1:
+        fig, axes = plt.subplots(num_plots, 1, figsize=(12, 6))
+    if isinstance(fig, Figure):
+        axes = fig.axes
+    titles = ["Battery Charge Level", "Solar Power"]
+    xlabel = "Dates"
+    ylabels = ["Battery Charge [%]", "Power [W/m\u00B2]"]
+
+    # Ensure all data series are aligned by trimming to the shortest length
+    min_length = min(len(times), len(state_history), len(expected_solar), len(actual_solar))
+    times = times[:min_length]
+    soc = [s[0] for s in state_history[:min_length]]  # Correct indexing to avoid extra dimension
+    expected_solar = expected_solar[:min_length]
+    actual_solar = actual_solar[:min_length]
+
+    # Debugging output to check data lengths
+    print(f"Data lengths after trimming: times={len(times)}, soc={len(soc)}, expected_solar={len(expected_solar)}, actual_solar={len(actual_solar)}")
+
+    # Plot state of charge
+    plot_data(axes[0], times[:len(soc)], soc, titles[0], xlabel, ylabels[0], label)
+    plot_data(axes[1], times[:len(actual_solar)], expected_solar, titles[1], xlabel, ylabels[1], label="Expected Solar Power")
+    plot_data(axes[1], times[:len(actual_solar)], actual_solar, titles[1], xlabel, ylabels[1], label="Actual Solar Power")
+
+    plt.tight_layout()
+
+    if filename != -1:
+        plot_path = os.path.join("Figures", f"{filename}.png")
+        plt.savefig(plot_path)
+    else:
+        plt.show()
+
+    return fig
     
 def plot_data(ax,x_data,y_data, title:str="", xlabel:str="X Data", ylabel:str="Y Data",label:str=""):
     ax.plot(x_data,y_data,label=label)
     # ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    ax.set_title(title)
     if not label == "":
         ax.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
     ax.grid(True)
-
-def make_pareto(plane: Seaplane,filename:str = "Pareto"):
-    # Define the bounds for each decision variable
-    bounds = [(3, 25), (1, 1)]  # Example bounds for a 2D problem
-
-    # Define the objective functions
-    def objective_functions(x,plane):
-        """
-        Define your objective functions here.
-        For example, for a two-objective problem:
-
-        """
-        days=31
-        f1,num_takeoffs = battery_sweep(plane,x[0],days=days,month=6)
-        # # TODO: Create an objective function that accounts for the riskiness of taking off
-        f2 = num_takeoffs/days
-
-        # f1 = np.sqrt(1+x[0]**2)
-        # f2 = np.sqrt((1-x[0])**4)*1.5
-        return [f1, f2]
-
-    # Create an instance of ParetoFront
-    pareto_front = ParetoFront.Pareto(objective_functions, bounds)
-
-    # Number of samples for Latin Hypercube Sampling
-    n_samples = 250
-
-    # Calculate the Pareto front using LHS
-    samples,pf,non_dominated_points = pareto_front.generate_pareto_front(n_samples,plane)
-
-    # Extract the objective values for plotting
-    pf = np.array(pf)
-    non_dominated_points = np.array(non_dominated_points)
-
-    # Plot the Pareto front
-    # fig, (ax1,ax2) = plt.subplots(1, 2,figsize=(12,6))
-    # ax1.scatter(samples.iloc[:,0],samples.iloc[:,1])
-    # ax1.set_xlabel("Battery Capacity [Ah]")
-    # ax1.set_title("Samples")
-    
-    # ax2.scatter(non_dominated_points[:, 0], non_dominated_points[:, 1], marker='o', color='grey', label='Non-dominated Points')
-    # ax2.scatter(pf[:, 0], pf[:, 1], marker='o', color='b', label='Pareto Front (LHS)')
-    # ax2.set_xlabel('Percentage of Daylight Hours on Water [%]')
-    # ax2.set_ylabel('Takeoffs Per Day')
-    # ax2.set_title('Pareto Front using Latin Hypercube Sampling')
-
-    plt.scatter(non_dominated_points[:, 0], non_dominated_points[:, 1], marker='o', color='grey', label='Non-dominated Points')
-    plt.scatter(pf[:, 0], pf[:, 1], marker='o', color='b', label='Pareto Front (LHS)')
-    plt.xlabel('Percentage of Daylight Hours on Water [%]')
-    plt.ylabel('Takeoffs Per Day')
-    plt.title('Pareto Front using Latin Hypercube Sampling')\
-
-
-        
-
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plot_path = os.path.join("Figures", f"{filename}.png")
-    plt.savefig(plot_path)
-    plt.close()
-
-def make_pareto_classic(plane: Seaplane,bounds,n_samples: int,filename: str = "ParetoFront"):
-    n_w = 5
-    values = np.zeros((n_w, n_samples))
-    samples = np.random.uniform(low=bounds[0], high=bounds[1], size=n_samples)
-    i = 0
-    
-    for  w in tqdm(np.linspace(0,1,n_w)):
-        j = 0
-        for sample in tqdm(samples):
-            f1,f2 = func(sample,plane)
-            F = f1*w+f2*(1-w)
-            values[i,j] = F
-            j+=1
-        plt.scatter(samples,values[i,:], label = f'W = {w}')
-        i+=1
-
-        
-    
-    # Add a legend
-    plt.legend()
-
-    # Add labels and title
-    plt.xlabel('Battery Capacity')
-    plt.ylabel('Objective Function Value (F)')
-    plt.title('F = DutyCycle*w+NumTakeoff*(1-w)')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
-    plt.grid(True)
-
-    # Show the plot
-    plot_path = os.path.join("Figures", f"{filename}.png")
-    plt.savefig(plot_path)
-
-    return values
 
 def func(x,plane):
     """

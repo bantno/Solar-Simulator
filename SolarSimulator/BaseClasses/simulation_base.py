@@ -146,11 +146,9 @@ class Simulation:
         auto = Autonomy(dt,mdp_model=mdp_model,data=actual_data,whale_probabilities=self.whale_table)
         mdp_model.show_progress=True
         data = {}
-
-        # Loop over the number of runs with tqdm progress bar
-        for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-            # Simulate the behavior
-            if algo == "Greedy":
+        # Simulate the behavior
+        if algo == "Threshold":
+            for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
                 if self.save_history:
                     reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_simple_behavior(
                         initial_state=(100, "moored"),
@@ -180,13 +178,10 @@ class Simulation:
                         "Reward": reward,
                         "LastStep": last_step
                     }
-
-                # Convert the multilevel dictionary to a DataFrame
-                df = pd.DataFrame.from_dict(data, orient='index')  # 'index' means the outer keys become the rows  
-                return df
     
-            elif algo == "MDP": 
-                mdp_model.create_ev_table()
+        elif algo == "Optimal": 
+            mdp_model.create_ev_table()
+            for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
                 # Simulate the behavior
                 if self.save_history:
                     reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_mdp_behavior(
@@ -217,12 +212,13 @@ class Simulation:
                         "Reward": reward,
                         "LastStep": last_step
                     }
+        else:
+            raise ValueError(f"Unknown algorithm: {algo}. Use 'Threshold' or 'Optimal'.")
 
-                # Convert the multilevel dictionary to a DataFrame
-                df = pd.DataFrame.from_dict(data, orient='index')  # 'index' means the outer keys become the rows
-                return df
-            else:
-                raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")
+        # Convert the multilevel dictionary to a DataFrame
+        df = pd.DataFrame.from_dict(data, orient='index')  # 'index' means the outer keys become the rows
+        return df
+ 
         
     def get_weather_data(self,start_date:datetime,end_date:datetime,dt:int):
         """Return expected and actual solar and wind data for given indices."""

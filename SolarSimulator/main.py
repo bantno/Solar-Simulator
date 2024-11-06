@@ -46,7 +46,7 @@ if __name__ == '__main__':
     )
 
 
-    sim = Simulation(plane, lat, lon, tz, save_history=True)
+    sim = Simulation(plane, lat, lon, tz, save_history=False)
     fig = -1
     duty_cycle = []
 
@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
     utc_offset = timezone(timedelta(hours=-6))
     start_date = pd.to_datetime(datetime(2019,6,2).replace(tzinfo=utc_offset))
-    end_date = pd.to_datetime(datetime(2019,6,16).replace(tzinfo=utc_offset))
+    end_date = pd.to_datetime(datetime(2019,7,2).replace(tzinfo=utc_offset))
 
     filename = f"SimResults_{time_string}"
 
@@ -63,9 +63,9 @@ if __name__ == '__main__':
     capacities = [50]
     mdp_probs = [0.9]
     success_prob=1.0
-    visualize = True
+    visualize = False
     dt=30
-    NUM_RUNS = 1
+    NUM_RUNS = 1000
     # actual_data, expected_data = sim.get_weather_data(start_date,end_date,dt=dt)
     # solar_data_expected = expected_data["expected_solar_rad"].values
     # solar_data_actual = actual_data["shortwave_radiation"].values
@@ -77,15 +77,15 @@ if __name__ == '__main__':
 
         
         # Greedy Simulation
-        algo='Greedy'
+        algo='Threshold'
         times,data = sim.run_simulation(start_date,end_date,dt,algo=algo,mdp_success_prob=0.9,true_success_prob=success_prob,runs=NUM_RUNS)
-        data.to_pickle(f"Greedy_Data_c{cap}_p{0.9}_{dt}min.pkl")
+        data.to_pickle(f"{algo}_Data_c{cap}_p{0.9}_{dt}min.pkl")
 
         for mdp_success_prob in tqdm(mdp_probs, desc=f"Processing probabilities for cap={cap}", leave=False):
             # MDP Simulation
-            algo='MDP'
+            algo='Optimal'
             times,data = sim.run_simulation(start_date,end_date,dt,algo=algo,mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
-            data.to_pickle(f"MDP_Data_c{cap}_p{mdp_success_prob}_{dt}min.pkl")
+            data.to_pickle(f"{algo}_Data_c{cap}_p{mdp_success_prob}_{dt}min.pkl")
 
 
     if visualize:

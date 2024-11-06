@@ -100,34 +100,51 @@ class PickleDataProcessor:
         plt.tight_layout()  # Adjust layout to prevent overlap
         plt.show()
     
-    def plot_reward_histogram(self, filepath, bins=50):
-        """Plot a histogram of Reward values from a single file with reward on the x-axis and count of cases on the y-axis."""
-        df = pd.read_pickle(filepath)
+    def plot_reward_histogram(self, directory, bins=50):
+        """Plot histograms of Reward values from each file in a directory on separate subplots."""
+        
+        # Get a list of all .pkl files in the directory
+        files = [f for f in os.listdir(directory) if f.endswith('.pkl')]
+        
+        # Set up the figure with the appropriate number of subplots
+        fig, axes = plt.subplots(len(files), 1, figsize=(10, 4 * len(files)))
+        fig.tight_layout(pad=3)
 
-        if "Reward" in df.columns:
-            plt.figure(figsize=(8, 6))
-            plt.hist(df["Reward"], bins=bins, edgecolor="black")
-            plt.title(f"Histogram of Rewards")
-            plt.xlabel("Whales Spotted")
-            plt.ylabel("Number of Cases")
-            plt.grid(axis='y', linestyle='--', alpha=0.7)
-            if self.show:
-                plt.show()
+        # Ensure axes is always a list for consistent indexing, even with one file
+        if len(files) == 1:
+            axes = [axes]
+        
+        # Loop through each file and create a subplot
+        for i, filename in enumerate(files):
+            filepath = os.path.join(directory, filename)
+            df = pd.read_pickle(filepath)
+
+            # Check if "Reward" column exists in the file
+            if "Reward" in df.columns:
+                ax = axes[i]
+                ax.hist(df["Reward"], bins=bins)
+                ax.set_title(f"{filename}")
+                ax.set_xlabel("Whales Spotted")
+                ax.set_ylabel("Number of Cases")
             else:
-                filename = "histogram.png"
-                plt.savefig(r"Figures\Histogram" + f"\{filename}")
+                print(f"No 'Reward' column found in {filename}. Skipping this file.")
+
+        plt.subplots_adjust(hspace=0.5)  # Adjust space between subplots
+        if self.show:
+            plt.show()
         else:
-            print(f"No Reward column found in {filepath}.")
+            filename = "histogram.png"
+            plt.savefig(r"Figures\Histogram" + f"\{filename}")
 
 # Example usage
 if __name__ == "__main__":
     processor = PickleDataProcessor(directory=r"Results\11-5\Jan2-Jun2\1000")  # Use "." for the current directory
-    processor.process_files()
+    # processor.process_files()
 
-    results_df = processor.get_results_df()
+    # results_df = processor.get_results_df()
     # results_df.to_csv("Run.csv")
-    print(results_df)  # Display the DataFrame
+    # print(results_df)  # Display the DataFrame
 
     # processor.plot_results_by_probability()
-    processor.plot_all_data()
-    # processor.plot_reward_histogram(filepath=r"Greedy_Data_c40_p0.9_30min.pkl")
+    # processor.plot_all_data()
+    processor.plot_reward_histogram(directory=r".",bins=30)

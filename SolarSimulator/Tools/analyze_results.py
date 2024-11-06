@@ -42,6 +42,7 @@ class PickleDataProcessor:
         if 'Reward' in df.columns and 'LastStep' in df.columns:
             mean_reward = df['Reward'].mean()
             mean_failure_step = round(df['LastStep'].mean())
+            print(f"Number of runs in dataset {filepath}: {len(df)}")
             return mean_reward, mean_failure_step
         else:
             print(f"Missing columns in {filepath}")
@@ -126,6 +127,7 @@ class PickleDataProcessor:
                 ax.set_title(f"{filename}")
                 ax.set_xlabel("Whales Spotted")
                 ax.set_ylabel("Number of Cases")
+                ax.set_xlim((20, 100))
             else:
                 print(f"No 'Reward' column found in {filename}. Skipping this file.")
 
@@ -138,13 +140,14 @@ class PickleDataProcessor:
 
 # Example usage
 if __name__ == "__main__":
-    processor = PickleDataProcessor(directory=r"Results\11-5\Jan2-Jun2\1000")  # Use "." for the current directory
-    # processor.process_files()
+    dire = r"Results\11-6"
+    processor = PickleDataProcessor(directory=dire)  # Use "." for the current directory
+    processor.process_files()
 
-    # results_df = processor.get_results_df()
+    results_df = processor.get_results_df()
     # results_df.to_csv("Run.csv")
-    # print(results_df)  # Display the DataFrame
+    print(results_df)  # Display the DataFrame
 
     # processor.plot_results_by_probability()
     # processor.plot_all_data()
-    processor.plot_reward_histogram(directory=r".",bins=30)
+    processor.plot_reward_histogram(directory=dire,bins=30)

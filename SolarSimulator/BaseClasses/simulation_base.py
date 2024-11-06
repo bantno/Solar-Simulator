@@ -35,13 +35,13 @@ class Simulation:
     simulates the vehicle's deployment.
     """
 
-    def __init__(self, plane: Seaplane, lat: float, lon: float, tz: str, cs: bool = False) -> None:
+    def __init__(self, plane: Seaplane, lat: float, lon: float, tz: str, save_history:bool=False) -> None:
         self.plane = plane
         self.lat = lat
         self.lon = lon
         self.tz = tz
-        self.cs = cs
         self.whale_table = WhaleSightingProbability().df
+        self.save_history = save_history
 
     def run_simulation(self,
                     start_date:datetime,
@@ -71,10 +71,7 @@ class Simulation:
         times = pd.date_range(start_date,end_date,freq=f"{dt}min")
         if runs == 1:
             reward = data["Reward"][0]
-            # state_history = data["StateHistory"]
             print(f"Reward {reward} for algorithm {algo}.")
-            
-            # self.generate_simulation_summary_table(start_date,end_date,total_failure_prob=(1-mdp_success_prob),time_step=60)
         return times,data
     
     def generate_simulation_summary_table(self, start_date: tuple, end_date: tuple, 
@@ -148,52 +145,84 @@ class Simulation:
         
         auto = Autonomy(dt,mdp_model=mdp_model,data=actual_data,whale_probabilities=self.whale_table)
         mdp_model.show_progress=True
-        if algo == "Greedy":
-            data = {}
+        data = {}
 
-            # Loop over the number of runs with tqdm progress bar
-            for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
+        # Loop over the number of runs with tqdm progress bar
+        for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
+            # Simulate the behavior
+            if algo == "Greedy":
+                if self.save_history:
+                    reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_simple_behavior(
+                        initial_state=(100, "moored"),
+                        true_success_prob=true_success_prob,
+                        simulate_failure=True,
+                        save_history = self.save_history
+                    )
+
+                    data[i] = {
+                        "Iteration": i,
+                        "StateHistory": state_history_list,
+                        "SolarHistory":solar_list,
+                        "ExpectedSolarHistory":expected_data["expected_solar_rad"].values,
+                        "WhaleHistory":whale_list,
+                        "Reward": reward,
+                        "LastStep": last_step
+                    }
+                else:
+                    reward, last_step = auto.simulate_simple_behavior(
+                        initial_state=(100, "moored"),
+                        true_success_prob=true_success_prob,
+                        simulate_failure=True
+                    )
+
+                    # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
+                    data[i] = {
+                        "Reward": reward,
+                        "LastStep": last_step
+                    }
+
+                # Convert the multilevel dictionary to a DataFrame
+                df = pd.DataFrame.from_dict(data, orient='index')  # 'index' means the outer keys become the rows  
+                return df
+    
+            elif algo == "MDP": 
+                mdp_model.create_ev_table()
                 # Simulate the behavior
-                reward, last_step = auto.simulate_simple_behavior(
-                    initial_state=(100, "moored"),
-                    true_success_prob=true_success_prob,
-                    simulate_failure=True
-                )
+                if self.save_history:
+                    reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_mdp_behavior(
+                        initial_state=(100, "moored"),
+                        true_success_prob=true_success_prob,
+                        simulate_failure=True,
+                        save_history = self.save_history
+                    )
 
-                # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
-                data[i] = {
-                    "Reward": reward,
-                    "LastStep": last_step
-                }
+                    data[i] = {
+                        "Iteration": i,
+                        "StateHistory": state_history_list,
+                        "SolarHistory":solar_list,
+                        "ExpectedSolarHistory":expected_data["expected_solar_rad"].values,
+                        "WhaleHistory":whale_list,
+                        "Reward": reward,
+                        "LastStep": last_step
+                    }
+                else:
+                    reward, last_step = auto.simulate_simple_behavior(
+                        initial_state=(100, "moored"),
+                        true_success_prob=true_success_prob,
+                        simulate_failure=True
+                    )
 
-            # Convert the multilevel dictionary to a DataFrame
-            df = pd.DataFrame.from_dict(data, orient='index')  # 'index' means the outer keys become the rows
-            
-            return df
-        
-        elif algo == "MDP":
-            mdp_model.create_ev_table()
-            data = {}
-            for i in tqdm(range(0,num_runs),desc=f"{algo} Simulation"):
-                # state_history_list,solar_list,reward,last_step = self._simulate_mdp_behavior(auto=auto,true_success_prob=true_success_prob)
-                # data.append({
-                #     "Iteration": i,
-                #     "StateHistory": state_history_list,
-                #     "SolarHistory":solar_list,
-                #     "Reward": reward,
-                #     "LastStep": last_step
-                # })
-                reward,last_step = auto.simulate_mdp_behavior(initial_state=(100,"moored"),
-                                            true_success_prob = true_success_prob,
-                                            simulate_failure = True)
-                data[i] = {
-                    "Reward": reward,
-                    "LastStep": last_step
-                }
-            df = pd.DataFrame(data)
-            return df
-        else:
-            raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")
+                    # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
+                    data[i] = {
+                        "Reward": reward,
+                        "LastStep": last_step
+                    }
+
+                # Convert the multilevel dictionary to a DataFrame
+                df = pd.DataFrame.from_dict(data, orient='index')  # 'index' means the outer keys become the rows
+                return df
+            else:
+                raise ValueError(f"Unknown algorithm: {algo}. Use 'Greedy' or 'MDP'.")
         
     def get_weather_data(self,start_date:datetime,end_date:datetime,dt:int):
         """Return expected and actual solar and wind data for given indices."""

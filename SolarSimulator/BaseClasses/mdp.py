@@ -139,7 +139,7 @@ class mdp:
         """
 
         # print("Creating expected value table...\n")
-        iterator = tqdm(range(self.max_stages-1, -1, -1),desc="Processing EV") if self.show_progress else range(self.max_stages-1, -1, -1)
+        iterator = tqdm(range(self.max_stages-1, -1, -1),desc="Processing EV", leave=False) if self.show_progress else range(self.max_stages-1, -1, -1)
         
         for stage in iterator:
             for state in self.states:

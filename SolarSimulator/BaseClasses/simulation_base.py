@@ -35,13 +35,14 @@ class Simulation:
     simulates the vehicle's deployment.
     """
 
-    def __init__(self, plane: Seaplane, lat: float, lon: float, tz: str, save_history:bool=False) -> None:
+    def __init__(self, plane: Seaplane, lat: float, lon: float, tz: str, save_history:bool=False, use_expected:bool=False) -> None:
         self.plane = plane
         self.lat = lat
         self.lon = lon
         self.tz = tz
         self.whale_table = WhaleSightingProbability().df
         self.save_history = save_history
+        self.use_expected = use_expected
 
     def run_simulation(self,
                     start_date:datetime,
@@ -152,7 +153,10 @@ class Simulation:
                         dt=dt,
                         mission_success_prob=mdp_success_prob
                         )
-        
+        if self.use_expected:
+            actual_data = expected_data.copy()
+            actual_data['shortwave_radiation'] = expected_data['expected_solar_rad']
+            actual_data['wind_speed_10m'] = expected_data['expected_wind_speed']
         auto = Autonomy(dt,mdp_model=mdp_model,data=actual_data,whale_probabilities=self.whale_table)
         mdp_model.show_progress=True
         data = {}

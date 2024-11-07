@@ -52,15 +52,15 @@ if __name__ == '__main__':
     time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 
     utc_offset = timezone(timedelta(hours=-6))
-    start_date = pd.to_datetime(datetime(2019,1,2).replace(tzinfo=utc_offset))
+    start_date = pd.to_datetime(datetime(2019,6,2).replace(tzinfo=utc_offset))
     end_date = pd.to_datetime(datetime(2019,7,2).replace(tzinfo=utc_offset))
 
-    capacities = [25,50,75]
+    capacities = [10,20,30,40,50,60,70,80,90,100]
     mdp_probs = [0.9]
     thresholds = [0.1]
     success_prob=0.9
     visualize = False
-    dt=10
+    dt=30
     NUM_RUNS = 1000
     sim = Simulation(plane, lat, lon, tz, save_history=visualize)
 

@@ -106,7 +106,7 @@ class PickleDataProcessor:
                 marker=markers[i % len(markers)],  # Cycle through markers
                 label=f"{algo_name}"
             )
-        print(self.calculate_percent_improvement(df.sort_values('Capacity')))
+
         plt.title("Mean Reward vs Capacity for All Algorithms")
         plt.xlabel("Capacity")
         plt.ylabel("Mean Reward")
@@ -171,20 +171,44 @@ class PickleDataProcessor:
 
         # Calculate percent improvement
         merged_df['Percent Improvement'] = ((merged_df['MeanReward_optimal'] - merged_df['MeanReward_threshold']) / merged_df['MeanReward_threshold']) * 100
-
+        
         # Reset index for better readability if needed
-        return merged_df.reset_index()[['Capacity', 'Percent Improvement']]
+        return merged_df[['Percent Improvement']]
 
 # Example usage
 if __name__ == "__main__":
-    dire = r"Results\11-5\Jan2-Jun2\1000"
-    processor = PickleDataProcessor(directory=dire)  # Use "." for the current directory
-    processor.process_files()
+    dir_list = [r"Results\PPT-Actual_Data\Actual vs Expected Data\Actual",
+                r"Results\PPT-Actual_Data\Actual vs Expected Data\Expected"]
+    labels = ["Actual","Expected"]
+    improvement = []
+    for idx, directory in enumerate(dir_list):
+        processor = PickleDataProcessor(directory=directory)  # Use "." for the current directory
+        processor.process_files()
+        # print(processor.get_results_df())  # Display the DataFrame
+        improvement.append(processor.calculate_percent_improvement(processor.get_results_df()))
+        # print(improvement[idx])
+        # processor.plot_all_data()
+    
+    improvement[0]['Actual'] = improvement[0]['Percent Improvement']
+    improvement[0] = improvement[0].drop('Percent Improvement',axis=1)
+    improvement[1]['Expected'] = improvement[1]['Percent Improvement']
+    improvement[1] = improvement[1].drop('Percent Improvement',axis=1)
+    print(improvement[0])
+    print(improvement[1])
+    df = improvement[0].join(improvement[1])
+    df = df.sort_index()
+    print(df)
 
-    results_df = processor.get_results_df()
-    # results_df.to_csv("Run.csv")
-    print(results_df)  # Display the DataFrame
+    plt.figure(figsize=(10, 6))
+    df['Actual'].plot(marker='o', label='SSRD=2019 Data')
+    df['Expected'].plot(marker='x', linestyle='--', label='SSRD=Expected Data')
 
-    processor.plot_by_algorithm_and_probability()
-    # processor.plot_all_data()
+    plt.xlabel('Capacity')
+    plt.ylabel('Value')
+    plt.title('Percent Improvement of Optimal Algorithm over Threshold Algorithm')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
     # processor.plot_reward_histogram(directory=dire,bins=30)

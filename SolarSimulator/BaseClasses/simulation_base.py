@@ -47,10 +47,11 @@ class Simulation:
                     start_date:datetime,
                     end_date:datetime,
                     dt,
-                    algo="MDP",
+                    algo=None,
                     mdp_success_prob=0,
                     true_success_prob=0,
-                    runs=1):
+                    runs=1,
+                    threshold=None):
     
         """
         Simulates and plots the duty cycle for the given plane, solar data file, cruise speed, air density, and algorithm.
@@ -58,20 +59,29 @@ class Simulation:
 
         plane = self.plane
         plane.update_plane()
-        # print(f"Capacity in Ah: {plane.capacity}")
-        # print(f"Required Power: {plane.get_required_power(20,1.2)} W")
-        data = self.simulate_deployment(
-                start_date=start_date,
-                end_date=end_date,
-                dt=dt,
-                algo=algo,
-                mdp_success_prob=mdp_success_prob,
-                true_success_prob=true_success_prob,
-                num_runs=runs)
+        if isinstance(threshold,float):
+            data = self.simulate_deployment(
+                    start_date=start_date,
+                    end_date=end_date,
+                    dt=dt,
+                    algo=algo,
+                    mdp_success_prob=mdp_success_prob,
+                    true_success_prob=true_success_prob,
+                    num_runs=runs,
+                    threshold=threshold)
+        else:
+            data = self.simulate_deployment(
+                    start_date=start_date,
+                    end_date=end_date,
+                    dt=dt,
+                    algo=algo,
+                    mdp_success_prob=mdp_success_prob,
+                    true_success_prob=true_success_prob,
+                    num_runs=runs,
+                    threshold=0.1)
+                    
         times = pd.date_range(start_date,end_date,freq=f"{dt}min")
-        if runs == 1:
-            reward = data["Reward"][0]
-            print(f"Reward {reward} for algorithm {algo}.")
+        
         return times,data
     
     def generate_simulation_summary_table(self, start_date: tuple, end_date: tuple, 
@@ -126,7 +136,7 @@ class Simulation:
         return summary_table
 
 
-    def simulate_deployment(self,start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs):
+    def simulate_deployment(self,start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs, threshold):
         self.plane.calculate_weight()
         actual_data, expected_data = self.get_weather_data(start_date, end_date, dt) # move this outside loop
         vehicle_states = ["moored", "flying"]
@@ -154,7 +164,8 @@ class Simulation:
                         initial_state=(100, "moored"),
                         true_success_prob=true_success_prob,
                         simulate_failure=True,
-                        save_history = self.save_history
+                        save_history = self.save_history,
+                        threshold=threshold
                     )
 
                     data[i] = {
@@ -170,7 +181,9 @@ class Simulation:
                     reward, last_step = auto.simulate_simple_behavior(
                         initial_state=(100, "moored"),
                         true_success_prob=true_success_prob,
-                        simulate_failure=True
+                        simulate_failure=True,
+                        save_history = self.save_history,
+                        threshold=threshold
                     )
 
                     # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
@@ -201,7 +214,7 @@ class Simulation:
                         "LastStep": last_step
                     }
                 else:
-                    reward, last_step = auto.simulate_simple_behavior(
+                    reward, last_step = auto.simulate_mdp_behavior(
                         initial_state=(100, "moored"),
                         true_success_prob=true_success_prob,
                         simulate_failure=True

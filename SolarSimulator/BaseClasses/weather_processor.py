@@ -190,15 +190,15 @@ if __name__ == "__main__":
     # Fetch and process data
     processor.fetch_weather_data(latitude=30, longitude=-90, start_date="2000-01-01", end_date="2019-12-31", hourly_vars=["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
     hourly_df = processor.process_hourly_data()
-    processor.save_hourly_data("data_hourly.pkl")
+    # processor.save_hourly_data("data_hourly.pkl")
 
     # Resample and save the data to 10-minute intervals
-    timestep = 10
+    timestep = 30
     resampled_df = processor.resample_data(interval_minutes=timestep, filename=f"data_{timestep}min.pkl")
 
     # filtered_data = processor.filter_data_by_time_step(resampled_df, month=1, day=1, hour=10, minute=10)
     # print(filtered_data)
-    fitted_distributions = processor.fit_distributions(hourly_df,"data_expected.pkl")
+    # fitted_distributions = processor.fit_distributions(hourly_df,"data_expected.pkl")
     fitted_distributions = processor.fit_distributions(resampled_df,f"data_expected_{timestep}min.pkl")
     print(fitted_distributions)
 

@@ -2,6 +2,7 @@ import os
 import re
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta, timezone
 
 class SolarChargePlotter:
@@ -30,15 +31,13 @@ class SolarChargePlotter:
         Returns a tuple with these values.
         """
         # Regex patterns for Greedy and MDP files
-        greedy_pattern = r"Greedy_Data_c(\d+)_p(0\.\d+)"
-        mdp_pattern = r"MDP_Data_c(\d+)_p(\d+\.\d+)"
-        
-        if match := re.search(greedy_pattern, filename):
-            cap, prob = match.groups()
-            return f"Greedy, cap={cap}, p={prob}"
-        elif match := re.search(mdp_pattern, filename):
-            cap, prob = match.groups()
-            return f"MDP, cap={cap}, p={prob}"
+        match = re.match(r"(\w+)_Data_c(\d+)_p([\d.]+)_(\d+)min_(\d+-\d+)", filename)
+        if match:
+            algo, cap, prob, dt,_ = match.groups()
+            cap = int(cap)
+            prob = float(prob)
+            dt = int(dt)
+            return algo
         else:
             return "Unknown"
 
@@ -161,6 +160,60 @@ class SolarChargePlotter:
         plt.savefig(r"Figures\StatePlot\state_plot_"+f"{self.start_date.day_of_year}_{self.dt}.png")
         plt.show()
 
+    def plot_reward_vs_threshold(self):
+        """
+        Plot reward vs threshold for all pickle files in the given directory.
+        The function will extract the threshold from each file's name and plot the corresponding reward.
+        """
+        plt.figure(figsize=(8, 6))
+
+        rewards = []
+        thresholds = []
+        # Iterate over all files in the directory
+        for file_name in os.listdir(self.directory):
+            if file_name.endswith(".pkl"):
+                file_path = os.path.join(self.directory, file_name)
+
+                # Extract the threshold from the filename using regex
+                threshold_match = re.search(r't([\d\.]+)', file_name)  # Capture the value after 't'
+                if threshold_match:
+                    threshold_value = float(threshold_match.group(1))
+                    # Load data from the pickle file
+                    with open(file_path, 'rb') as f:
+                        data = pd.read_pickle(f)
+
+                    # Assuming the data has 'reward' as a key (adjust this if the structure is different)
+                    thresholds.append(threshold_value)
+                    rewards.append(data['Reward'].mean())
+                else:
+                    algo_match = re.search(r'([\w])_Data+', file_name)  # Capture the value after 't'
+                    with open(file_path, 'rb') as f:
+                        data = pd.read_pickle(f)
+
+                    # Assuming the data has 'reward' as a key (adjust this if the structure is different)
+                    optimal_reward = data['Reward'].mean()
+                    print(optimal_reward)
+                    
+
+
+                # Plot reward vs threshold
+        sorted_indices = np.argsort(thresholds)
+        thresholds = np.array(thresholds)[sorted_indices]
+        rewards = np.array(rewards)[sorted_indices]
+        plt.plot(thresholds[1:],rewards[1:] , marker='o', linestyle='-',color='orange', label='Threshold')
+        plt.axhline(y=optimal_reward, label='Optimal')
+        plt.axhline(y=rewards[0], label='Greedy',color='red')
+
+
+
+
+        plt.title('Reward vs Threshold')
+        plt.xlabel('Threshold')
+        plt.ylabel('Reward')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
 
 if __name__ == '__main__':
     dt=30
@@ -169,3 +222,4 @@ if __name__ == '__main__':
     end_date = pd.to_datetime(datetime(2019,7,2).replace(tzinfo=utc_offset))
     plotter = SolarChargePlotter(r".",start_date=start_date,time_step=f"{dt}min")
     plotter.plot_data()
+    # plotter.plot_reward_vs_threshold()

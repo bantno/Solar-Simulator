@@ -16,10 +16,12 @@ class Autonomy:
                                  initial_state,
                                  true_success_prob,
                                  simulate_failure = False,
-                                 save_history = False):
+                                 save_history = False,
+                                 threshold = 0.1):
 
         reward = 0
         max_stages = len(self.data)-1
+        # print(f"Threshold = {threshold}\n")
 
         self.stepwise_failure_prob = self.calculate_step_transition_prob(self.dt*max_stages,true_success_prob,self.dt)
         self.wind_speed_table = self.data["wind_speed_10m"]
@@ -48,7 +50,7 @@ class Autonomy:
             minutes = (self.dt * k) % 1440
             whale_prob = self.whale_prob.loc[minutes // 120]
             is_flying_feasible = self.mdp_model.is_action_feasible("fly",current_state,k,solar_power_wpm2)
-            is_reward_sufficient = whale_prob>0.1 and solar_power_wpm2>0
+            is_reward_sufficient = whale_prob>threshold and solar_power_wpm2>0
             is_battery_sufficient = current_state[0] > nightly_idle_soc*2 + single_flight_soc # TODO: Create better way to determine this
 
             if is_flying_feasible and is_reward_sufficient and is_battery_sufficient:

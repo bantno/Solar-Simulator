@@ -4,8 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from datetime import datetime
-from mpl_toolkits.mplot3d import Axes3D
-
+from scipy.stats import beta
 from tqdm import tqdm
 
 class mdp:
@@ -41,6 +40,7 @@ class mdp:
         
         expected_data.sort_index()
         self.expected_solar_power = expected_data["expected_solar_rad"]
+        self.expected_data = expected_data
         self.expected_wind_speed = expected_data["expected_wind_speed"]
         self.max_stages = len(pd.date_range(start_date,end_date,freq=f"{dt}min"))
         if len(self.expected_solar_power)!=len(self.expected_wind_speed):
@@ -157,7 +157,7 @@ class mdp:
                 best_action = self.actions[np.argmax(reward_list)]
                 self.ev_table.loc[state, stage] = max_reward
                 self.policy_table.loc[state, stage] = best_action
-        # print("Done!")
+        
 
     def value_iteration(self, max_iterations=10):
         """
@@ -197,8 +197,51 @@ class mdp:
         else:
             print(f"Value iteration terminated after reaching max iterations ({max_iterations}).")
 
+    def _generate_potential_states(self,current_state,action,solar_alpha,solar_beta,solar_scale,N):
+        """
+        Generates a vector of states that could results from the current state and action at
+        a given stage using Monte Carlo simulation.
+
+        Parameters:
+        - current_state : (soc,vehicle_state)
+            soc = state of charge | can take any integer value from 0 to 100, inclusive
+            vehicle_state = string | either "moored" or "flying"
+        - action : string | "floating" or "flying"
+        - solar_alpha : float | alpha parameter of the beta distribution that defines solar radiation
+            at a given stage
+        - solar_beta : float | beta parameter of the beta distribution that defines solar radiation
+            at a given stage
+        - solar_scale : float | scale factor by which the value sampled from the beta distribution
+            should be multiplied
+        - N : int | number of sample states to generate
+
+        Returns:
+        - potential_states : numpy array of tuples, size=(N,1) | Potential states
+        """
+        soc, vehicle_state = current_state
+        solar_radiation_samples = np.random.beta(solar_alpha, solar_beta, N) * solar_scale
+
+        # Initialize new SoC based on action using vectorized calculations
+        potential_soc_changes = np.array([
+            self.calculate_soc_update(self.plane, action, self.dt,solar_radiation_samples[i]) for i in range(N)
+        ])
+        
+        new_soc_array = np.clip(soc + potential_soc_changes, -100, 100)
+
+        # Determine new vehicle state based on action
+        if action == "float":
+            new_vehicle_state = "moored"
+        elif action == "fly":
+            new_vehicle_state = "flying"
+        
+        # Create an array of potential states as tuples
+        potential_states = np.array([(new_soc_value, new_vehicle_state) for new_soc_value in new_soc_array])
+
+        return potential_states
+
+
     def get_future_reward(self, state, action, stage):
-        """snip
+        """
         Returns the future reward for transitioning to a new state after performing the given action.
         """
         next_stage = stage + 1

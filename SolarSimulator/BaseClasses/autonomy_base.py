@@ -10,7 +10,7 @@ class Autonomy:
         self.dt = dt
         self.mdp_model = mdp_model
         self.data = data
-        self.whale_prob = whale_probabilities["Sighting Probability"]
+        self.whale_prob = whale_probabilities
 
     def simulate_simple_behavior(self,
                                  initial_state,
@@ -47,13 +47,11 @@ class Autonomy:
             current_state = state_history_list[k]
             current_energy = energy_history_list[k]
             solar_power_wpm2 = shortwave_radiation[k]
-            minutes = (self.dt * k) % 1440
-            whale_prob = self.whale_prob.loc[minutes // 120]
-            is_flying_feasible = self.mdp_model.is_action_feasible("fly",current_state,k,solar_power_wpm2)
+            whale_prob = self.get_sighting_probability(self.whale_prob,k,self.dt,0)
             is_reward_sufficient = whale_prob>threshold and solar_power_wpm2>0
             is_battery_sufficient = current_state[0] > nightly_idle_soc*2 + single_flight_soc # TODO: Create better way to determine this
 
-            if is_flying_feasible and is_reward_sufficient and is_battery_sufficient:
+            if is_reward_sufficient and is_battery_sufficient:
                 best_action = "fly"
             else :
                 best_action = "float"
@@ -66,12 +64,11 @@ class Autonomy:
                 failure_prob = -1
 
             is_action_successful = np.random.uniform(0,1) > failure_prob
-            is_action_feasible = self.mdp_model.is_action_feasible(best_action,current_state,k,solar_power_wpm2)
             
-            if is_action_successful and is_action_feasible :
+            if is_action_successful :
                 new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,best_action,self.dt,solar_power_wpm2)
                 new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
-                reward+=self.R(current_state,best_action,k)
+                reward+=self.R(current_state,best_action,k,whale_prob)
                 state_history_list[k+1]=new_state
                 energy_history_list[k+1]=new_energy
                 whale_list[k+1]=whale_prob
@@ -139,8 +136,7 @@ class Autonomy:
             if np.random.uniform(0,1) > failure_prob and self.mdp_model.is_action_feasible(best_action,current_state,k,solar_power_wpm2) :
                 new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,best_action,self.dt,solar_power_wpm2)
                 new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
-                reward+=self.R(current_state,best_action,k)
-
+                reward+=self.R(current_state,best_action,k,whale_prob)
                 state_history_list[k+1]=new_state
                 energy_history_list[k+1]=new_energy
                 whale_list[k+1]=whale_prob
@@ -155,7 +151,7 @@ class Autonomy:
 
     
 
-    def R(self,state,action,stage):
+    def R(self,state,action,stage,whale_prob):
         """
         Calculates the reward for performing the given action in the current state at the current stage.
         Includes stochastic rewards based on the probability of finding whales (time-dependent) and wind speed.
@@ -171,8 +167,7 @@ class Autonomy:
         - Reward value considering both deterministic and stochastic factors.
         """
     
-        minutes = (self.dt * stage) % 1440
-        whale_prob = self.whale_prob.loc[minutes // 120]
+    
         whale_reward = 0
 
         # Determine whale sighting probability based on time of day
@@ -298,4 +293,13 @@ class Autonomy:
         net_power = solar_power*panel_efficiency*plane.S - required_power - avionics_power
         energy_change = net_power * dt * 60  # Convert power (W) to energy (Joules)
         return energy_change
-
+    @staticmethod
+    def get_sighting_probability(probability_map, current_step, timestep, start_time):
+        # Calculate the current time in minutes
+        current_time = (start_time + (current_step * timestep)) % 1440
+        
+        # Find the nearest start time by rounding down to the closest 120-minute mark
+        nearest_start = (current_time // 120) * 120
+        
+        # Return the probability, or None if out of range
+        return probability_map.get(nearest_start)

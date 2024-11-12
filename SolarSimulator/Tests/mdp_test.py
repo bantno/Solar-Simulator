@@ -69,7 +69,7 @@ class TestMDP(unittest.TestCase):
             start_date=start_date,
             end_date=end_date,
             expected_data=expected_data,
-            whale_prob=whale_prob,
+            whale_surface_probs=whale_prob,
             dt=dt,
             mission_success_prob=0.99,
         )

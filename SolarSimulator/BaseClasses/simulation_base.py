@@ -15,7 +15,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
 from BaseClasses.mdp import mdp
-from BaseClasses.whale_sighting_base import WhaleSightingProbability
+from BaseClasses.whale_sighting_base import WhaleSighting
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.autonomy_base import Autonomy
 
@@ -40,7 +40,7 @@ class Simulation:
         self.lat = lat
         self.lon = lon
         self.tz = tz
-        self.whale_table = WhaleSightingProbability().df
+        self.whale_table = WhaleSighting().probability_map
         self.save_history = save_history
         self.use_expected = use_expected
 
@@ -149,7 +149,7 @@ class Simulation:
                         start_date=start_date,
                         end_date=end_date,
                         expected_data=expected_data,
-                        whale_prob=self.whale_table,
+                        whale_surface_probs=self.whale_table,
                         dt=dt,
                         mission_success_prob=mdp_success_prob
                         )

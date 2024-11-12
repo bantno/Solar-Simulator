@@ -238,6 +238,24 @@ class mdp:
         potential_states = np.array([(new_soc_value, new_vehicle_state) for new_soc_value in new_soc_array])
 
         return potential_states
+    @staticmethod
+    def _get_potential_rewards(dt_min,capacity_j,current_state,required_power_w,solar_alpha,solar_beta,solar_scale,efficiency=0.15,penalty=10):
+        w_to_j = 60*dt_min
+        required_energy = required_power_w*w_to_j
+        current_energy = current_state[0]/100.*capacity_j
+        maximum_collected_energy = solar_scale*efficiency*w_to_j
+
+        threshold = (required_energy - current_energy) / maximum_collected_energy
+        if threshold < 0:
+            prob_less_than_threshold = 0  # If threshold < 0, P(y <= threshold) = 0
+        elif threshold > 1:
+            prob_less_than_threshold = 1  # If threshold > 1, P(y <= threshold) = 1
+        else:
+            # Use Beta CDF to compute the probability P(y <= threshold)
+            prob_less_than_threshold = beta.cdf(threshold, solar_alpha, solar_beta)
+        E_R = -penalty * prob_less_than_threshold
+        return E_R
+
 
 
     def get_future_reward(self, state, action, stage):

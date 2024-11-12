@@ -138,6 +138,42 @@ class TestMDP(unittest.TestCase):
         self.assertTrue(all(socs>=0) and all(socs<100))
         print(socs)
 
+    def test_get_potential_rewards(self):
+        
+        # Case 1: Certain success
+        dt_min = 10
+        capacity_j = 1000000
+        current_state = (100,"test")
+        required_power_w = 0
+        solar_alpha = 20
+        solar_beta = 20
+        solar_scale = 1000
+        expected_reward_1 = self.mdp._get_potential_rewards(dt_min,capacity_j,current_state,required_power_w,solar_alpha,solar_beta,solar_scale)
+        self.assertEqual(expected_reward_1,0)
+
+        # Case 2: Certain Failure
+        dt_min = 10
+        capacity_j = 100
+        current_state = (0,"test")
+        required_power_w = 100
+        solar_alpha = 20
+        solar_beta = 20
+        solar_scale = 1
+        expected_reward = self.mdp._get_potential_rewards(dt_min,capacity_j,current_state,required_power_w,solar_alpha,solar_beta,solar_scale)
+        self.assertTrue(expected_reward<0)
+
+        # Case 3: 50/50 Success/Failure
+        dt_min = 1
+        capacity_j = 100
+        current_state = (100,"test")
+        required_power_w = 200/60
+        solar_alpha = 20
+        solar_beta = 20
+        solar_scale = 200/60
+        efficiency = 1.0
+        penalty = 100
+        expected_reward = self.mdp._get_potential_rewards(dt_min,capacity_j,current_state,required_power_w,solar_alpha,solar_beta,solar_scale,efficiency,penalty)
+        self.assertAlmostEqual(expected_reward,-penalty/2)
 
 if __name__ == '__main__':
     unittest.main()

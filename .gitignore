@@ -2,9 +2,6 @@ SampleData/OldVersions/C3-2.0001.ipt
 SampleData/C3-2.ipt
 .gitignore
 Results/
-**/__pycache__/
-*.pyc
-SolarSimulator/BaseClasses/__pycache__/autonomy_base.cpython-311.pyc
-SolarSimulator/BaseClasses/__pycache__/mdp.cpython-311.pyc
-SolarSimulator/BaseClasses/__pycache__/plotting_base.cpython-311.pyc
-SolarSimulator/BaseClasses/__pycache__/simulation_base.cpython-311.pyc
+# **/__pycache__/
+# *.pyc
+

@@ -2,7 +2,6 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
 from datetime import datetime
 from scipy.stats import beta
 from tqdm import tqdm
@@ -12,72 +11,59 @@ class mdp:
     Class representing a Markov Decision Process (MDP) problem.
     """
 
-    def __init__(self,
-                 plane,
-                 soc_increment,
-                 vehicle_states,
-                 actions,
-                 start_date: datetime,
-                 end_date: datetime,
-                 expected_data,
-                 whale_surface_probs,
-                 dt,
-                 mission_success_prob,
-                 gamma=1.0,
-                 epsilon=1e-3
-                 ):
+    def __init__(self, plane, soc_increment, vehicle_states, actions, start_date: datetime,
+                 end_date: datetime, expected_data, whale_surface_probs, dt, mission_success_prob,
+                 gamma=1.0, epsilon=1e-3):
         
-        self.show_progress = False
+        # Simulation settings and parameters
         self.vehicle_states = vehicle_states
-        self.plane = plane
-        self.soc_increment = soc_increment
-        self.states = self.create_states(soc_increment, vehicle_states)
         self.actions = actions
         self.dt = dt
         self.gamma = gamma
         self.epsilon = epsilon
+        self.show_progress = False
 
-        
+        # Plane and state of charge settings
+        self.plane = plane
+        self.soc_increment = soc_increment
+        self.states = self.create_states(soc_increment, vehicle_states)
+
+        # Expected data and validation
         expected_data.sort_index()
         self.expected_data = expected_data
         self.expected_solar_power = expected_data['expected_solar_rad'].values
-        self.max_stages = len(pd.date_range(start_date,end_date,freq=f"{dt}min"))
-        if self.max_stages!=len(self.expected_data):
+        self.max_stages = len(pd.date_range(start_date, end_date, freq=f"{dt}min"))
+        if self.max_stages != len(self.expected_data):
             raise ValueError(f"Max stages and data lengths do not match. {self.max_stages}!={len(self.expected_data)}")
-        
-        self.stepwise_failure_prob = self.calculate_step_transition_prob(self.max_stages*dt,mission_success_prob,dt)
-        self.whale_surface_probs = whale_surface_probs
-        self.start_time = start_date.minute+60*start_date.hour
 
-        # Initialize expected cumulative reward table
+        # Failure probabilities and whale sighting probabilities
+        self.stepwise_failure_prob = self.calculate_step_transition_prob(
+            self.max_stages * dt, mission_success_prob, dt
+        )
+        self.whale_surface_probs = whale_surface_probs
+        self.start_time = start_date.minute + 60 * start_date.hour
+
+        # Initialize tables for expected rewards and optimal policy
         self.ev_table = pd.DataFrame(
             np.nan, index=pd.MultiIndex.from_tuples(self.states), columns=range(self.max_stages)
         )
-
-        # Initialize optimal policy table
         self.policy_table = pd.DataFrame(
-            np.nan,
-            index=pd.MultiIndex.from_tuples(self.states),
-            columns=range(self.max_stages),
-            dtype=object
+            np.nan, index=pd.MultiIndex.from_tuples(self.states),
+            columns=range(self.max_stages), dtype=object
         )
-
 
     def create_states(self, soc_increment: int, vehicle_states: list) -> list:
         """
         Generate a list of states based on state of charge (SoC) increments and vehicle states.
         """
-        states = []
-        for state in vehicle_states:
-            for soc in range(0, 101, soc_increment):
-                states.append((soc, state))
+        states = [(soc, state) for state in vehicle_states for soc in range(0, 101, soc_increment)]
         return states
 
     def T(self, state, action, stage):
         """
-        Returns the possible next states and their transition probabilities for a given action and stage.
+        Returns failure probability for a given action and stage.
         """
-        success_prob, failure_prob = self.calculate_maneuver_probabilities(state[1], action)
+        _, failure_prob = self.calculate_maneuver_probabilities(state[1], action)
         return failure_prob
 
     def calculate_new_state(self, state, action, solar_power):
@@ -86,70 +72,52 @@ class mdp:
         """
         soc = state[0]
         delta_soc = self.calculate_soc_update(self.plane, action, self.dt, solar_power)
-        new_soc = soc + delta_soc
-        new_soc = min(new_soc, 100)  # Keep SoC less than 100
+        new_soc = min(soc + delta_soc, 100)  # Limit SoC to 100
+        new_vehicle_state = "flying" if action == "fly" else "moored"
 
-        if action == "fly":
-            new_vehicle_state = "flying"
-        elif action == "float":
-            new_vehicle_state = "moored"
-        else:
-            raise ValueError(f"Expected action 'float' or 'fly'. Got {action}.")
+        # Set state to "broken" if SoC falls below 0
+        if new_soc < 0:
+            new_soc, new_vehicle_state = -1, "broken"
         
-        if new_soc < 0 :
-            new_soc = -1
-            new_vehicle_state = "broken"
-
         return (new_soc, new_vehicle_state)
 
     def create_ev_table(self):
         """
         Creates an expectation value (EV) table with the given number of stages.
         """
-        S = self.plane.S
-        dt = self.dt
-        efficiency = 0.15
-        required_cruise_energy = self.plane.required_cruise_power * 60 * self.dt
-        capacity_j = self.plane.voltage*self.plane.capacity*3600
-        alphas = self.expected_data['beta_alpha'].values
-        betas = self.expected_data['beta_beta'].values
-        
-        # Initialize failure penalty and whale found reward
-        failure_penalty = 0
-        whale_found_reward = 1
+        S, dt, efficiency = self.plane.S, self.dt, 0.15
+        required_cruise_energy = self.plane.required_cruise_power * 60 * dt
+        capacity_j = self.plane.voltage * self.plane.capacity * 3600
+        alphas, betas = self.expected_data['beta_alpha'].values, self.expected_data['beta_beta'].values
 
-        iterator = tqdm(range(self.max_stages-1, -1, -1),desc="EV", leave=False) if self.show_progress else range(self.max_stages-1, -1, -1)
+        failure_penalty, whale_found_reward = 0, 1
+        stages = tqdm(range(self.max_stages-1, -1, -1), desc="EV", leave=False) if self.show_progress else range(self.max_stages-1, -1, -1)
 
-        for stage in iterator:
+        for stage in stages:
             for state in self.states:
-                best_action = None
-                reward_list = [-100000000000]*len(self.actions)
-                
-                for idx, action in enumerate(self.actions):
-                    required_energy = 0 if idx==0 else required_cruise_energy
-                    current_energy = state[0]/100*capacity_j
-                    max_collected_energy = 1367*S*dt*60*efficiency
-                    solar_alpha = alphas[stage]
-                    solar_beta = betas[stage]
-                    whale_surface_probability = self.get_sighting_probability(stage,dt,self.start_time)
-                    broken_probability = self.T(state,action,stage)
-                    if idx==0:
-                        k=0
-                    else:
-                        k = whale_found_reward
+                reward_list = [-1e12] * len(self.actions)
 
-                    reward = self.expected_reward(required_energy,current_energy,
-                                                    max_collected_energy,failure_penalty,
-                                                    k,solar_alpha,solar_beta,
-                                                    whale_surface_probability,broken_probability)
-                    future_reward = self.get_future_reward(state, action, stage)
-                    total_reward = reward + self.gamma * future_reward
+                for idx, action in enumerate(self.actions):
+                    required_energy = required_cruise_energy if idx else 0
+                    current_energy = state[0] / 100 * capacity_j
+                    max_collected_energy = 1367 * S * dt * 60 * efficiency
+
+                    solar_alpha, solar_beta = alphas[stage], betas[stage]
+                    whale_surface_probability = self.get_sighting_probability(stage, dt, self.start_time)
+                    broken_probability = self.T(state, action, stage)
+                    k = whale_found_reward if idx else 0
+
+                    reward = self.expected_reward(
+                        required_energy, current_energy, max_collected_energy, failure_penalty,
+                        k, solar_alpha, solar_beta, whale_surface_probability, broken_probability
+                    )
+                    total_reward = reward + self.gamma * self.get_future_reward(state, action, stage)
                     reward_list[idx] = total_reward
 
                 max_reward = np.max(reward_list)
-                best_action = self.actions[np.argmax(reward_list)]
                 self.ev_table.loc[state, stage] = max_reward
-                self.policy_table.loc[state, stage] = best_action
+                self.policy_table.loc[state, stage] = self.actions[np.argmax(reward_list)]
+        
         print(self.ev_table)
     
     @staticmethod
@@ -204,77 +172,103 @@ class mdp:
 
     def get_future_reward(self, state, action, stage):
         """
-        Returns the future reward for transitioning to a new state after performing the given action.
+        Calculate the future reward after transitioning to a new state by performing an action.
+
+        Parameters:
+        - state (tuple): Current state as (SoC, vehicle_state).
+        - action (str): Action to perform, e.g., "fly" or "float".
+        - stage (int): Current stage in the simulation.
+
+        Returns:
+        - float: Future reward value for the next state.
         """
+        # Define the next stage in the sequence
         next_stage = stage + 1
+
+        # Return 0 if this is the last stage, as there is no future reward
         if next_stage not in self.ev_table.columns:
-            return 0  # No future reward beyond the last stage
+            return 0  
+
+        # Calculate the new state based on the current state, action, and solar power for the stage
         new_state = self.calculate_new_state(state, action, self.expected_solar_power[stage])
-        if new_state[0] >=0 :
+
+        # Determine the future reward based on the state of charge in the new state
+        # If the state of charge (SoC) is non-negative, retrieve the reward from the EV table
+        if new_state[0] >= 0:
             future_reward = self.ev_table.loc[new_state, next_stage]
-        else : 
+        else:
+            # If SoC is negative, set future reward to 0
             future_reward = 0
+
         return future_reward
 
     def calculate_soc_update(self, plane, action, dt, solar_power):
         """
-        Calculates the change in SoC after performing the given action.
+        Calculate the change in State of Charge (SoC) after performing the specified action.
+
+        Parameters:
+        - plane: The plane object containing power and battery specifications.
+        - action (str): Action to perform, either "float" or "fly".
+        - dt (float): Time step in minutes.
+        - solar_power (float): Available solar power in watts per square meter.
+
+        Returns:
+        - int: The rounded change in SoC based on the action and environmental conditions.
         """
-        panel_efficiency = 0.15 # TODO: use PVWATTS FOR THIS
+        panel_efficiency = 0.15  # TODO: Update using PVWATTS for more accurate efficiency
+
+        # Determine required power based on action
         if action == "float":
             required_power = 0
         elif action == "fly":
-            required_power = self.plane.required_cruise_power  # Assumed constants for flight
-        else :
+            required_power = plane.required_cruise_power
+        else:
             raise ValueError(f"Expected action 'float' or 'fly'. Got {action}.")
 
-        avionics_power = self.plane.idle_power
-        net_power = solar_power*panel_efficiency*self.plane.S - required_power - avionics_power
-        energy_change = net_power * dt * 60  # Convert power (W) to energy (Joules)
-        soc_change = energy_change / (plane.voltage * plane.capacity * 3600) * 100
+        # Calculate the net power balance
+        avionics_power = plane.idle_power
+        solar_input = solar_power * panel_efficiency * plane.S
+        net_power = solar_input - required_power - avionics_power
+
+        # Convert power (W) to energy (Joules) and then to change in SoC (%)
+        energy_change = net_power * dt * 60  # Convert power to energy
+        soc_change = (energy_change / (plane.voltage * plane.capacity * 3600)) * 100  # Energy to SoC %
+
+        # Round to the nearest SoC increment and return
         return self.soc_increment * round(soc_change / self.soc_increment)
 
     def calculate_maneuver_probabilities(self, current_state, action):
         """
-        Calculate the success and failure probabilities for the given maneuver, adjusting continuously based on wind speed.
-        """
-
-        base_failure_prob = self.stepwise_failure_prob
-        # Base probabilities
-        if current_state == "moored" and action == "float":
-            state_action_factor = 1.0  # High success rate for floating
-        elif current_state == "moored" and action == "fly":
-            state_action_factor = 10.0  # Higher failure risk for taking off
-        elif current_state == "flying" and action == "float":
-            state_action_factor = 10.0  # Moderate risk for flying to floating
-        elif current_state == "flying" and action == "fly":
-            state_action_factor = 2.0  # Low failure risk for continuous flying
-        else:
-            return 0.0, 1.0  # Default to guaranteed failure
-        
-        failure_prob = base_failure_prob * state_action_factor
-        success_prob = 1 - failure_prob  # Success probability is the complement of failure
-
-        return success_prob, failure_prob
-
-
-    @staticmethod
-    def is_daytime(start_time, time_step, stage):
-        """
-        Check if the current simulation stage is within daytime hours (6 AM to 6 PM).
+        Calculate the success and failure probabilities for a maneuver based on the current state, 
+        action, and base failure probability.
 
         Parameters:
-            start_time (int): Start time of the simulation in minutes from midnight (0-1439).
-            time_step (int): Duration of each simulation step in minutes.
-            stage (int): The current stage of the simulation.
+        - current_state (str): The current state of the plane, e.g., "moored" or "flying".
+        - action (str): The maneuver to be performed, e.g., "float" or "fly".
 
         Returns:
-            bool: True if the time falls between 6:00 AM (360) and 6:00 PM (1080), 
-                otherwise False.
+        - tuple: Success and failure probabilities.
         """
-        minutes_per_day = 1440
-        current_time = (start_time + time_step * stage) % minutes_per_day
-        return 360 <= current_time < 1080
+        base_failure_prob = self.stepwise_failure_prob
+
+        # Determine failure probability factor based on state-action combinations
+        state_action_factors = {
+            ("moored", "float"): 1.0,
+            ("moored", "fly"): 10.0,
+            ("flying", "float"): 10.0,
+            ("flying", "fly"): 2.0
+        }
+
+        # Retrieve factor or default to guaranteed failure if combination is invalid
+        state_action_factor = state_action_factors.get((current_state, action), None)
+        if state_action_factor is None:
+            return 0.0, 1.0  # Invalid action for the given state: return guaranteed failure
+
+        # Calculate probabilities
+        failure_prob = base_failure_prob * state_action_factor
+        success_prob = 1 - failure_prob
+
+        return success_prob, failure_prob
     
     @staticmethod
     def calculate_step_transition_prob(period_min, no_failure_probability, step_length_min):
@@ -318,7 +312,21 @@ class mdp:
         return stepwise_failure_probability
     
     def get_sighting_probability(self, current_step, timestep, start_time):
-        current_time = (start_time + (current_step * timestep))%1440 # minutes
+        """
+        Calculate the whale sighting probability for the given step and time.
+
+        This method computes the probability of a whale sighting based on the current time,
+        adjusting for the nearest time block (every 120 minutes) for the given step.
+
+        Parameters:
+            current_step (int): The current step in the simulation.
+            timestep (int): The time interval between each step in minutes.
+            start_time (int): The start time in minutes.
+
+        Returns:
+            float: The probability of whale sighting at the nearest time block.
+        """
+        current_time = (start_time + (current_step * timestep)) % 1440
         nearest_start = (current_time // 120) * 120
         return self.whale_surface_probs.get(nearest_start)
     

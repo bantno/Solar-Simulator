@@ -118,8 +118,7 @@ class Autonomy:
             best_action = optimal_policy.loc[current_state,k]
             current_energy = energy_history_list[k]
             solar_power_wpm2 = shortwave_radiation[k]
-            minutes = (self.dt * k) % 1440
-            whale_prob = self.whale_prob.loc[minutes // 120]
+            whale_prob = self.get_sighting_probability(self.whale_prob,k,self.dt,0)
 
             if simulate_failure :
                 _,failure_prob = self.calculate_maneuver_probabilities(current_state=current_state[1],
@@ -128,12 +127,7 @@ class Autonomy:
             else:
                 failure_prob = -1
 
-            is_battery_sufficient = current_state[0] > nightly_idle_soc*2 + single_flight_soc # TODO: Create better way to determine this
-
-            if not is_battery_sufficient :
-                best_action = "float"
-
-            if np.random.uniform(0,1) > failure_prob and self.mdp_model.is_action_feasible(best_action,current_state,k,solar_power_wpm2) :
+            if np.random.uniform(0,1) > failure_prob :
                 new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,best_action,self.dt,solar_power_wpm2)
                 new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
                 reward+=self.R(current_state,best_action,k,whale_prob)

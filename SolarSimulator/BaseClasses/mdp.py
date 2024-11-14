@@ -77,10 +77,8 @@ class mdp:
         """
         Returns the possible next states and their transition probabilities for a given action and stage.
         """
-        success_prob, failure_prob = self.calculate_maneuver_probabilities(state[1], action, stage)
-        new_state_success = self.calculate_new_state(state, action, stage, self.expected_solar_power.iloc[stage])
-        new_state_failure = (-1,"Broken")  # Stay in the same state on failure
-        return [(success_prob, new_state_success), (failure_prob, new_state_failure)]
+        success_prob, failure_prob = self.calculate_maneuver_probabilities(state[1], action)
+        return failure_prob
 
     def calculate_new_state(self, state, action, solar_power):
         """
@@ -128,16 +126,22 @@ class mdp:
                 reward_list = [-100000000000]*len(self.actions)
                 
                 for idx, action in enumerate(self.actions):
-                    required_energy = 0 if idx==1 else required_cruise_energy
+                    required_energy = 0 if idx==0 else required_cruise_energy
                     current_energy = state[0]/100*capacity_j
                     max_collected_energy = 1367*S*dt*60*efficiency
                     solar_alpha = alphas[stage]
                     solar_beta = betas[stage]
                     whale_surface_probability = self.get_sighting_probability(stage,dt,self.start_time)
+                    broken_probability = self.T(state,action,stage)
+                    if idx==0:
+                        k=0
+                    else:
+                        k = whale_found_reward
+
                     reward = self.expected_reward(required_energy,current_energy,
                                                     max_collected_energy,failure_penalty,
-                                                    whale_found_reward,solar_alpha,solar_beta,
-                                                    whale_surface_probability)
+                                                    k,solar_alpha,solar_beta,
+                                                    whale_surface_probability,broken_probability)
                     future_reward = self.get_future_reward(state, action, stage)
                     total_reward = reward + self.gamma * future_reward
                     reward_list[idx] = total_reward
@@ -149,7 +153,7 @@ class mdp:
         print(self.ev_table)
     
     @staticmethod
-    def expected_reward(P, C, I, k, l, solar_alpha, solar_beta, P_H_1:float)->float:
+    def expected_reward(P, C, I, k, l, solar_alpha, solar_beta, p_H_1:float, p_B_1:float)->float:
         """
         Calculate the expected reward E[R(X, H)].
         
@@ -157,17 +161,19 @@ class mdp:
         - P (float): Required energy.
         - C (float): Stored energy.
         - I (float): Maximum collected energy.
-        - k (float): Penalty if X <= 0 and H = 0.
+        - k (float): Absolute values of penalty for vehicle failure.
         - l (float): Reward if X > 0 and H = 1.
         - alpha (float): Shape parameter for the Beta distribution.
         - beta (float): Shape parameter for the Beta distribution.
-        - P_H_0 (float): Probability that H = 0.
+        - P_H_1 (float): Probability that whale is at the surface.
+        - P_B_1 (float): Probability that B = 1.
         
         Returns:
         - float: Expected reward E[R(X, H)].
         """
         # Probability that H = 1
-        P_H_0 = 1 - P_H_1
+        p_H_0 = 1 - p_H_1
+        p_B_0 = 1 - p_B_1
 
         # Calculate the threshold for X <= 0 condition (S <= (P - C) / I)
         threshold = ((P-C) / I)
@@ -183,10 +189,18 @@ class mdp:
             # Probability that S <= threshold, i.e., F_S
             F_S = beta.cdf(threshold, solar_alpha, solar_beta)
 
-        # Calculate the expected reward
-        E_R_X_H = (-k * F_S) * P_H_0 + (l - k * F_S) * P_H_1
+        # Calculate the expected rewards for each case
+        reward_H0_B0 = -k * F_S
+        reward_H0_B1 = -k
+        reward_H1_B0 = l - k * F_S
+        reward_H1_B1 = l - k
 
-        return E_R_X_H
+        expected_reward = (reward_H0_B0 * p_H_0 * p_B_0 +
+                        reward_H0_B1 * p_H_0 * p_B_1 +
+                        reward_H1_B0 * p_H_1 * p_B_0 +
+                        reward_H1_B1 * p_H_1 * p_B_1)
+
+        return expected_reward
 
     def get_future_reward(self, state, action, stage):
         """

@@ -40,7 +40,7 @@ class mdp:
         
         expected_data.sort_index()
         self.expected_data = expected_data
-        self.expected_solar_power = expected_data['expected_solar_rad']
+        self.expected_solar_power = expected_data['expected_solar_rad'].values
         self.max_stages = len(pd.date_range(start_date,end_date,freq=f"{dt}min"))
         if self.max_stages!=len(self.expected_data):
             raise ValueError(f"Max stages and data lengths do not match. {self.max_stages}!={len(self.expected_data)}")
@@ -97,6 +97,11 @@ class mdp:
             new_vehicle_state = "moored"
         else:
             raise ValueError(f"Expected action 'float' or 'fly'. Got {action}.")
+        
+        if new_soc < 0 :
+            new_soc = -1
+            new_vehicle_state = "broken"
+
         return (new_soc, new_vehicle_state)
 
     def create_ev_table(self):
@@ -107,12 +112,12 @@ class mdp:
         dt = self.dt
         efficiency = 0.15
         required_cruise_energy = self.plane.required_cruise_power * 60 * self.dt
-        capacity_j = self.plane.voltage*self.plane.capacity
-        alphas = self.expected_data['beta_alpha']
-        betas = self.expected_data['beta_beta']
+        capacity_j = self.plane.voltage*self.plane.capacity*3600
+        alphas = self.expected_data['beta_alpha'].values
+        betas = self.expected_data['beta_beta'].values
         
         # Initialize failure penalty and whale found reward
-        failure_penalty = -100
+        failure_penalty = 0
         whale_found_reward = 1
 
         iterator = tqdm(range(self.max_stages-1, -1, -1),desc="EV", leave=False) if self.show_progress else range(self.max_stages-1, -1, -1)
@@ -120,11 +125,11 @@ class mdp:
         for stage in iterator:
             for state in self.states:
                 best_action = None
-                reward_list = np.full(len(self.actions), -1000000)  # Preallocate with the right size
+                reward_list = [-100000000000]*len(self.actions)
                 
                 for idx, action in enumerate(self.actions):
                     required_energy = 0 if idx==1 else required_cruise_energy
-                    current_energy = np.floor(state[0]/100*capacity_j)
+                    current_energy = state[0]/100*capacity_j
                     max_collected_energy = 1367*S*dt*60*efficiency
                     solar_alpha = alphas[stage]
                     solar_beta = betas[stage]
@@ -141,9 +146,10 @@ class mdp:
                 best_action = self.actions[np.argmax(reward_list)]
                 self.ev_table.loc[state, stage] = max_reward
                 self.policy_table.loc[state, stage] = best_action
+        print(self.ev_table)
     
     @staticmethod
-    def expected_reward(P, C, I, k, l, solar_alpha, solar_beta, P_H_1):
+    def expected_reward(P, C, I, k, l, solar_alpha, solar_beta, P_H_1:float)->float:
         """
         Calculate the expected reward E[R(X, H)].
         
@@ -164,10 +170,18 @@ class mdp:
         P_H_0 = 1 - P_H_1
 
         # Calculate the threshold for X <= 0 condition (S <= (P - C) / I)
-        threshold = (P - C) / I
-
-        # Probability that S <= threshold, i.e., F_S
-        F_S = beta.cdf(threshold, solar_alpha, solar_beta)
+        threshold = ((P-C) / I)
+        if solar_alpha==0 or solar_beta==0:
+            # If no energy is collected, handle the penalty based on stored energy
+            if C < P:
+                # If stored energy is insufficient to meet required energy, apply penalty
+                F_S = 1
+            else:
+                # If stored energy is sufficient, no penalty
+                F_S = 0
+        else:
+            # Probability that S <= threshold, i.e., F_S
+            F_S = beta.cdf(threshold, solar_alpha, solar_beta)
 
         # Calculate the expected reward
         E_R_X_H = (-k * F_S) * P_H_0 + (l - k * F_S) * P_H_1
@@ -181,8 +195,12 @@ class mdp:
         next_stage = stage + 1
         if next_stage not in self.ev_table.columns:
             return 0  # No future reward beyond the last stage
-        new_state = self.calculate_new_state(state, action,stage, self.expected_solar_power[stage])
-        return self.ev_table.loc[new_state, next_stage]
+        new_state = self.calculate_new_state(state, action, self.expected_solar_power[stage])
+        if new_state[0] >=0 :
+            future_reward = self.ev_table.loc[new_state, next_stage]
+        else : 
+            future_reward = 0
+        return future_reward
 
     def calculate_soc_update(self, plane, action, dt, solar_power):
         """
@@ -286,7 +304,7 @@ class mdp:
         return stepwise_failure_probability
     
     def get_sighting_probability(self, current_step, timestep, start_time):
-        current_time = start_time + (current_step * timestep) # minutes
+        current_time = (start_time + (current_step * timestep))%1440 # minutes
         nearest_start = (current_time // 120) * 120
         return self.whale_surface_probs.get(nearest_start)
     

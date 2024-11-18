@@ -25,7 +25,7 @@ class WhaleSighting:
 
     def get_sighting_probability(self, current_step, timestep, start_time):
         # Calculate the current time in minutes
-        current_time = (start_time + (current_step * timestep))%1440
+        current_time = (start_time + (current_step * timestep)+60)%1440
         
         # Find the nearest start time by rounding down to the closest 120-minute mark
         nearest_start = (current_time // 120) * 120

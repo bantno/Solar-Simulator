@@ -195,15 +195,14 @@ class Autonomy:
         """
         Calculate the success and failure probabilities for the given maneuver, adjusting continuously based on wind speed.
         """
-        wind_speed = self.wind_speed_table.iloc[stage]  # Retrieve wind speed for the current stage
         base_failure_prob = self.stepwise_failure_prob
         # Base probabilities
         if current_state == "moored" and action == "float":
             state_action_factor = 1.0  # High success rate for floating
         elif current_state == "moored" and action == "fly":
-            state_action_factor = 10  # Higher failure risk for taking off
+            state_action_factor = 15  # Higher failure risk for taking off
         elif current_state == "flying" and action == "float":
-            state_action_factor = 10  # Moderate risk for flying to floating
+            state_action_factor = 15  # Moderate risk for flying to floating
         elif current_state == "flying" and action == "fly":
             state_action_factor = 2  # Low failure risk for continuous flying
         else:

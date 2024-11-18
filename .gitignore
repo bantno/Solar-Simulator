@@ -1,7 +1,6 @@
-SampleData/OldVersions/C3-2.0001.ipt
-SampleData/C3-2.ipt
 .gitignore
 Results/
+Data/
 **/__pycache__/
 *.pyc
 

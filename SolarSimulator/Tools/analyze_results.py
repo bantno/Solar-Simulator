@@ -95,6 +95,7 @@ class PickleDataProcessor:
     def plot_all_data(self):
         """Plot all data on one plot with series based on algorithm only."""
         df = self.get_results_df()
+        print(df)
 
         plt.figure(figsize=(10, 7))
         markers = ['o', 's', '^', 'D', 'P', 'X', '*']  # A list of markers for variety
@@ -210,9 +211,11 @@ if __name__ == "__main__":
     # plt.grid(True)
     # plt.show()
 
-    dire = r"Results\11-15\RJ_Run"
+    dire = r"Results\6monthRun-0.75fail"
     processor = PickleDataProcessor(directory=dire)  # Use "." for the current directory
-    processor.plot_reward_histogram(directory=dire,bins=30)
+    # processor.plot_reward_histogram(directory=dire,bins=30)
     processor.process_files()
     df = processor.get_results_df()
     processor.calculate_percent_improvement(df).to_csv("test.csv")
+    processor.plot_all_data()
+    # print(processor.results)

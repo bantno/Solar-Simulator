@@ -139,7 +139,7 @@ class Simulation:
 
     def simulate_deployment(self,start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs, threshold):
         self.plane.calculate_weight()
-        actual_data, expected_data = self.get_weather_data(start_date, end_date, dt) # move this outside loop
+        actual_data, expected_data = self.get_weather_data(start_date, end_date, dt)
         vehicle_states = ["moored", "flying"]
         actions = ["float", "fly"]
         mdp_model = mdp(self.plane,
@@ -153,16 +153,19 @@ class Simulation:
                         dt=dt,
                         mission_success_prob=mdp_success_prob
                         )
-        if self.use_expected:
-            actual_data = expected_data.copy()
-            actual_data['shortwave_radiation'] = expected_data['expected_solar_rad']
-            actual_data['wind_speed_10m'] = expected_data['expected_wind_speed']
+        # if self.use_expected:
+        #     actual_data = expected_data.copy()
+        #     actual_data['shortwave_radiation'] = expected_data['expected_solar_rad']
+        #     actual_data['wind_speed_10m'] = expected_data['expected_wind_speed']
         auto = Autonomy(dt,mdp_model=mdp_model,data=actual_data,whale_probabilities=self.whale_table)
         mdp_model.show_progress=True
         data = {}
         # Simulate the behavior
         if algo == "Threshold":
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
+                actual_data = self._load_weather_data(dt,directory=r"Data\SYNTHETIC_DATA",i=i)
+                actual_data = actual_data.loc[start_date:end_date]
+                auto.data=actual_data
                 if self.save_history:
                     reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_simple_behavior(
                         initial_state=(100, "moored"),
@@ -199,6 +202,9 @@ class Simulation:
         elif algo == "Optimal": 
             mdp_model.create_ev_table()
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
+                actual_data = self._load_weather_data(dt,directory=r"Data\SYNTHETIC_DATA",i=i)
+                actual_data = actual_data.loc[start_date:end_date]
+                auto.data=actual_data
                 # Simulate the behavior
                 if self.save_history:
                     reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_mdp_behavior(
@@ -239,7 +245,7 @@ class Simulation:
         
     def get_weather_data(self,start_date:datetime,end_date:datetime,dt:int):
         """Return expected and actual solar and wind data for given indices."""
-        actual_data = self._load_weather_data(dt)
+        actual_data = self._load_weather_data(dt,r"Data\SYNTHETIC_DATA",i=0)
         actual_data = actual_data.loc[start_date:end_date]
         df = self._load_expected_weather_data(dt)
         # Define start and end dates (month, day, hour, minute)
@@ -272,10 +278,13 @@ class Simulation:
         
         return actual_data,expected_data
 
-    def _load_weather_data(self, dt: int, directory: str=r"Data\HISTORICAL_DATA"):
+    def _load_weather_data(self, dt: int, directory: str=r"Data\HISTORICAL_DATA", i=None):
         """Load actual solar and wind data from pickle files with a specific timestep in the filename."""
         # Create regex pattern to match files with the specified timestep (in minutes)
-        pattern = rf"data_{dt}min\.pkl$"
+        if i is None :
+            pattern = rf"data_{dt}min\.pkl$"
+        else:
+            pattern = rf"data_{dt}min_{i}\.pkl$"
         
         # Search for the file in the specified directory
         actual_file = None
@@ -286,6 +295,7 @@ class Simulation:
 
         if actual_file:
             actual_data = pd.read_pickle(actual_file)
+            actual_data = actual_data[~((actual_data.index.month == 2) & (actual_data.index.day == 29))]
             return actual_data
         else:
             raise FileNotFoundError(f"No file found in '{directory}' with timestep '{dt}' minutes.")

@@ -51,16 +51,20 @@ if __name__ == '__main__':
     current_time = datetime.now()
     time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 
-    utc_offset = timezone(timedelta(hours=-5))
-    start_date = pd.to_datetime(datetime(2019,7,1).replace(tzinfo=utc_offset))
-    end_date = pd.to_datetime(datetime(2019,7,10).replace(tzinfo=utc_offset))
+    utc_offset = timezone(timedelta(hours=0))
+    start_date = pd.to_datetime(datetime(2024,7,1).replace(tzinfo=utc_offset))
+    end_date = pd.to_datetime(datetime(2024,7,28).replace(tzinfo=utc_offset))
 
-    capacities = [40]
+    
+    # start_date = pd.to_datetime(datetime(2024,7,1))
+    # end_date = pd.to_datetime(datetime(2024,7,2))
+
+    capacities = [50]
     mdp_probs = [0.9]
     thresholds = [0.2]
     success_prob=1.0
     visualize = True
-    dt=60
+    dt=30
     NUM_RUNS = 1
     sim = Simulation(plane, lat, lon, tz, save_history=visualize)
 
@@ -82,5 +86,7 @@ if __name__ == '__main__':
 
 
     if visualize:
+        # utc_offset = timezone(timedelta(hours=-5))
+        # start_date = pd.to_datetime(datetime(2024,7,1).replace(tzinfo=utc_offset))
         plotter = SolarChargePlotter(r".",start_date=start_date,time_step=f"{dt}min")
         plotter.plot_data()

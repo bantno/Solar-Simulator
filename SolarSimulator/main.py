@@ -53,15 +53,15 @@ if __name__ == '__main__':
 
     utc_offset = timezone(timedelta(hours=-5))
     start_date = pd.to_datetime(datetime(2019,7,1).replace(tzinfo=utc_offset))
-    end_date = pd.to_datetime(datetime(2019,8,2).replace(tzinfo=utc_offset))
+    end_date = pd.to_datetime(datetime(2019,7,10).replace(tzinfo=utc_offset))
 
-    capacities = [50]
+    capacities = [40]
     mdp_probs = [0.9]
-    thresholds = [0.1]
+    thresholds = [0.2]
     success_prob=1.0
-    visualize = False
-    dt=30
-    NUM_RUNS = 10000
+    visualize = True
+    dt=60
+    NUM_RUNS = 1
     sim = Simulation(plane, lat, lon, tz, save_history=visualize)
 
     # Run simulation

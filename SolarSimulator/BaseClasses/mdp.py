@@ -90,7 +90,7 @@ class mdp:
         capacity_j = self.plane.voltage * self.plane.capacity * 3600
         alphas, betas = self.expected_data['beta_alpha'].values, self.expected_data['beta_beta'].values
 
-        failure_penalty, whale_found_reward = 0, 1
+        failure_penalty, whale_found_reward = 25, 1
         stages = tqdm(range(self.max_stages-1, -1, -1), desc="EV", leave=False) if self.show_progress else range(self.max_stages-1, -1, -1)
 
         for stage in stages:
@@ -117,8 +117,6 @@ class mdp:
                 max_reward = np.max(reward_list)
                 self.ev_table.loc[state, stage] = max_reward
                 self.policy_table.loc[state, stage] = self.actions[np.argmax(reward_list)]
-        
-        print(self.ev_table)
     
     @staticmethod
     def expected_reward(P, C, I, k, l, solar_alpha, solar_beta, p_H_1:float, p_B_1:float)->float:

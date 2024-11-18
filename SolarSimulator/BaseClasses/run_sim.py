@@ -1,9 +1,11 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import gc
 import os
 import re
 from datetime import datetime, timedelta, timezone
 from tqdm import tqdm
+from multiprocessing import Pool
 
 from seaplane_base import Seaplane
 from simulation_base import Simulation
@@ -66,6 +68,8 @@ class SolarPlaneSimulation:
                     runs=self.num_runs, threshold=threshold
                 )
                 data.to_pickle(f"{self.save_dir}/{algo}_Data_c{cap}_t{threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl")
+                del data
+                gc.collect()
 
             for mdp_success_prob in tqdm(mdp_probs, desc=f"Processing probabilities for cap={cap}", leave=False):
                 algo = 'Optimal'
@@ -75,6 +79,8 @@ class SolarPlaneSimulation:
                     runs=self.num_runs
                 )
                 data.to_pickle(f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl")
+                del data
+                gc.collect()
 
         if self.visualize:
             plotter = SolarChargePlotter(self.save_dir, start_date=self.start_date, time_step=f"{self.dt}min")
@@ -127,7 +133,7 @@ class SolarPlaneSimulation:
 
         probabilities = df['Probability'].unique()
         algorithms = df['Algorithm'].unique()
-        
+
         for i, algo_name in enumerate(algorithms):
             for prob in probabilities:
                 subset = df[(df['Algorithm'] == algo_name) & (df['Probability'] == prob)]
@@ -144,7 +150,13 @@ class SolarPlaneSimulation:
         plt.legend(title="Algorithm, Probability", loc='best')
         plt.grid(True)
         plt.tight_layout()
-        plt.show()
+
+        if self.show:
+            plt.show()
+        else:
+            plot_path = os.path.join(self.save_dir, "Plot_By_Algorithm_Probability.png")
+            plt.savefig(plot_path)
+            plt.close()
 
     def plot_all_data(self):
         """Plot all data on one plot with series based on algorithm only."""
@@ -165,7 +177,13 @@ class SolarPlaneSimulation:
         plt.legend(title="Algorithm", loc='best')
         plt.grid(True)
         plt.tight_layout()
-        plt.show()
+
+        if self.show:
+            plt.show()
+        else:
+            plot_path = os.path.join(self.save_dir, "Plot_All_Data.png")
+            plt.savefig(plot_path)
+            plt.close()
 
     def plot_reward_histogram(self, bins=50):
         """Plot histograms of Reward values from each file in the directory."""
@@ -198,7 +216,10 @@ class SolarPlaneSimulation:
         if self.show:
             plt.show()
         else:
-            plt.savefig(os.path.join("Figures", "Histogram.png"))
+            plot_path = os.path.join(self.save_dir, "Reward_Histogram.png")
+            plt.savefig(plot_path)
+            plt.close()
+
 
     def calculate_percent_improvement(self):
         df = self.get_results_df().sort_values('Capacity')
@@ -207,33 +228,119 @@ class SolarPlaneSimulation:
         merged_df = optimal_df[['MeanReward']].join(threshold_df[['MeanReward']], lsuffix='_optimal', rsuffix='_threshold')
         merged_df['Percent Improvement'] = ((merged_df['MeanReward_optimal'] - merged_df['MeanReward_threshold']) / merged_df['MeanReward_threshold']) * 100
         return merged_df[['Percent Improvement']]
+    
+    def save_results_with_metadata(self, results, file_prefix="Simulation"):
+        """
+        Save results to a dated folder with filenames indicating key simulation parameters.
+
+        Args:
+            results (pd.DataFrame): DataFrame containing simulation results to save.
+            file_prefix (str): Prefix for the saved file names.
+        """
+        # Create a dated results directory
+        date_folder = datetime.now().strftime("%Y-%m-%d-%h-%m")
+        results_dir = os.path.join(self.save_dir, date_folder)
+        os.makedirs(results_dir, exist_ok=True)
+
+        # Generate filename with metadata
+        metadata = f"lat{self.lat}_lon{self.lon}_cap{self.capacity_ah}_dt{self.dt}"
+        filename = f"{file_prefix}_{metadata}.csv"
+
+        # Save results to the directory
+        results_path = os.path.join(results_dir, filename)
+        results.to_csv(results_path, index=False)
+
+        print(f"Results saved to: {results_path}")
+
+        # Optionally, save visualizations in the same directory
+        plot_filename = f"{file_prefix}_{metadata}_plot.png"
+        plot_path = os.path.join(results_dir, plot_filename)
+        
+        if self.visualize:
+            self.plot_all_data()  # Ensure a method like plot_all_data saves plots
+            plt.savefig(plot_path)
+            print(f"Plot saved to: {plot_path}")
+
+    def _run_simulation(self, args):
+        """Helper function to execute a single simulation run."""
+        cap, algo, threshold, mdp_success_prob, success_prob = args
+        self.simulation.plane.capacity = cap
+        
+        if algo == "Threshold":
+            times, data = self.simulation.run_simulation(
+                self.start_date, self.end_date, self.dt, algo=algo,
+                mdp_success_prob=0.9, true_success_prob=success_prob,
+                runs=self.num_runs, threshold=threshold
+            )
+            filename = f"{self.save_dir}/{algo}_Data_c{cap}_t{threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl"
+        elif algo == "Optimal":
+            times, data = self.simulation.run_simulation(
+                self.start_date, self.end_date, self.dt, algo=algo,
+                mdp_success_prob=mdp_success_prob, true_success_prob=success_prob,
+                runs=self.num_runs
+            )
+            filename = f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl"
+        else:
+            return None
+
+        data.to_pickle(filename)
+        del data
+        gc.collect()
+
+        return filename
+
+    def run(self, capacities=[50], thresholds=[0.1], mdp_probs=[0.9], success_prob=1.0):
+        tasks = []
+        for cap in capacities:
+            for threshold in thresholds:
+                tasks.append((cap, "Threshold", threshold, None, success_prob))
+            for mdp_prob in mdp_probs:
+                tasks.append((cap, "Optimal", None, mdp_prob, success_prob))
+
+        # Use multiprocessing to execute tasks in parallel
+        with Pool(processes=6) as pool:
+            list(tqdm(pool.imap(self._run_simulation, tasks), total=len(tasks), desc="Running simulations"))
+
 
 # Example usage
 if __name__ == "__main__":
     # Initialize the SolarPlaneSimulation with relevant parameters
     simulation = SolarPlaneSimulation(
-        start_date="2019-01-01",
-        end_date="2019-06-01",
-        dt=30,              # 30-minute time step
-        num_runs=10,        # 10 simulation runs
-        visualize=True,     # Set to True if you want to generate and show plots
-        save_dir="Results", # Directory to save result files
-        show=True           # Show plots immediately after generation
+        lat=25, lon=-90, tz="Etc/GMT-5",  # Location parameters
+        start_date="2019-01-01",          # Simulation start date
+        end_date="2019-07-01",            # Simulation end date
+        dt=30,                            # Time step in minutes
+        num_runs=1000,                     # Number of simulation runs
+        visualize=True,                   # Enable visualization
+        save_dir=r"Results\6monthRun-0.9fail", # Directory to save results
+        show=True                         # Suppress immediate plot display
     )
 
-    # Run the simulation for specified capacities and thresholds/probabilities
-    capacities = [50]           # Set capacity (Amp-hours)
-    thresholds = [0.2,]     # Threshold values for 'Threshold' algorithm
-    mdp_probs = [0.9]      # MDP success probabilities for 'Optimal' algorithm
+    # Define simulation parameters
+    capacities = [10, 20, 30, 40, 50, 60, 70, 80]  # Battery capacities in Amp-hours
+    thresholds = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3] # Threshold values for 'Threshold' algorithm
+    mdp_probs = [0.9]                              # MDP success probabilities for 'Optimal' algorithm
+    success_prob = 0.9                             # True success probability
 
-    simulation.run(capacities=capacities, thresholds=thresholds, mdp_probs=mdp_probs, success_prob=1.0)
+    # Run the simulation
+    simulation.run(capacities=capacities, thresholds=thresholds, mdp_probs=mdp_probs, success_prob=success_prob)
 
-    # Process files, plot results, and calculate improvements
+    # Process files to extract and organize results
     simulation.process_files()
-    simulation.plot_all_data()             # Plot overall data by algorithm
-    simulation.plot_by_algorithm_and_probability()  # Plot by algorithm and probability
-    simulation.plot_reward_histogram(bins=30) # Histogram for reward distributions
+
+    # Generate results DataFrame
+    results_df = simulation.get_results_df()
+    print("Simulation Results:")
+    print(results_df.head())  # Display the first few rows of results
+
+    # Save results and visualizations with descriptive filenames and folders
+    simulation.save_results_with_metadata(results_df, file_prefix="SolarPlaneSim")
+
+    # Generate and save additional visualizations
+    simulation.plot_all_data()                           # Plot all data by algorithm
+    simulation.plot_reward_histogram(bins=30)           # Plot histogram of rewards
 
     # Calculate and display percent improvement
     improvements = simulation.calculate_percent_improvement()
+    print("Percent Improvement in Mean Reward:")
     print(improvements)

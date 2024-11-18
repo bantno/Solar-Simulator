@@ -159,7 +159,7 @@ class PickleDataProcessor:
             plt.show()
         else:
             filename = "histogram.png"
-            plt.savefig(r"Figures\Histogram" + f"\{filename}")
+            plt.savefig(r"Figures\Histogram")# + f"\{filename}")
 
     def calculate_percent_improvement(self,df):
         # Separate data for Optimal and Threshold algorithms
@@ -177,38 +177,42 @@ class PickleDataProcessor:
 
 # Example usage
 if __name__ == "__main__":
-    dir_list = [r"Results\PPT-Actual_Data\Actual vs Expected Data\Actual",
-                r"Results\PPT-Actual_Data\Actual vs Expected Data\Expected"]
-    labels = ["Actual","Expected"]
-    improvement = []
-    for idx, directory in enumerate(dir_list):
-        processor = PickleDataProcessor(directory=directory)  # Use "." for the current directory
-        processor.process_files()
-        # print(processor.get_results_df())  # Display the DataFrame
-        improvement.append(processor.calculate_percent_improvement(processor.get_results_df()))
-        # print(improvement[idx])
-        # processor.plot_all_data()
+    # dir_list = [r"Results\PPT-Actual_Data\Actual vs Expected Data\Actual",
+    #             r"Results\PPT-Actual_Data\Actual vs Expected Data\Expected"]
+    # labels = ["Actual","Expected"]
+    # improvement = []
+    # for idx, directory in enumerate(dir_list):
+    #     processor = PickleDataProcessor(directory=directory)  # Use "." for the current directory
+    #     processor.process_files()
+    #     # print(processor.get_results_df())  # Display the DataFrame
+    #     improvement.append(processor.calculate_percent_improvement(processor.get_results_df()))
+    #     # print(improvement[idx])
+    #     # processor.plot_all_data()
     
-    improvement[0]['Actual'] = improvement[0]['Percent Improvement']
-    improvement[0] = improvement[0].drop('Percent Improvement',axis=1)
-    improvement[1]['Expected'] = improvement[1]['Percent Improvement']
-    improvement[1] = improvement[1].drop('Percent Improvement',axis=1)
-    print(improvement[0])
-    print(improvement[1])
-    df = improvement[0].join(improvement[1])
-    df = df.sort_index()
-    print(df)
+    # improvement[0]['Actual'] = improvement[0]['Percent Improvement']
+    # improvement[0] = improvement[0].drop('Percent Improvement',axis=1)
+    # improvement[1]['Expected'] = improvement[1]['Percent Improvement']
+    # improvement[1] = improvement[1].drop('Percent Improvement',axis=1)
+    # print(improvement[0])
+    # print(improvement[1])
+    # df = improvement[0].join(improvement[1])
+    # df = df.sort_index()
+    # print(df)
 
-    plt.figure(figsize=(10, 6))
-    df['Actual'].plot(marker='o', label='SSRD=2019 Data')
-    df['Expected'].plot(marker='x', linestyle='--', label='SSRD=Expected Data')
+    # plt.figure(figsize=(10, 6))
+    # df['Actual'].plot(marker='o', label='SSRD=2019 Data')
+    # df['Expected'].plot(marker='x', linestyle='--', label='SSRD=Expected Data')
 
-    plt.xlabel('Capacity')
-    plt.ylabel('Value')
-    plt.title('Percent Improvement of Optimal Algorithm over Threshold Algorithm')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+    # plt.xlabel('Capacity')
+    # plt.ylabel('Value')
+    # plt.title('Percent Improvement of Optimal Algorithm over Threshold Algorithm')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()
 
-
-    # processor.plot_reward_histogram(directory=dire,bins=30)
+    dire = r"Results\11-15\RJ_Run"
+    processor = PickleDataProcessor(directory=dire)  # Use "." for the current directory
+    processor.plot_reward_histogram(directory=dire,bins=30)
+    processor.process_files()
+    df = processor.get_results_df()
+    processor.calculate_percent_improvement(df).to_csv("test.csv")

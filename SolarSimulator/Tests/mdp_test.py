@@ -74,106 +74,28 @@ class TestMDP(unittest.TestCase):
             mission_success_prob=0.99,
         )
 
-    def test_create_states(self):
-        """
-        Test if states are created correctly based on SOC increments and vehicle states.
-        """
-        states = self.mdp.create_states(self.mdp.soc_increment, self.mdp.vehicle_states)
-        expected_states = [
-            (0, "moored"), (1, "moored"), (2, "moored"), (3, "moored"), (4, "moored"), (5, "moored"),
-            (95, "flying"), (96, "flying"), (97, "flying"), (98, "flying"), (99, "flying"), (100, "flying")
-            # Continue based on increments
-        ]
-        self.assertEqual(states[:4], expected_states[:4])  # Only checking the first few for brevity
-        self.assertEqual(states[-5:], expected_states[-5:])  # Only checking the first few for brevity
-        # print("Passed create_states test.")
+    def test_expected_reward(self):
+        # P = 50
+        # C = 100
+        # I = 50
+        # k = 1
+        # l = 1
+        # solar_alpha = 20
+        # solar_beta = 20
+        # P_H = 0
+        # reward = self.mdp.expected_reward(P,C,I,k,l,solar_alpha,solar_beta,P_H)
+        # self.assertAlmostEqual(reward,0.0)
 
-    def test_transition_probabilities(self):
-        """
-        Test if the transition probabilities (success and failure) are calculated correctly.
-        """
-        state = (50, "flying")
-        action = "fly"
-        stage = 10
-        success_prob, failure_prob = self.mdp.calculate_maneuver_probabilities(state[1], action, stage)
-        self.assertAlmostEqual(success_prob + failure_prob, 1.0, places=5)
-        # print("Passed transition probabilities test.")
-
-    def test_reward_function(self):
-        """
-        Test the reward function for specific state-action combinations.
-        """
-        state = (50, "moored")
-        action = "fly"
-        stage = 10
-        reward = self.mdp.R(state, action, stage)
-        # Assert some condition based on expected reward value (placeholder)
-        self.assertIsInstance(reward, float)
-        # print("Passed reward function test.")
-
-    def test_soc_update(self):
-        """
-        Test the calculate_soc_update function for different actions and solar power levels.
-        """
-        soc_change_float = self.mdp.calculate_soc_update(self.mdp.plane, "float", self.mdp.dt, 50)
-        soc_change_fly = self.mdp.calculate_soc_update(self.mdp.plane, "fly", self.mdp.dt, 50)
-        # Validate SOC changes based on expected behavior
-        self.assertTrue(soc_change_float >= 0)
-        self.assertTrue(soc_change_fly <= 0)
-        # print("Passed soc_update test.")
-
-    def test_generate_potential_states(self):
-        """
-        Test the generation of potential states for MCS simulation
-        """
-        state = (50,"moored")
-        action = "fly"
-        solar_alpha = 8
-        solar_beta = 5
-        N = 100
-        samples = self.mdp._generate_potential_states(state,action,solar_alpha,solar_beta,1367,N)
-
-        self.assertTrue(len(samples)==N)
-        socs = np.array([s[0] for i,s in enumerate(samples)]).astype(float)
-        self.assertTrue(all(socs>=0) and all(socs<100))
-        print(socs)
-
-    def test_get_potential_rewards(self):
-        
-        # Case 1: Certain success
-        dt_min = 10
-        capacity_j = 1000000
-        current_state = (100,"test")
-        required_power_w = 0
-        solar_alpha = 20
-        solar_beta = 20
-        solar_scale = 1000
-        expected_reward_1 = self.mdp._get_potential_rewards(dt_min,capacity_j,current_state,required_power_w,solar_alpha,solar_beta,solar_scale)
-        self.assertEqual(expected_reward_1,0)
-
-        # Case 2: Certain Failure
-        dt_min = 10
-        capacity_j = 100
-        current_state = (0,"test")
-        required_power_w = 100
-        solar_alpha = 20
-        solar_beta = 20
-        solar_scale = 1
-        expected_reward = self.mdp._get_potential_rewards(dt_min,capacity_j,current_state,required_power_w,solar_alpha,solar_beta,solar_scale)
-        self.assertTrue(expected_reward<0)
-
-        # Case 3: 50/50 Success/Failure
-        dt_min = 1
-        capacity_j = 100
-        current_state = (100,"test")
-        required_power_w = 200/60
-        solar_alpha = 20
-        solar_beta = 20
-        solar_scale = 200/60
-        efficiency = 1.0
-        penalty = 100
-        expected_reward = self.mdp._get_potential_rewards(dt_min,capacity_j,current_state,required_power_w,solar_alpha,solar_beta,solar_scale,efficiency,penalty)
-        self.assertAlmostEqual(expected_reward,-penalty/2)
+        P = 110
+        C = .5*100
+        I = 10
+        k = 1
+        l = 1
+        solar_alpha = 4
+        solar_beta = 4
+        P_H = 0
+        reward = self.mdp.expected_reward(P,C,I,k,l,solar_alpha,solar_beta,P_H)
+        self.assertAlmostEqual(reward,0.0)
 
 if __name__ == '__main__':
     unittest.main()

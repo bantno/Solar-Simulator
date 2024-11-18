@@ -74,7 +74,7 @@ class Autonomy:
                 whale_list[k+1]=whale_prob
                 solar_power_list[k+1] = solar_power_wpm2
             else:
-                reward = reward-5 # TODO MAKE whale penalty a parameter
+                reward = reward-25 # TODO MAKE whale penalty a parameter
                 break
         if save_history:
             return reward, k, state_history_list[:k + 1], solar_power_list[:k + 1], whale_list
@@ -201,33 +201,15 @@ class Autonomy:
         if current_state == "moored" and action == "float":
             state_action_factor = 1.0  # High success rate for floating
         elif current_state == "moored" and action == "fly":
-            state_action_factor = 2  # Higher failure risk for taking off
+            state_action_factor = 10  # Higher failure risk for taking off
         elif current_state == "flying" and action == "float":
-            state_action_factor = 2  # Moderate risk for flying to floating
+            state_action_factor = 10  # Moderate risk for flying to floating
         elif current_state == "flying" and action == "fly":
-            state_action_factor = 1.5  # Low failure risk for continuous flying
+            state_action_factor = 2  # Low failure risk for continuous flying
         else:
             return 0.0, 1.0  # Default to guaranteed failure
-        base_failure_prob = base_failure_prob * state_action_factor
-
-        # Wind speed influence
-        # Define thresholds for low and high wind speed ranges
-        low_wind_threshold = 5  # m/s
-        high_wind_threshold = 20  # m/s
-
-        # Adjust failure probability based on wind speed in a continuous manner
-        if wind_speed <= low_wind_threshold:
-            wind_factor = 1  # No adjustment for low wind (below or equal to threshold)
-        elif wind_speed >= high_wind_threshold:
-            wind_factor = 1.2  # Max adjustment for high wind (above or equal to threshold)
-        else:
-            # Linearly scale between the low and high wind thresholds
-            wind_factor = 1+(wind_speed - low_wind_threshold) / (high_wind_threshold - low_wind_threshold)
-
-        # Adjust the failure probability continuously based on wind_factor
-        failure_prob = base_failure_prob * wind_factor  # Scale up to a max of 20% failure
-        success_prob = 1 - failure_prob  # Success probability is the complement of failure
-
+        failure_prob = base_failure_prob * state_action_factor
+        success_prob = 1-failure_prob
         return success_prob, failure_prob
     
     @staticmethod
@@ -287,6 +269,7 @@ class Autonomy:
         net_power = solar_power*panel_efficiency*plane.S - required_power - avionics_power
         energy_change = net_power * dt * 60  # Convert power (W) to energy (Joules)
         return energy_change
+    
     @staticmethod
     def get_sighting_probability(probability_map, current_step, timestep, start_time):
         # Calculate the current time in minutes

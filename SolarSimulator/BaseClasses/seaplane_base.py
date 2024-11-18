@@ -52,6 +52,7 @@ class Seaplane:
         self.calculate_pdc0()
         self.calculate_weight()
         self.required_cruise_power = self.get_required_power(20,1.2)
+        self.required_takeoff_energy = self.get_required_takeoff_energy(1)
         
 
     def get_total_mass(self,directory):
@@ -143,6 +144,9 @@ class Seaplane:
         D = .5*rho*U**3*self.S*self.cd0 + 2*self.weight**2*self.k/(rho*U*self.S) # From Traub
         return D
 
-    def calc_takeoff_penalty(self) -> float:
+    def get_required_takeoff_energy(self,takeoff_time_min) -> float:
         """Determine energy cost of taking off in Joules"""
-        return 4000*15
+        required_power_w = 4000.
+        seconds_to_takeoff = 60.
+        required_takeoff_energy_J = required_power_w*seconds_to_takeoff
+        return required_takeoff_energy_J

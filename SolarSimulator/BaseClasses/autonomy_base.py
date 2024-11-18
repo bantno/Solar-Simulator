@@ -66,7 +66,7 @@ class Autonomy:
             is_action_successful = np.random.uniform(0,1) > failure_prob
             
             if is_action_successful :
-                new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,best_action,self.dt,solar_power_wpm2)
+                new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
                 new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
                 reward+=self.R(current_state,best_action,k,whale_prob)
                 state_history_list[k+1]=new_state
@@ -128,7 +128,7 @@ class Autonomy:
                 failure_prob = -1
 
             if np.random.uniform(0,1) > failure_prob :
-                new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,best_action,self.dt,solar_power_wpm2)
+                new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
                 new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
                 reward+=self.R(current_state,best_action,k,whale_prob)
                 state_history_list[k+1]=new_state
@@ -251,21 +251,28 @@ class Autonomy:
         # print(stepwise_failure_probability)
         return stepwise_failure_probability
     
-    def calculate_energy_update(self, plane, action, dt, solar_power):
+    def calculate_energy_update(self, plane, state, action, dt, solar_power):
         """
         Calculates the change in SoC after performing the given action.
         """
         panel_efficiency = 0.15 # TODO: use PVWATTS FOR THIS
+        
+        required_takeoff_energy=0
+        required_cruise_power=0
+        
         if action == "float":
-            required_power = 0
+            required_cruise_power = 0
         elif action == "fly":
-            required_power = plane.get_required_power(20, 1.2)  # Assumed constants for flight
+            required_cruise_power = plane.required_cruise_power  # Assumed constants for flight
+            if state[1] == "moored":
+                required_takeoff_energy = plane.required_takeoff_energy
         else :
             raise ValueError(f"Expected action 'float' or 'fly'. Got {action}.")
+        
 
         avionics_power = plane.idle_power
-        net_power = solar_power*panel_efficiency*plane.S - required_power - avionics_power
-        energy_change = net_power * dt * 60  # Convert power (W) to energy (Joules)
+        net_power = solar_power*panel_efficiency*plane.S - required_cruise_power - avionics_power
+        energy_change = net_power * dt * 60  - required_takeoff_energy # Convert power (W) to energy (Joules)
         return energy_change
     
     @staticmethod

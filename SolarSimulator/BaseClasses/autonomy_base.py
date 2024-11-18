@@ -187,7 +187,6 @@ class Autonomy:
         elif best_action=="fly":
             state = "flying"
         soc = min(round(energy/max_capacity*100),100)
-        soc= max(0,soc)
         return (soc,state)
 
 

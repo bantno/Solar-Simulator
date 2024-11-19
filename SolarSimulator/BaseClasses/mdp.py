@@ -87,6 +87,7 @@ class mdp:
         """
         S, dt, efficiency = self.plane.S, self.dt, 0.15
         required_cruise_energy = self.plane.required_cruise_power * 60 * dt
+        required_takeoff_energy = self.plane.required_takeoff_energy
         capacity_j = self.plane.voltage * self.plane.capacity * 3600
         alphas, betas = self.expected_data['beta_alpha'].values, self.expected_data['beta_beta'].values
 
@@ -99,6 +100,8 @@ class mdp:
 
                 for idx, action in enumerate(self.actions):
                     required_energy = required_cruise_energy if idx else 0
+                    if state[1] == "moored" and action=="fly":
+                        required_energy = required_cruise_energy+required_takeoff_energy
                     current_energy = state[0] / 100 * capacity_j
                     max_collected_energy = 1367 * S * dt * 60 * efficiency
 

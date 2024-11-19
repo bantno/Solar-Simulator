@@ -24,7 +24,6 @@ class Autonomy:
         # print(f"Threshold = {threshold}\n")
 
         self.stepwise_failure_prob = self.calculate_step_transition_prob(self.dt*max_stages,true_success_prob,self.dt)
-        self.wind_speed_table = self.data["wind_speed_10m"]
         
         night_hours = 12
         nightly_idle_soc = np.ceil((self.mdp_model.plane.idle_power*night_hours*3600)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)

@@ -1,6 +1,4 @@
 import numpy as np
-import random
-from tqdm import tqdm
 
 class Autonomy:
     """Represents the autonomy module for a solar-powered seaplane."""
@@ -11,6 +9,7 @@ class Autonomy:
         self.mdp_model = mdp_model
         self.data = data
         self.whale_prob = whale_probabilities
+        self.failure_penalty = 25
 
     def simulate_simple_behavior(self,
                                  initial_state,
@@ -48,7 +47,7 @@ class Autonomy:
             solar_power_wpm2 = shortwave_radiation[k]
             whale_prob = self.get_sighting_probability(self.whale_prob,k,self.dt,0)
             is_reward_sufficient = whale_prob>threshold and solar_power_wpm2>0
-            is_battery_sufficient = current_state[0] > nightly_idle_soc*2 + single_flight_soc # TODO: Create better way to determine this
+            is_battery_sufficient = current_state[0] > nightly_idle_soc + single_flight_soc*2 # TODO: Create better way to determine this
 
             if is_reward_sufficient and is_battery_sufficient:
                 best_action = "fly"
@@ -73,12 +72,18 @@ class Autonomy:
                 whale_list[k+1]=whale_prob
                 solar_power_list[k+1] = solar_power_wpm2
             else:
-                reward = reward-25 # TODO MAKE whale penalty a parameter
+                reward -= self.failure_penalty # TODO MAKE whale penalty a parameter
                 break
+            if new_state[0] < 0 :
+                reward = reward-self.failure_penalty
+                break
+        
+        # print(reward)
         if save_history:
             return reward, k, state_history_list[:k + 1], solar_power_list[:k + 1], whale_list
         else:
             return reward,k
+        
 
 
     def simulate_mdp_behavior(self,
@@ -91,7 +96,6 @@ class Autonomy:
         reward = 0
         max_stages = len(self.data)-1
         self.stepwise_failure_prob = self.calculate_step_transition_prob(self.dt*max_stages,true_success_prob,self.dt)
-        self.wind_speed_table = self.data["wind_speed_10m"]
         optimal_policy = self.mdp_model.policy_table
 
         # Preallocate arrays with a fixed size
@@ -106,12 +110,7 @@ class Autonomy:
         solar_power_list[0] = 0.0
         whale_list[0] = 0.0
         shortwave_radiation = self.data["shortwave_radiation"].values
-
-        night_hours = 12
-        nightly_idle_soc = np.ceil((self.mdp_model.plane.idle_power*night_hours*3600)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
-        single_flight_soc = np.ceil(self.mdp_model.plane.get_required_power(20,1.2)*self.dt*60/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
         
-
         for k in range(max_stages-1):
             current_state = state_history_list[k]
             best_action = optimal_policy.loc[current_state,k]
@@ -135,8 +134,14 @@ class Autonomy:
                 whale_list[k+1]=whale_prob
                 solar_power_list[k+1] = solar_power_wpm2
             else :
-                reward = reward-5
+                reward = reward-self.failure_penalty
                 break
+
+            if new_state[0] < 0 :
+                reward -=self.failure_penalty
+                break
+        
+        # print(reward)
         if save_history:
             return reward, k, state_history_list[:k + 1], solar_power_list[:k + 1], whale_list
         else:
@@ -254,7 +259,7 @@ class Autonomy:
         """
         Calculates the change in SoC after performing the given action.
         """
-        panel_efficiency = 0.15 # TODO: use PVWATTS FOR THIS
+        panel_efficiency = 0.10 # TODO: use PVWATTS FOR THIS
         
         required_takeoff_energy=0
         required_cruise_power=0

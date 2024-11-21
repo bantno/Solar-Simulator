@@ -30,7 +30,7 @@ class Seaplane:
         self.gamma = gamma
         self.collected_energy = 0 #kWh
         self.cs = cs
-        self.idle_power = 1.0 # W
+        self.idle_power = 0.0 # W
 
         # Define airframe and motion parameters
         self.cd0 = cd0
@@ -52,7 +52,7 @@ class Seaplane:
         self.calculate_pdc0()
         self.calculate_weight()
         self.required_cruise_power = self.get_required_power(20,1.2)
-        self.required_takeoff_energy = self.get_required_takeoff_energy(1)
+        self.required_takeoff_energy = self.get_required_takeoff_energy(0)
         
 
     def get_total_mass(self,directory):
@@ -147,6 +147,6 @@ class Seaplane:
     def get_required_takeoff_energy(self,takeoff_time_min) -> float:
         """Determine energy cost of taking off in Joules"""
         required_power_w = 4000.
-        seconds_to_takeoff = 60.
+        seconds_to_takeoff = 60.*takeoff_time_min
         required_takeoff_energy_J = required_power_w*seconds_to_takeoff
         return required_takeoff_energy_J

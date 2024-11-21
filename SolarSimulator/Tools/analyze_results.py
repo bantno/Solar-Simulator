@@ -93,19 +93,35 @@ class PickleDataProcessor:
 
 
     def plot_all_data(self):
-        """Plot all data on one plot with series based on algorithm only."""
+        """Plot all data on one plot with series based on algorithm and threshold."""
         df = self.get_results_df()
         print(df)
 
-        plt.figure(figsize=(10, 7))
-        markers = ['o', 's', '^', 'D', 'P', 'X', '*']  # A list of markers for variety
+        # Separate the optimal algorithm (Threshold = NaN)
+        optimal_df = df[df['Threshold'].isna()]
+        other_df = df[df['Threshold'].notna()]
 
-        # Iterate over unique algorithms
-        for i, (algo_name, subset) in enumerate(df.groupby('Algorithm')):
+        plt.figure(figsize=(12, 8))
+        # markers = ['o', 's', '^', 'D', 'P', 'X', '*']  # A list of markers for variety
+        # colors = plt.cm.tab20.colors  # Use a colormap for consistent color variety
+
+        # Plot the optimal algorithm
+        if not optimal_df.empty:
+            plt.scatter(
+                optimal_df['Capacity'], optimal_df['MeanReward'], 
+                # marker='X', color='black', s=100,  # Unique marker, size, and color
+                label="Optimal Algorithm"
+            )
+
+        # Plot other algorithms grouped by Algorithm and Threshold
+        for i, ((algo_name, threshold), subset) in enumerate(other_df.groupby(['Algorithm', 'Threshold'])):
+            # marker = markers[i % len(markers)]  # Cycle through markers
+            # color = colors[i % len(colors)]    # Cycle through colors
+
             plt.scatter(
                 subset['Capacity'], subset['MeanReward'], 
-                marker=markers[i % len(markers)],  # Cycle through markers
-                label=f"{algo_name}"
+                # marker=marker, color=color,  # Assign unique marker and color
+                label=f"{algo_name}, Threshold={threshold}"
             )
 
         plt.title("Mean Reward vs Capacity for All Algorithms")
@@ -178,44 +194,12 @@ class PickleDataProcessor:
 
 # Example usage
 if __name__ == "__main__":
-    # dir_list = [r"Results\PPT-Actual_Data\Actual vs Expected Data\Actual",
-    #             r"Results\PPT-Actual_Data\Actual vs Expected Data\Expected"]
-    # labels = ["Actual","Expected"]
-    # improvement = []
-    # for idx, directory in enumerate(dir_list):
-    #     processor = PickleDataProcessor(directory=directory)  # Use "." for the current directory
-    #     processor.process_files()
-    #     # print(processor.get_results_df())  # Display the DataFrame
-    #     improvement.append(processor.calculate_percent_improvement(processor.get_results_df()))
-    #     # print(improvement[idx])
-    #     # processor.plot_all_data()
-    
-    # improvement[0]['Actual'] = improvement[0]['Percent Improvement']
-    # improvement[0] = improvement[0].drop('Percent Improvement',axis=1)
-    # improvement[1]['Expected'] = improvement[1]['Percent Improvement']
-    # improvement[1] = improvement[1].drop('Percent Improvement',axis=1)
-    # print(improvement[0])
-    # print(improvement[1])
-    # df = improvement[0].join(improvement[1])
-    # df = df.sort_index()
-    # print(df)
-
-    # plt.figure(figsize=(10, 6))
-    # df['Actual'].plot(marker='o', label='SSRD=2019 Data')
-    # df['Expected'].plot(marker='x', linestyle='--', label='SSRD=Expected Data')
-
-    # plt.xlabel('Capacity')
-    # plt.ylabel('Value')
-    # plt.title('Percent Improvement of Optimal Algorithm over Threshold Algorithm')
-    # plt.legend()
-    # plt.grid(True)
-    # plt.show()
-
-    dire = r"Results\6monthRun-0.75fail"
+    dire = r"Results\TakeoffPowerConsumption\PPT-Results\testplz"
     processor = PickleDataProcessor(directory=dire)  # Use "." for the current directory
     # processor.plot_reward_histogram(directory=dire,bins=30)
     processor.process_files()
     df = processor.get_results_df()
     processor.calculate_percent_improvement(df).to_csv("test.csv")
     processor.plot_all_data()
+    # processor.plot_reward_histogram()
     # print(processor.results)

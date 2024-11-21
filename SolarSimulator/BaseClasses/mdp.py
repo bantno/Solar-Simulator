@@ -19,7 +19,7 @@ class mdp:
         self.vehicle_states = vehicle_states
         self.actions = actions
         self.dt = dt
-        self.gamma = gamma
+        self.gamma = 0.95
         self.epsilon = epsilon
         self.show_progress = False
 
@@ -85,7 +85,7 @@ class mdp:
         """
         Creates an expectation value (EV) table with the given number of stages.
         """
-        S, dt, efficiency = self.plane.S, self.dt, 0.15
+        S, dt, efficiency = self.plane.S, self.dt, 0.10
         required_cruise_energy = self.plane.required_cruise_power * 60 * dt
         required_takeoff_energy = self.plane.required_takeoff_energy
         capacity_j = self.plane.voltage * self.plane.capacity * 3600
@@ -257,8 +257,8 @@ class mdp:
         # Determine failure probability factor based on state-action combinations
         state_action_factors = {
             ("moored", "float"): 1.0,
-            ("moored", "fly"): 15.0,
-            ("flying", "float"): 15.0,
+            ("moored", "fly"): 5.0,
+            ("flying", "float"): 5.0,
             ("flying", "fly"): 2.0
         }
 

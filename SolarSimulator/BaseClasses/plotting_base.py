@@ -246,6 +246,6 @@ if __name__ == '__main__':
     utc_offset = timezone(timedelta(hours=0))
     start_date = pd.to_datetime(datetime(2024,1,1).replace(tzinfo=utc_offset))
     end_date = pd.to_datetime(datetime(2024,2,1).replace(tzinfo=utc_offset))
-    plotter = SolarChargePlotter(r"Results\TakeoffPowerConsumption\PPT-Results\9month50Ah",start_date=start_date,time_step=f"{dt}min")
+    plotter = SolarChargePlotter(r".",start_date=start_date,time_step=f"{dt}min")
     # plotter.plot_data()
     plotter.plot_reward_vs_threshold()

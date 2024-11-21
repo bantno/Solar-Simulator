@@ -52,7 +52,7 @@ class Seaplane:
         self.calculate_pdc0()
         self.calculate_weight()
         self.required_cruise_power = self.get_required_power(20,1.2)
-        self.required_takeoff_energy = self.get_required_takeoff_energy(0)
+        self.required_takeoff_energy = self.get_required_takeoff_energy(1)
         
 
     def get_total_mass(self,directory):

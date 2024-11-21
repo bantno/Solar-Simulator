@@ -19,7 +19,7 @@ class mdp:
         self.vehicle_states = vehicle_states
         self.actions = actions
         self.dt = dt
-        self.gamma = 0.95
+        self.gamma = 1.0
         self.epsilon = epsilon
         self.show_progress = False
 
@@ -329,7 +329,7 @@ class mdp:
         Returns:
             float: The probability of whale sighting at the nearest time block.
         """
-        current_time = (start_time + (current_step * timestep)) % 1440
+        current_time = (start_time + (current_step * timestep)+60) % 1440
         nearest_start = (current_time // 120) * 120
         return self.whale_surface_probs.get(nearest_start)
     

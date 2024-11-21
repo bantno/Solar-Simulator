@@ -143,31 +143,46 @@ class PickleDataProcessor:
         fig.tight_layout(pad=3)
 
         # Ensure axes is always a list for consistent indexing, even with one file
-        if len(files) == 1:
+        num_files = len(files)
+        if num_files == 1:
             axes = [axes]
+        elif num_files == 0:
+            raise ValueError("No .pkl files found in the directory.")
         
         # Loop through each file and create a subplot
         for i, filename in enumerate(files):
             filepath = os.path.join(directory, filename)
             df = pd.read_pickle(filepath)
-            # match = re.match(r"(\w+)_Data_c(\d+)_p([\d.]+)_(\d+)min\.pkl", filename)
-            match = re.match(r"(\w+)_Data_c(\d+)_p([\d.]+)_(\d+)min_(\d+-\d+)", filename)
 
+            # Regex to handle all cases (Optimal, Threshold, and Greedy)
+            match = re.match(r"(\w+)_Data_c(\d+)_((p|t)([\d.]+))_(\d+)min_(\d+-\d+)", filename)
             if match:
-                algo, cap, prob, dt,_ = match.groups()
+                algo, cap, _, key, value, dt, days = match.groups()
                 cap = int(cap)
-                prob = float(prob)
                 dt = int(dt)
 
-            # Check if "Reward" column exists in the file
+                # Handle algorithm name for Greedy
+                if algo == "Threshold" and key == "t" and float(value) == 0.0:
+                    algo = "Greedy"
+                    value = None  # Threshold is irrelevant for Greedy
+
+                # Prepare title details
+                details = f"Capacity: {cap} Ah, "
+                details += f"Failure p={value}" if key == "p" else f"Threshold t={value}"
+                title = f"{algo} ({details}, {dt} min steps)"
+
+            else:
+                title = f"Unmatched: {filename}"
+
+            # Check if "Reward" column exists in the DataFrame
             if "Reward" in df.columns:
-                ax = axes[i]
-                ax.hist(df["Reward"], bins=bins,edgecolor='white')
-                ax.set_title(f"{algo}")
+                ax = axes[i] if num_files > 1 else axes  # Single plot case
+                ax.hist(df["Reward"], bins=bins, edgecolor="white")
+                ax.set_title(title)
                 ax.set_xlabel("Whales Spotted")
                 ax.set_ylabel("Number of Cases")
-                ax.set_xlim((0, 60))
-                ax.tick_params(axis='x', which='both', labelbottom=True)
+                ax.set_xlim((0, 175))
+                ax.tick_params(axis="x", which="both", labelbottom=True)
             else:
                 print(f"No 'Reward' column found in {filename}. Skipping this file.")
 
@@ -194,12 +209,12 @@ class PickleDataProcessor:
 
 # Example usage
 if __name__ == "__main__":
-    dire = r"Results\TakeoffPowerConsumption\PPT-Results\testplz"
+    dire = r"."
     processor = PickleDataProcessor(directory=dire)  # Use "." for the current directory
     # processor.plot_reward_histogram(directory=dire,bins=30)
     processor.process_files()
     df = processor.get_results_df()
     processor.calculate_percent_improvement(df).to_csv("test.csv")
-    processor.plot_all_data()
-    # processor.plot_reward_histogram()
+    # processor.plot_all_data()
+    processor.plot_reward_histogram(directory=dire,)
     # print(processor.results)

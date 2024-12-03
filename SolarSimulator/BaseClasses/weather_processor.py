@@ -219,7 +219,7 @@ class WeatherDataProcessor:
         saved_files = []
 
         # Generate N datasets
-        for dataset_number in range(N):
+        for dataset_number in tqdm(range(N)):
             # Initialize an empty list to store weekly data for the synthetic year
             synthetic_year = []
 
@@ -269,15 +269,15 @@ if __name__ == "__main__":
     processor = WeatherDataProcessor()
 
     # Fetch and process data
-    processor.fetch_weather_data(latitude=30, longitude=-90, start_date="2000-01-01", end_date="2019-12-31", hourly_vars=["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
+    processor.fetch_weather_data(latitude=30, longitude=-90, start_date="2000-01-01", end_date="2023-12-31", hourly_vars=["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
     hourly_df = processor.process_hourly_data()
     # fitted_distributions = processor.fit_distributions(hourly_df,"data_expected.pkl")
     # hourly_df.to_pickle(r"Data\HISTORICAL_DATA")
     # fitted_distributions.to_pickle(r"Data\EXPECTED_DATA\data_expected_60min")
     
-    timestep = 30
+    timestep = 10
     resampled_df = processor.resample_data(interval_minutes=timestep, filename=f"data_{timestep}min.pkl")
     # fitted_distributions = processor.fit_distributions(resampled_df,f"data_expected_{timestep}min.pkl")
-    processor.generate_yearly_weather_data(resampled_df,N=1000,save_path=r"Data\SYNTHETIC_DATA")
+    processor.generate_yearly_weather_data(resampled_df,N=1500,save_path=r"Data\SYNTHETIC_DATA")
 
 

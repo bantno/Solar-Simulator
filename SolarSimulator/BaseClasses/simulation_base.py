@@ -42,7 +42,7 @@ class Simulation:
         self.tz = tz
         self.whale_table = WhaleSighting().probability_map
         self.save_history = save_history
-        self.use_expected = use_expected
+        self.use_expected = False
 
     def run_simulation(self,
                     start_date:datetime,

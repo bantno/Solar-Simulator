@@ -209,23 +209,21 @@ class SolarPlaneSimulation:
 if __name__ == "__main__":
     # Initialize the SolarPlaneSimulation with relevant parameters
     simulation = SolarPlaneSimulation(
-        lat=25, lon=-90, tz="Etc/GMT-5",  # Location parameters
+        lat=30, lon=-90, tz="Etc/GMT-0",  # Location parameters
         start_date="2024-03-01",          # Simulation start date
-        end_date="2024-10-01",            # Simulation end date
-        dt=30,                            # Time step in minutes
-        num_runs=500,                     # Number of simulation runs
+        end_date="2024-4-01",            # Simulation end date
+        dt=10,                            # Time step in minutes
+        num_runs=100,                     # Number of simulation runs
         visualize=False,                   # Enable visualization
-        save_dir=r"Results\6monthRun-0.75fail15", # Directory to save results
+        save_dir=r".", # Directory to save results
         show=False                        # Suppress immediate plot display
     )
 
     # Define simulation parameters
-    # capacities = [10,20,30,40,50,60,70,80]  # Battery capacities in Amp-hours
-    # thresholds = [0.05,0.1,0.15,0.2,0.25] # Threshold values for 'Threshold' algorithm
-    capacities = [20,40,60,80]  # Battery capacities in Amp-hours
-    thresholds = [0.1,0.2,0.25] # Threshold values for 'Threshold' algorithm
-    mdp_probs = [0.75]                              # MDP success probabilities for 'Optimal' algorithm
-    success_prob = 0.75                             # True success probability
+    capacities = [30,40,50,60,70]            # Battery capacities in Amp-hours
+    thresholds = [0.0,0.15,0.25]                   # Threshold values for 'Threshold' algorithm
+    mdp_probs = [0.9]                         # MDP success probabilities for 'Optimal' algorithm
+    success_prob = 0.9                      # True success probability
 
     # Run the simulation
     simulation.run(capacities=capacities, thresholds=thresholds, mdp_probs=mdp_probs, success_prob=success_prob)

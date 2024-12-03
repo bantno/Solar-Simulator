@@ -31,12 +31,19 @@ class SolarChargePlotter:
         Returns a tuple with these values.
         """
         # Regex patterns for Greedy and MDP files
-        match = re.match(r"(\w+)_Data_c(\d+)_p([\d.]+)_(\d+)min_(\d+-\d+)", filename)
+        match = re.match(r"(\w+)_Data_c(\d+)_(p|t)([\d.]+)_(\d+)min_(\d+-\d+)", filename)
         if match:
-            algo, cap, prob, dt,_ = match.groups()
+            algo, cap, param_type, param_value, dt, _ = match.groups()
             cap = int(cap)
-            prob = float(prob)
+            param_value = float(param_value)
             dt = int(dt)
+            # return {
+            #     "algo": algo,
+            #     "cap": cap,
+            #     "param_type": param_type,  # 'p' for optimal, 't' for threshold
+            #     "param_value": param_value,
+            #     "dt": dt
+            # }
             return algo
         else:
             return "Unknown"
@@ -216,7 +223,7 @@ class SolarChargePlotter:
 
 
 if __name__ == '__main__':
-    dt=30
+    dt=10
     utc_offset = timezone(timedelta(hours=-6))
     start_date = pd.to_datetime(datetime(2019,6,2).replace(tzinfo=utc_offset))
     end_date = pd.to_datetime(datetime(2019,7,2).replace(tzinfo=utc_offset))

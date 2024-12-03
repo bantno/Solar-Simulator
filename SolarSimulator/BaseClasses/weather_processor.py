@@ -23,7 +23,8 @@ class WeatherDataProcessor:
             "start_date": start_date,
             "end_date": end_date,
             "hourly": hourly_vars,
-            "timezone": timezone
+            "timezone": timezone,
+            "cell_selection": "sea"
         }
         self.response = self.client.weather_api(url, params=params)[0]
         print(f"Coordinates {self.response.Latitude()}°N {self.response.Longitude()}°E")
@@ -137,15 +138,15 @@ class WeatherDataProcessor:
                 beta_params = (np.nan, np.nan, np.nan, np.nan)  # Not enough data to fit
                 expected_beta = np.nan
 
-            # Fit wind speed data to a Weibull distribution
-            wind_data = group['wind_speed_10m'].dropna()
-            if len(wind_data) > 1:
-                weibull_params = weibull_min.fit(wind_data, floc=0)
-                k, loc, scale = weibull_params
-                expected_weibull = scale * gamma(1 + 1 / k)
-            else:
-                weibull_params = (np.nan, np.nan, np.nan)  # Not enough data to fit
-                expected_weibull = np.nan  # Not enough data to fit
+            # # Fit wind speed data to a Weibull distribution
+            # wind_data = group['wind_speed_10m'].dropna()
+            # if len(wind_data) > 1:
+            #     weibull_params = weibull_min.fit(wind_data, floc=0)
+            #     k, loc, scale = weibull_params
+            #     expected_weibull = scale * gamma(1 + 1 / k)
+            # else:
+            #     weibull_params = (np.nan, np.nan, np.nan)  # Not enough data to fit
+            #     expected_weibull = np.nan  # Not enough data to fit
 
             # Store results in a list
             results.append({
@@ -156,27 +157,20 @@ class WeatherDataProcessor:
                 'beta_alpha': beta_params[0],
                 'beta_beta': beta_params[1],
                 'expected_solar_rad': expected_beta,
-                'weibull_k': weibull_params[0],
-                'weibull_loc': weibull_params[1],
-                'weibull_scale': weibull_params[2],
-                'expected_wind_speed': expected_weibull
+                # 'weibull_k': weibull_params[0],
+                # 'weibull_loc': weibull_params[1],
+                # 'weibull_scale': weibull_params[2],
+                # 'expected_wind_speed': expected_weibull
             })
 
-        # Create a DataFrame from the results list
         df = pd.DataFrame(results)
         df["datetime"] = pd.to_datetime(dict(year=2024, month=df["month"], day=df["day"], hour=df["hour"], minute=df["minute"]))
 
-        # Step 2: Shift datetime by the desired number of hours, e.g., +3 hours
-        shift_hours = 0
-        df["datetime"] = df["datetime"] + pd.Timedelta(hours=shift_hours)
-
-        # Step 3: Update month, day, hour, and minute columns from the shifted datetime
         df["month"] = df["datetime"].dt.month
         df["day"] = df["datetime"].dt.day
         df["hour"] = df["datetime"].dt.hour
         df["minute"] = df["datetime"].dt.minute
 
-        # Drop the helper datetime column if no longer needed
         results_df = df.drop(columns=["datetime"])
         results_df.to_pickle(filename)
 
@@ -219,7 +213,7 @@ class WeatherDataProcessor:
         saved_files = []
 
         # Generate N datasets
-        for dataset_number in range(N):
+        for dataset_number in tqdm(range(N)):
             # Initialize an empty list to store weekly data for the synthetic year
             synthetic_year = []
 
@@ -275,9 +269,9 @@ if __name__ == "__main__":
     # hourly_df.to_pickle(r"Data\HISTORICAL_DATA")
     # fitted_distributions.to_pickle(r"Data\EXPECTED_DATA\data_expected_60min")
     
-    timestep = 30
+    timestep = 10
     resampled_df = processor.resample_data(interval_minutes=timestep, filename=f"data_{timestep}min.pkl")
-    # fitted_distributions = processor.fit_distributions(resampled_df,f"data_expected_{timestep}min.pkl")
+    fitted_distributions = processor.fit_distributions(resampled_df,f"data_expected_{timestep}min.pkl")
     processor.generate_yearly_weather_data(resampled_df,N=1000,save_path=r"Data\SYNTHETIC_DATA")
 
 

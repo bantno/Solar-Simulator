@@ -59,7 +59,7 @@ class SolarPlaneSimulation:
         self.simulation = Simulation(self.plane, self.lat, self.lon, self.tz, save_history=self.visualize)
         self.results = []  # To store processed results
 
-    def run_single(self, capacities=[50], thresholds=[0.1], mdp_probs=[0.9], success_prob=1.0):
+    def run_single(self, capacities=[], thresholds=[], mdp_probs=[], success_prob=1.0):
         """
         Run the simulation without multiprocessing. 
         Sequentially processes capacities, thresholds, and MDP probabilities.
@@ -113,7 +113,7 @@ class SolarPlaneSimulation:
             del data  # Free memory
             gc.collect()
 
-    def run(self, capacities=[50], thresholds=[0.1], mdp_probs=[0.9], success_prob=1.0):
+    def run(self, capacities=[], thresholds=[], mdp_probs=[], success_prob=0.0):
         for cap in tqdm(capacities, desc="Processing capacities"):
             self.simulation.plane.capacity = cap
 
@@ -211,19 +211,19 @@ if __name__ == "__main__":
     simulation = SolarPlaneSimulation(
         lat=25, lon=-90, tz="Etc/GMT-5",  # Location parameters
         start_date="2024-03-01",          # Simulation start date
-        end_date="2024-10-01",            # Simulation end date
-        dt=30,                            # Time step in minutes
-        num_runs=500,                     # Number of simulation runs
-        visualize=False,                   # Enable visualization
-        save_dir=r"Results\6monthRun-0.75fail15", # Directory to save results
-        show=False                        # Suppress immediate plot display
+        end_date="2024-03-02",            # Simulation end date
+        dt=10,                            # Time step in minutes
+        num_runs=1,                     # Number of simulation runs
+        visualize=True,                   # Enable visualization
+        save_dir=r".", # Directory to save results
+        show=True                        # Suppress immediate plot display
     )
 
     # Define simulation parameters
     # capacities = [10,20,30,40,50,60,70,80]  # Battery capacities in Amp-hours
     # thresholds = [0.05,0.1,0.15,0.2,0.25] # Threshold values for 'Threshold' algorithm
-    capacities = [20,40,60,80]  # Battery capacities in Amp-hours
-    thresholds = [0.1,0.2,0.25] # Threshold values for 'Threshold' algorithm
+    capacities = [20]  # Battery capacities in Amp-hours
+    thresholds = [0.25] # Threshold values for 'Threshold' algorithm
     mdp_probs = [0.75]                              # MDP success probabilities for 'Optimal' algorithm
     success_prob = 0.75                             # True success probability
 

@@ -211,7 +211,7 @@ if __name__ == "__main__":
     # plt.grid(True)
     # plt.show()
 
-    dire = r"Results\6monthRun-0.75fail"
+    dire = r"."
     processor = PickleDataProcessor(directory=dire)  # Use "." for the current directory
     # processor.plot_reward_histogram(directory=dire,bins=30)
     processor.process_files()

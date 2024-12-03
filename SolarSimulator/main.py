@@ -53,7 +53,7 @@ if __name__ == '__main__':
 
     utc_offset = timezone(timedelta(hours=0))
     start_date = pd.to_datetime(datetime(2024,7,1).replace(tzinfo=utc_offset))
-    end_date = pd.to_datetime(datetime(2024,7,28).replace(tzinfo=utc_offset))
+    end_date = pd.to_datetime(datetime(2024,7,7).replace(tzinfo=utc_offset))
 
     
     # start_date = pd.to_datetime(datetime(2024,7,1))
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     thresholds = [0.2]
     success_prob=1.0
     visualize = True
-    dt=30
+    dt=10
     NUM_RUNS = 1
     sim = Simulation(plane, lat, lon, tz, save_history=visualize)
 
@@ -86,7 +86,5 @@ if __name__ == '__main__':
 
 
     if visualize:
-        # utc_offset = timezone(timedelta(hours=-5))
-        # start_date = pd.to_datetime(datetime(2024,7,1).replace(tzinfo=utc_offset))
         plotter = SolarChargePlotter(r".",start_date=start_date,time_step=f"{dt}min")
         plotter.plot_data()

@@ -211,17 +211,17 @@ if __name__ == "__main__":
     simulation = SolarPlaneSimulation(
         lat=30, lon=-90, tz="Etc/GMT-0",  # Location parameters
         start_date="2024-03-01",          # Simulation start date
-        end_date="2024-9-01",            # Simulation end date
-        dt=30,                            # Time step in minutes
-        num_runs=1500,                     # Number of simulation runs
-        visualize=True,                   # Enable visualization
+        end_date="2024-4-01",            # Simulation end date
+        dt=10,                            # Time step in minutes
+        num_runs=100,                     # Number of simulation runs
+        visualize=False,                   # Enable visualization
         save_dir=r".", # Directory to save results
         show=False                        # Suppress immediate plot display
     )
 
     # Define simulation parameters
-    capacities = [50]            # Battery capacities in Amp-hours
-    thresholds = [0.0,0.25]                   # Threshold values for 'Threshold' algorithm
+    capacities = [30,40,50,60,70]            # Battery capacities in Amp-hours
+    thresholds = [0.0,0.15,0.25]                   # Threshold values for 'Threshold' algorithm
     mdp_probs = [0.9]                         # MDP success probabilities for 'Optimal' algorithm
     success_prob = 0.9                      # True success probability
 

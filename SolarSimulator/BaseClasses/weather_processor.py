@@ -219,7 +219,7 @@ class WeatherDataProcessor:
         saved_files = []
 
         # Generate N datasets
-        for dataset_number in range(N):
+        for dataset_number in tqdm(range(N)):
             # Initialize an empty list to store weekly data for the synthetic year
             synthetic_year = []
 
@@ -275,9 +275,9 @@ if __name__ == "__main__":
     # hourly_df.to_pickle(r"Data\HISTORICAL_DATA")
     # fitted_distributions.to_pickle(r"Data\EXPECTED_DATA\data_expected_60min")
     
-    timestep = 30
+    timestep = 10
     resampled_df = processor.resample_data(interval_minutes=timestep, filename=f"data_{timestep}min.pkl")
     # fitted_distributions = processor.fit_distributions(resampled_df,f"data_expected_{timestep}min.pkl")
-    processor.generate_yearly_weather_data(resampled_df,N=10000,save_path=r"Data\SYNTHETIC_DATA")
+    processor.generate_yearly_weather_data(resampled_df,N=1500,save_path=r"Data\SYNTHETIC_DATA")
 
 

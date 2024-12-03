@@ -26,7 +26,7 @@ class Autonomy:
         
         night_hours = 12
         nightly_idle_soc = np.ceil((self.mdp_model.plane.idle_power*night_hours*3600)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
-        single_flight_soc = np.ceil(self.mdp_model.plane.get_required_power(20,1.2)*self.dt*60/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
+        single_flight_soc = np.ceil((self.mdp_model.plane.get_required_power(20,1.2)*self.dt*60+self.mdp_model.plane.required_takeoff_energy)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
         battery_capacity_J = self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600
         # Preallocate arrays with a fixed size
         state_history_list = np.empty(max_stages,dtype=tuple)  # Adjust dimensions based on the state size
@@ -63,7 +63,7 @@ class Autonomy:
 
             is_action_successful = np.random.uniform(0,1) > failure_prob
             
-            if is_action_successful :
+            if True:
                 new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
                 new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
                 reward+=self.R(current_state,best_action,k,whale_prob)
@@ -71,7 +71,7 @@ class Autonomy:
                 energy_history_list[k+1]=new_energy
                 whale_list[k+1]=whale_prob
                 solar_power_list[k+1] = solar_power_wpm2
-            else:
+            if not is_action_successful :
                 reward -= self.failure_penalty # TODO MAKE whale penalty a parameter
                 break
             if new_state[0] < 0 :

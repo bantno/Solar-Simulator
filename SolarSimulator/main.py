@@ -52,20 +52,16 @@ if __name__ == '__main__':
     time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 
     utc_offset = timezone(timedelta(hours=0))
-    start_date = pd.to_datetime(datetime(2024,3,1).replace(tzinfo=utc_offset))
-    end_date = pd.to_datetime(datetime(2024,9,1).replace(tzinfo=utc_offset))
+    start_date = pd.to_datetime(datetime(2024,1,1).replace(tzinfo=utc_offset))
+    end_date = pd.to_datetime(datetime(2024,1,10).replace(tzinfo=utc_offset))
 
-    
-    # start_date = pd.to_datetime(datetime(2024,7,1))
-    # end_date = pd.to_datetime(datetime(2024,7,2))
-
-    capacities = [50]
+    capacities = [20]
     mdp_probs = [0.9]
     thresholds = [0.0,0.25]
     success_prob=1.0
-    visualize = True
-    dt=30
-    NUM_RUNS = 1500
+    visualize = False
+    dt=10
+    NUM_RUNS = 500
     sim = Simulation(plane, lat, lon, tz, save_history=visualize)
 
     # Run simulation
@@ -78,11 +74,11 @@ if __name__ == '__main__':
             times,data = sim.run_simulation(start_date,end_date,dt,algo=algo,mdp_success_prob=mdp_probs[0],true_success_prob=success_prob,runs=NUM_RUNS,threshold=threshold)
             data.to_pickle(f"{algo}_Data_c{cap}_t{threshold}_{dt}min_{start_date.day_of_year}-{end_date.day_of_year}_{NUM_RUNS}.pkl")
 
-        # for mdp_success_prob in tqdm(mdp_probs, desc=f"Processing probabilities for cap={cap}", leave=False):
-        #     # MDP Simulation
-        #     algo='Optimal'
-        #     times,data = sim.run_simulation(start_date,end_date,dt,algo=algo,mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
-        #     data.to_pickle(f"{algo}_Data_c{cap}_p{mdp_success_prob}_{dt}min_{start_date.day_of_year}-{end_date.day_of_year}_{NUM_RUNS}.pkl")
+        for mdp_success_prob in tqdm(mdp_probs, desc=f"Processing probabilities for cap={cap}", leave=False):
+            # MDP Simulation
+            algo='Optimal'
+            times,data = sim.run_simulation(start_date,end_date,dt,algo=algo,mdp_success_prob=mdp_success_prob,true_success_prob=success_prob,runs=NUM_RUNS)
+            data.to_pickle(f"{algo}_Data_c{cap}_p{mdp_success_prob}_{dt}min_{start_date.day_of_year}-{end_date.day_of_year}_{NUM_RUNS}.pkl")
 
 
     if visualize:

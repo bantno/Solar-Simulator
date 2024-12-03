@@ -19,7 +19,7 @@ class mdp:
         self.vehicle_states = vehicle_states
         self.actions = actions
         self.dt = dt
-        self.gamma = gamma
+        self.gamma = 1.0
         self.epsilon = epsilon
         self.show_progress = False
 
@@ -71,7 +71,7 @@ class mdp:
         Calculate the new state of charge after performing the action.
         """
         soc = state[0]
-        delta_soc = self.calculate_soc_update(self.plane, action, self.dt, solar_power)
+        delta_soc = self.calculate_soc_update(self.plane,state, action, self.dt, solar_power)
         new_soc = min(soc + delta_soc, 100)  # Limit SoC to 100
         new_vehicle_state = "flying" if action == "fly" else "moored"
 
@@ -85,8 +85,9 @@ class mdp:
         """
         Creates an expectation value (EV) table with the given number of stages.
         """
-        S, dt, efficiency = self.plane.S, self.dt, 0.15
+        S, dt, efficiency = self.plane.S, self.dt, 0.10
         required_cruise_energy = self.plane.required_cruise_power * 60 * dt
+        required_takeoff_energy = self.plane.required_takeoff_energy
         capacity_j = self.plane.voltage * self.plane.capacity * 3600
         alphas, betas = self.expected_data['beta_alpha'].values, self.expected_data['beta_beta'].values
 
@@ -99,6 +100,8 @@ class mdp:
 
                 for idx, action in enumerate(self.actions):
                     required_energy = required_cruise_energy if idx else 0
+                    if state[1] == "moored" and action=="fly":
+                        required_energy = required_cruise_energy+required_takeoff_energy
                     current_energy = state[0] / 100 * capacity_j
                     max_collected_energy = 1367 * S * dt * 60 * efficiency
 
@@ -200,7 +203,7 @@ class mdp:
 
         return future_reward
 
-    def calculate_soc_update(self, plane, action, dt, solar_power):
+    def calculate_soc_update(self, plane, state, action, dt, solar_power):
         """
         Calculate the change in State of Charge (SoC) after performing the specified action.
 
@@ -214,12 +217,14 @@ class mdp:
         - int: The rounded change in SoC based on the action and environmental conditions.
         """
         panel_efficiency = 0.15  # TODO: Update using PVWATTS for more accurate efficiency
-
+        required_takeoff_energy = 0
         # Determine required power based on action
         if action == "float":
             required_power = 0
         elif action == "fly":
             required_power = plane.required_cruise_power
+            if state[1] == "moored":
+                required_takeoff_energy = plane.required_takeoff_energy
         else:
             raise ValueError(f"Expected action 'float' or 'fly'. Got {action}.")
 
@@ -229,7 +234,7 @@ class mdp:
         net_power = solar_input - required_power - avionics_power
 
         # Convert power (W) to energy (Joules) and then to change in SoC (%)
-        energy_change = net_power * dt * 60  # Convert power to energy
+        energy_change = net_power * dt * 60 - required_takeoff_energy # Convert power to energy
         soc_change = (energy_change / (plane.voltage * plane.capacity * 3600)) * 100  # Energy to SoC %
 
         # Round to the nearest SoC increment and return
@@ -252,8 +257,8 @@ class mdp:
         # Determine failure probability factor based on state-action combinations
         state_action_factors = {
             ("moored", "float"): 1.0,
-            ("moored", "fly"): 10.0,
-            ("flying", "float"): 10.0,
+            ("moored", "fly"): 5.0,
+            ("flying", "float"): 5.0,
             ("flying", "fly"): 2.0
         }
 
@@ -324,7 +329,7 @@ class mdp:
         Returns:
             float: The probability of whale sighting at the nearest time block.
         """
-        current_time = (start_time + (current_step * timestep)) % 1440
+        current_time = (start_time + (current_step * timestep)+60) % 1440
         nearest_start = (current_time // 120) * 120
         return self.whale_surface_probs.get(nearest_start)
     

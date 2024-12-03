@@ -209,7 +209,7 @@ class SolarPlaneSimulation:
 if __name__ == "__main__":
     # Initialize the SolarPlaneSimulation with relevant parameters
     simulation = SolarPlaneSimulation(
-        lat=25, lon=-90, tz="Etc/GMT-5",  # Location parameters
+        lat=30, lon=-90, tz="Etc/GMT-0",  # Location parameters
         start_date="2024-03-01",          # Simulation start date
         end_date="2024-03-02",            # Simulation end date
         dt=10,                            # Time step in minutes

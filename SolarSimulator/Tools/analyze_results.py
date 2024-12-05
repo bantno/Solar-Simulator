@@ -4,7 +4,6 @@ import datetime
 if __name__ == "__main__":
     directory = r"."
 
-<<<<<<< HEAD
     # plt.figure(figsize=(10, 6))
     # df['Actual'].plot(marker='o', label='SSRD=2019 Data')
     # df['Expected'].plot(marker='x', linestyle='--', label='SSRD=Expected Data')
@@ -22,10 +21,6 @@ if __name__ == "__main__":
     processor.process_files()
     df = processor.get_results_df()
     processor.calculate_percent_improvement(df).to_csv("test.csv")
-=======
-    # Generate figure
-    processor = DataProcessor(directory=directory)  # Use "." for the current directory
->>>>>>> c4cd1f504e38e01057eb167164573c942c708b88
     processor.plot_all_data()
     
     # Calculate percent improvement

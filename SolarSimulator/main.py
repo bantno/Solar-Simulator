@@ -52,27 +52,16 @@ if __name__ == '__main__':
     time_string = current_time.strftime("%Y-%m-%d_%H-%M-%S")
 
     utc_offset = timezone(timedelta(hours=0))
-<<<<<<< HEAD
     start_date = pd.to_datetime(datetime(2024,7,1).replace(tzinfo=utc_offset))
     end_date = pd.to_datetime(datetime(2024,7,7).replace(tzinfo=utc_offset))
-=======
-    start_date = pd.to_datetime(datetime(2024,1,1).replace(tzinfo=utc_offset))
-    end_date = pd.to_datetime(datetime(2024,1,10).replace(tzinfo=utc_offset))
->>>>>>> c4cd1f504e38e01057eb167164573c942c708b88
 
     capacities = [20]
     mdp_probs = [0.9]
     thresholds = [0.0,0.25]
     success_prob=1.0
-<<<<<<< HEAD
     visualize = True
     dt=10
     NUM_RUNS = 1
-=======
-    visualize = False
-    dt=10
-    NUM_RUNS = 500
->>>>>>> c4cd1f504e38e01057eb167164573c942c708b88
     sim = Simulation(plane, lat, lon, tz, save_history=visualize)
 
     # Run simulation

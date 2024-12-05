@@ -25,7 +25,6 @@ class SolarChargePlotter:
         df = pd.read_pickle(file_path)
         return df.head(1)
 
-<<<<<<< HEAD
     def extract_parameters_from_filename(self, filename):
         """
         Extracts 'cap' and either 'p' or 'mdp_success_prob' from the filename.
@@ -49,8 +48,6 @@ class SolarChargePlotter:
         else:
             return "Unknown"
 
-=======
->>>>>>> c4cd1f504e38e01057eb167164573c942c708b88
     def plot_data(self):
         """Plot the state of charge, solar history, and cumulative hours flown for the first entry in each file in the directory."""
         import re
@@ -444,7 +441,7 @@ class DataProcessor:
                 ax.set_title(title)
                 ax.set_xlabel("Whales Spotted")
                 ax.set_ylabel("Number of Cases")
-                ax.set_xlim((0, 175))
+                ax.set_xlim((0, 100))
                 ax.tick_params(axis="x", which="both", labelbottom=True)
             else:
                 print(f"No 'Reward' column found in {filename}. Skipping this file.")
@@ -472,17 +469,27 @@ class DataProcessor:
 
 
 if __name__ == '__main__':
-<<<<<<< HEAD
-    dt=10
-    utc_offset = timezone(timedelta(hours=-6))
-    start_date = pd.to_datetime(datetime(2019,6,2).replace(tzinfo=utc_offset))
-    end_date = pd.to_datetime(datetime(2019,7,2).replace(tzinfo=utc_offset))
-=======
-    dt=30
-    utc_offset = timezone(timedelta(hours=0))
-    start_date = pd.to_datetime(datetime(2024,1,1).replace(tzinfo=utc_offset))
-    end_date = pd.to_datetime(datetime(2024,2,1).replace(tzinfo=utc_offset))
->>>>>>> c4cd1f504e38e01057eb167164573c942c708b88
-    plotter = SolarChargePlotter(r".",start_date=start_date,time_step=f"{dt}min")
-    # plotter.plot_data()
-    plotter.plot_reward_vs_threshold()
+    # # dire = r"Results\12-4\1month"
+    # dire = r"Results\12-4\3month"
+    # # dire = r"Results\12-4\8month"
+    # dire = r"Results\12-4\1month\1"
+    dire = r"."
+    
+    processor = DataProcessor(directory=dire)  # Use "." for the current directory
+    processor.process_files()
+    df = processor.get_results_df()
+    processor.plot_all_data()
+    
+    # Histogram
+    # processor.process_files()
+    processor.plot_reward_histogram(r"Figures\Histogram")
+    # mcs_results = processor.get_results_df()
+
+    # # Plot States
+    # direct = r"Figures\Histogram"
+    # utc_offset = timezone(timedelta(hours=0))
+    # start_date = pd.to_datetime(datetime(2024,3,1).replace(tzinfo=utc_offset))
+    # solar = SolarChargePlotter(direct,start_date,"10min")
+    # # solar.plot_data()
+    # solar.plot_reward_vs_threshold()
+    # # processor.calculate_percent_improvement(mcs_results).to_csv("Improvement.csv")

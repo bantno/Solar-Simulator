@@ -212,7 +212,7 @@ if __name__ == "__main__":
     simulation = SolarPlaneSimulation(
         lat=30, lon=-90, tz="Etc/GMT-0",  # Location parameters
         start_date="2024-03-01",          # Simulation start date
-        end_date="2024-04-01",            # Simulation end date
+        end_date="2024-03-10",            # Simulation end date
         dt=10,                            # Time step in minutes
         num_runs=1,                     # Number of simulation runs
         visualize=True,                   # Enable visualization

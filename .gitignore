@@ -1,5 +1,5 @@
-.gitignore
 Results/
 Data/
 **/__pycache__/
 *.pyc
+*.pkl

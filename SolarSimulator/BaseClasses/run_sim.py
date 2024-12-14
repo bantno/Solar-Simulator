@@ -155,14 +155,14 @@ class SolarPlaneSimulation:
                 mdp_success_prob=0.9, true_success_prob=success_prob,
                 runs=self.num_runs, threshold=threshold
             )
-            filename = f"{self.save_dir}/{algo}_Data_c{cap}_t{threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl"
+            filename = f"{self.save_dir}/{algo}_Data_c{cap}_t{threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
         elif algo == "Optimal":
             times, data = self.simulation.run_simulation(
                 self.start_date, self.end_date, self.dt, algo=algo,
                 mdp_success_prob=mdp_success_prob, true_success_prob=success_prob,
                 runs=self.num_runs
             )
-            filename = f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl"
+            filename = f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
         else:
             return None
 
@@ -215,17 +215,17 @@ if __name__ == "__main__":
         end_date="2024-03-10",            # Simulation end date
         dt=10,                            # Time step in minutes
         num_runs=1,                     # Number of simulation runs
-        visualize=True,                   # Enable visualization
-        save_dir=r"Results\1month", # Directory to save results
-        show=True                        # Suppress immediate plot display
+        visualize=False,                   # Enable visualization
+        save_dir=r".", # Directory to save results
+        show=False                        # Suppress immediate plot display
     )
 
     # Define simulation parameters
     # capacities = [10,15,20,25,30]  # Battery capacities in Amp-hours
-    thresholds = [0.0,0.1,0.2,0.25,0.3] # Threshold values for 'Threshold' algorithm
-    capacities = [20,30,40,50,60,70,80,90,100,110,120]  # Battery capacities in Amp-hours
+    thresholds = [0.25] # Threshold values for 'Threshold' algorithm
+    capacities = [69]  # Battery capacities in Amp-hours
     # thresholds = [0,0.25] # Threshold values for 'Threshold' algorithm
-    mdp_probs = [0.99995]                              # MDP success probabilities for 'Optimal' algorithm
+    mdp_probs = [0]#[0.99995]                              # MDP success probabilities for 'Optimal' algorithm
     success_prob = 0.99995                             # True success probability
 
     # Run the simulation

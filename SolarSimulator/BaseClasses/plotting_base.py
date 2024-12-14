@@ -274,18 +274,25 @@ class DataProcessor:
         """Read all pickle files and store their mean results."""
         for filename in os.listdir(self.directory):
             if filename.endswith(".pkl"):
-                match = re.match(r"(\w+)_Data_c(\d+)(?:_t([\d.]+))?(?:_p([\d.]+))?_(\d+)min_(\d+-\d+)", filename)
-
+                match = re.match(r"(\w+)_Data_c(\d+)(?:_t([\d.]+))?(?:_p([\d.]+))?_(\d+)min_(\d+-\d+)_(\d+)(?:_lat(\d+))?", filename)
                 if match:
-                    algo, cap, threshold, prob, dt, date_range = match.groups()
+                    algo, cap, threshold, prob, dt, date_range, runs, latitude = match.groups()
                     cap = int(cap)
                     dt = int(dt)
-                    
+                    runs = int(runs)
+
                     # Convert threshold and probability to floats if they are found, otherwise set to None
                     threshold = float(threshold) if threshold is not None else None
                     prob = float(prob) if prob is not None else None
+                    latitude = float(latitude) if latitude is not None else None
 
-                    # Assuming calculate_mean_rewards_and_failures is defined elsewhere in your class
+                    # Parse the date range
+                    start_day, end_day = map(int, date_range.split("-"))
+
+                    # Calculate the number of timesteps
+                    num_timesteps = ((end_day - start_day + 1) * 24 * 60) // dt
+
+                    # Calculate mean reward and failure step
                     mean_reward, mean_failure_step = self.calculate_mean_rewards_and_failures(
                         os.path.join(self.directory, filename)
                     )
@@ -297,8 +304,13 @@ class DataProcessor:
                         "Threshold": threshold,   # Will be None if threshold was not in the filename
                         "Timestep": dt,
                         "Probability": prob,      # Will be None if probability was not in the filename
-                        "MeanReward": mean_reward,
-                        "MeanFailureStep": mean_failure_step
+                        "Latitude": latitude,
+                        "StartDate": start_day,
+                        "EndDate": end_day,
+                        "NumTimesteps": num_timesteps,
+                        "NumRuns": runs,
+                        "MeanFailureStep": mean_failure_step,
+                        "MeanReward": mean_reward
                     })
                 else:
                     print(f"Filename {filename} does not match expected pattern.")
@@ -478,7 +490,8 @@ if __name__ == '__main__':
     processor = DataProcessor(directory=dire)  # Use "." for the current directory
     processor.process_files()
     df = processor.get_results_df()
-    processor.plot_all_data()
+    print(df)
+    # processor.plot_all_data()
     
     # Histogram
     # processor.process_files()

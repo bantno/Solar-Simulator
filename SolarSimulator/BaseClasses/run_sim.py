@@ -225,8 +225,8 @@ if __name__ == "__main__":
     thresholds = [0.0,0.1,0.2,0.25,0.3] # Threshold values for 'Threshold' algorithm
     capacities = [20,30,40,50,60,70,80,90,100,110,120]  # Battery capacities in Amp-hours
     # thresholds = [0,0.25] # Threshold values for 'Threshold' algorithm
-    mdp_probs = [0.9]                              # MDP success probabilities for 'Optimal' algorithm
-    success_prob = 0.9                             # True success probability
+    mdp_probs = [0.99995]                              # MDP success probabilities for 'Optimal' algorithm
+    success_prob = 0.99995                             # True success probability
 
     # Run the simulation
     simulation.run(capacities=capacities, thresholds=thresholds, mdp_probs=mdp_probs, success_prob=success_prob)

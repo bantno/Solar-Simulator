@@ -38,7 +38,8 @@ class Seaplane:
         self.S = S
 
         path = r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data"
-        self.af_mass = self.get_total_mass(path)
+        # self.af_mass = self.get_total_mass(path)
+        self.af_mass = 8
 
         self.voltage = voltage
         self.capacity = capacity

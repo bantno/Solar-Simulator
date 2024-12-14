@@ -180,7 +180,8 @@ class SolarPlaneSimulation:
             for mdp_prob in mdp_probs:
                 tasks.append((cap, "Optimal", None, mdp_prob, success_prob))
 
-        num_cores_to_use = max(1, os.cpu_count() - 2)  # Leave 1 core free
+        num_cores_to_use = max(1, os.cpu_count())
+        print(f"Running with {num_cores_to_use} cores.")
 
         try:
             with Pool(processes=num_cores_to_use) as pool:
@@ -213,18 +214,18 @@ if __name__ == "__main__":
         start_date="2024-03-01",          # Simulation start date
         end_date="2024-04-01",            # Simulation end date
         dt=10,                            # Time step in minutes
-        num_runs=1000,                     # Number of simulation runs
-        visualize=False,                   # Enable visualization
-        save_dir=r".", # Directory to save results
-        show=False                        # Suppress immediate plot display
+        num_runs=1,                     # Number of simulation runs
+        visualize=True,                   # Enable visualization
+        save_dir=r"Results\1month", # Directory to save results
+        show=True                        # Suppress immediate plot display
     )
 
     # Define simulation parameters
-    # capacities = [10,20,30,40,50,60,70,80]  # Battery capacities in Amp-hours
-    # thresholds = [0.05,0.1,0.15,0.2,0.25] # Threshold values for 'Threshold' algorithm
-    capacities = [20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]  # Battery capacities in Amp-hours
-    thresholds = [0,0.25] # Threshold values for 'Threshold' algorithm
-    mdp_probs = [0.75]                              # MDP success probabilities for 'Optimal' algorithm
+    # capacities = [10,15,20,25,30]  # Battery capacities in Amp-hours
+    thresholds = [0.0,0.1,0.2,0.25,0.3] # Threshold values for 'Threshold' algorithm
+    capacities = [20,30,40,50,60,70,80,90,100,110,120]  # Battery capacities in Amp-hours
+    # thresholds = [0,0.25] # Threshold values for 'Threshold' algorithm
+    mdp_probs = [0.9]                              # MDP success probabilities for 'Optimal' algorithm
     success_prob = 0.9                             # True success probability
 
     # Run the simulation

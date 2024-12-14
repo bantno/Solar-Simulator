@@ -482,7 +482,7 @@ if __name__ == '__main__':
     
     # Histogram
     # processor.process_files()
-    processor.plot_reward_histogram(r"Figures\Histogram")
+    # processor.plot_reward_histogram(r"Figures\Histogram")
     # mcs_results = processor.get_results_df()
 
     # # Plot States

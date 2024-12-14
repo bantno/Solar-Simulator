@@ -37,9 +37,7 @@ class mdp:
             raise ValueError(f"Max stages and data lengths do not match. {self.max_stages}!={len(self.expected_data)}")
 
         # Failure probabilities and whale sighting probabilities
-        self.stepwise_failure_prob = self.calculate_step_transition_prob(
-            self.max_stages * dt, mission_success_prob, dt
-        )
+        self.stepwise_failure_prob = 1-mission_success_prob
         self.whale_surface_probs = whale_surface_probs
         self.start_time = start_date.minute + 60 * start_date.hour
 

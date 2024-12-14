@@ -271,12 +271,7 @@ if __name__ == "__main__":
     
     timestep = 10
     resampled_df = processor.resample_data(interval_minutes=timestep, filename=f"data_{timestep}min.pkl")
-<<<<<<< HEAD
     fitted_distributions = processor.fit_distributions(resampled_df,f"data_expected_{timestep}min.pkl")
     processor.generate_yearly_weather_data(resampled_df,N=1000,save_path=r"Data\SYNTHETIC_DATA")
-=======
-    # fitted_distributions = processor.fit_distributions(resampled_df,f"data_expected_{timestep}min.pkl")
-    processor.generate_yearly_weather_data(resampled_df,N=1500,save_path=r"Data\SYNTHETIC_DATA")
->>>>>>> c4cd1f504e38e01057eb167164573c942c708b88
 
 

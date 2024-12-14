@@ -22,7 +22,7 @@ class Autonomy:
         max_stages = len(self.data)-1
         # print(f"Threshold = {threshold}\n")
 
-        self.stepwise_failure_prob = self.calculate_step_transition_prob(self.dt*max_stages,true_success_prob,self.dt)
+        self.stepwise_failure_prob = 1-true_success_prob
         
         night_hours = 12
         nightly_idle_soc = np.ceil((self.mdp_model.plane.idle_power*night_hours*3600)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
@@ -95,7 +95,7 @@ class Autonomy:
         battery_capacity_J = self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600
         reward = 0
         max_stages = len(self.data)-1
-        self.stepwise_failure_prob = self.calculate_step_transition_prob(self.dt*max_stages,true_success_prob,self.dt)
+        self.stepwise_failure_prob = 1-true_success_prob
         optimal_policy = self.mdp_model.policy_table
 
         # Preallocate arrays with a fixed size
@@ -214,46 +214,46 @@ class Autonomy:
         success_prob = 1-failure_prob
         return success_prob, failure_prob
     
-    @staticmethod
-    def calculate_step_transition_prob(period_min, no_failure_probability, step_length_min):
-        """
-        Calculate the stepwise transition probability for each step within a specified period.
+    # @staticmethod
+    # def calculate_step_transition_prob(period_min, no_failure_probability, step_length_min):
+    #     """
+    #     Calculate the stepwise transition probability for each step within a specified period.
 
-        This method computes the probability of failure for a single step given the total 
-        failure probability over a period and the number of steps within that period. 
-        It ensures that the compounded stepwise failure matches the specified total failure 
-        probability over the entire period.
+    #     This method computes the probability of failure for a single step given the total 
+    #     failure probability over a period and the number of steps within that period. 
+    #     It ensures that the compounded stepwise failure matches the specified total failure 
+    #     probability over the entire period.
 
-        Parameters:
-            period_min (float): The total length of the period in minutes.
-            failure_probability (float): The overall failure probability for the entire period 
-                (value between 0 and 1).
-            step_length_min (float): The length of each step in minutes.
+    #     Parameters:
+    #         period_min (float): The total length of the period in minutes.
+    #         failure_probability (float): The overall failure probability for the entire period 
+    #             (value between 0 and 1).
+    #         step_length_min (float): The length of each step in minutes.
 
-        Returns:
-            float: The stepwise failure probability for each individual step.
+    #     Returns:
+    #         float: The stepwise failure probability for each individual step.
 
-        Example:
-            If the total period is 60 minutes with a failure probability of 0.5 and 
-            step length is 15 minutes, this method returns the stepwise probability for 
-            each 15-minute interval.
+    #     Example:
+    #         If the total period is 60 minutes with a failure probability of 0.5 and 
+    #         step length is 15 minutes, this method returns the stepwise probability for 
+    #         each 15-minute interval.
 
-        Raises:
-            ValueError: If any input is non-positive or the failure_probability is not in [0, 1].
-        """
-        # Validate inputs
-        if period_min <= 0:
-            raise ValueError("Period_min must be a positive number.")
-        if not (0 <= no_failure_probability <= 1):
-            raise ValueError("Failure_probability must be between 0 and 1, inclusive.")
-        if step_length_min <= 0:
-            raise ValueError("Step_length_min must be a positive number.")
+    #     Raises:
+    #         ValueError: If any input is non-positive or the failure_probability is not in [0, 1].
+    #     """
+    #     # Validate inputs
+    #     if period_min <= 0:
+    #         raise ValueError("Period_min must be a positive number.")
+    #     if not (0 <= no_failure_probability <= 1):
+    #         raise ValueError("Failure_probability must be between 0 and 1, inclusive.")
+    #     if step_length_min <= 0:
+    #         raise ValueError("Step_length_min must be a positive number.")
 
-        # Calculate the number of steps and the stepwise failure probability
-        num_steps = np.ceil(period_min / step_length_min)
-        stepwise_failure_probability = 1 - (no_failure_probability ** (1 / num_steps))
-        # print(stepwise_failure_probability)
-        return stepwise_failure_probability
+    #     # Calculate the number of steps and the stepwise failure probability
+    #     num_steps = np.ceil(period_min / step_length_min)
+    #     stepwise_failure_probability = 1 - (no_failure_probability ** (1 / num_steps))
+    #     # print(stepwise_failure_probability)
+    #     return stepwise_failure_probability
     
     def calculate_energy_update(self, plane, state, action, dt, solar_power):
         """

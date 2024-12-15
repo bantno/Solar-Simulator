@@ -314,6 +314,45 @@ class DataProcessor:
                     })
                 else:
                     print(f"Filename {filename} does not match expected pattern.")
+    @staticmethod
+    def plot_optimal_battery_capacity(df):
+        """
+        Plot the optimal battery capacity against mission duration for different latitudes using Matplotlib.
+        
+        Parameters:
+        - df: DataFrame with columns 'Capacity', 'NumTimesteps', 'Timestep', 'Latitude', and 'MeanReward'.
+        
+        The function identifies the battery capacity with the highest mean reward for each mission duration and latitude,
+        then plots mission duration on the X-axis, optimal battery capacity on the Y-axis, and different curves for each latitude.
+        """
+        # Step 1: Calculate mission duration in days
+        df['MissionDurationDays'] = df['NumTimesteps'] * df['Timestep'] / (60 * 24)
+
+        # Step 2: Identify the optimal battery capacity for each mission duration and latitude
+        optimal_df = df.groupby(['MissionDurationDays', 'Latitude']).apply(
+            lambda group: group.loc[group['MeanReward'].idxmax()]
+        ).reset_index(drop=True)
+
+        # Step 3: Plot the results using Matplotlib
+        plt.figure(figsize=(10, 6))
+
+        # Get unique latitudes
+        latitudes = optimal_df['Latitude'].unique()
+
+        # Plot each latitude separately
+        for lat in latitudes:
+            lat_data = optimal_df[optimal_df['Latitude'] == lat]
+            plt.plot(lat_data['MissionDurationDays'], lat_data['Capacity'], label=f'Latitude {lat}', marker='o')
+
+        # Customize the plot
+        plt.title('Optimal Battery Capacity vs Mission Duration')
+        plt.xlabel('Mission Duration (Days)')
+        plt.ylabel('Optimal Battery Capacity (Ah)')
+        plt.legend(title='Latitude')
+        plt.grid(True)
+
+        # Show the plot
+        plt.show()
 
     def calculate_mean_rewards_and_failures(self, filepath):
         """Calculate the mean reward and failure step for a given pickle file."""
@@ -490,6 +529,7 @@ if __name__ == '__main__':
     processor = DataProcessor(directory=dire)  # Use "." for the current directory
     processor.process_files()
     df = processor.get_results_df()
+    processor.plot_optimal_battery_capacity(df)
     print(df)
     # processor.plot_all_data()
     

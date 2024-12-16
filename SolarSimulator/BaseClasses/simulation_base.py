@@ -58,6 +58,8 @@ class Simulation:
         Simulates and plots the duty cycle for the given plane, solar data file, cruise speed, air density, and algorithm.
         """        
 
+        # NEED TO FIX THIS TO BE ABLE TO RUN 3rd algorithm type.
+
         plane = self.plane
         plane.update_plane()
         if isinstance(threshold,float):
@@ -225,6 +227,42 @@ class Simulation:
                     }
                 else:
                     reward, last_step = auto.simulate_mdp_behavior(
+                        initial_state=(100, "moored"),
+                        true_success_prob=true_success_prob,
+                        simulate_failure=True
+                    )
+
+                    # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
+                    data[i] = {
+                        "Reward": reward,
+                        "LastStep": last_step
+                    }
+        elif algo == "Charge Threshold": 
+            mdp_model.create_ev_table()
+            for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
+                actual_data = self._load_weather_data(dt,directory=r"Data\SYNTHETIC_DATA\lat30",i=i)
+                actual_data = actual_data.loc[start_date:end_date]
+                auto.data=actual_data
+                # Simulate the behavior
+                if self.save_history:
+                    reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_fullcharge_behavior(
+                        initial_state=(100, "moored"),
+                        true_success_prob=true_success_prob,
+                        simulate_failure=True,
+                        save_history = self.save_history
+                    )
+
+                    data[i] = {
+                        "Iteration": i,
+                        "StateHistory": state_history_list,
+                        "SolarHistory":solar_list,
+                        "ExpectedSolarHistory":expected_data["expected_solar_rad"].values,
+                        "WhaleHistory":whale_list,
+                        "Reward": reward,
+                        "LastStep": last_step
+                    }
+                else:
+                    reward, last_step = auto.simulate_fullcharge_behavior(
                         initial_state=(100, "moored"),
                         true_success_prob=true_success_prob,
                         simulate_failure=True

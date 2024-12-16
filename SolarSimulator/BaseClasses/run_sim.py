@@ -113,11 +113,11 @@ class SolarPlaneSimulation:
             del data  # Free memory
             gc.collect()
 
-    def run(self, capacities=[], thresholds=[], mdp_probs=[], success_prob=0.0):
+    def run(self, capacities=[], thresholds=[], mdp_probs=[], charge_thresholds=[], success_prob=0.0):
         for cap in tqdm(capacities, desc="Processing capacities"):
             self.simulation.plane.capacity = cap
 
-            for threshold in tqdm(thresholds, desc=f"Processing thresholds for cap={cap}", leave=False):
+            for threshold in tqdm(thresholds, desc=f"Processing for cap={cap}", leave=False):
                 algo = 'Threshold'
                 times, data = self.simulation.run_simulation(
                     self.start_date, self.end_date, self.dt, algo=algo,
@@ -128,7 +128,7 @@ class SolarPlaneSimulation:
                 del data
                 gc.collect()
 
-            for mdp_success_prob in tqdm(mdp_probs, desc=f"Processing probabilities for cap={cap}", leave=False):
+            for mdp_success_prob in tqdm(mdp_probs, desc=f"Processing for cap={cap}", leave=False):
                 algo = 'Optimal'
                 times, data = self.simulation.run_simulation(
                     self.start_date, self.end_date, self.dt, algo=algo,
@@ -136,6 +136,17 @@ class SolarPlaneSimulation:
                     runs=self.num_runs
                 )
                 data.to_pickle(f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl")
+                del data
+                gc.collect()
+            
+            for charge_threshold in tqdm(charge_thresholds, desc=f"Processing for cap={cap}", leave=False):
+                algo = 'Charge Threshold'
+                times, data = self.simulation.run_simulation(
+                    self.start_date, self.end_date, self.dt, algo=algo,
+                    mdp_success_prob=0.0, true_success_prob=success_prob,
+                    runs=self.num_runs
+                )
+                data.to_pickle(f"{self.save_dir}/{algo}_Data_c{cap}_t{charge_threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl")
                 del data
                 gc.collect()
 
@@ -152,11 +163,18 @@ class SolarPlaneSimulation:
         if algo == "Threshold":
             times, data = self.simulation.run_simulation(
                 self.start_date, self.end_date, self.dt, algo=algo,
-                mdp_success_prob=0.9, true_success_prob=success_prob,
+                mdp_success_prob=0.0, true_success_prob=success_prob,
                 runs=self.num_runs, threshold=threshold
             )
             filename = f"{self.save_dir}/{algo}_Data_c{cap}_t{threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
         elif algo == "Optimal":
+            times, data = self.simulation.run_simulation(
+                self.start_date, self.end_date, self.dt, algo=algo,
+                mdp_success_prob=mdp_success_prob, true_success_prob=success_prob,
+                runs=self.num_runs
+            )
+            filename = f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
+        elif algo == "Charge Threshold":
             times, data = self.simulation.run_simulation(
                 self.start_date, self.end_date, self.dt, algo=algo,
                 mdp_success_prob=mdp_success_prob, true_success_prob=success_prob,
@@ -172,15 +190,17 @@ class SolarPlaneSimulation:
 
         return filename
 
-    def run(self, capacities=[50], thresholds=[0.1], mdp_probs=[0.9], success_prob=1.0):
+    def run(self, capacities=[], thresholds=[], mdp_probs=[], charge_thresholds = [], success_prob=1.0):
         tasks = []
         for cap in capacities:
             for threshold in thresholds:
                 tasks.append((cap, "Threshold", threshold, None, success_prob))
             for mdp_prob in mdp_probs:
                 tasks.append((cap, "Optimal", None, mdp_prob, success_prob))
+            for charge_threshold in charge_thresholds:
+                tasks.append((cap, "Charge Threshold", None, charge_threshold, success_prob))
 
-        num_cores_to_use = max(1, os.cpu_count())
+        num_cores_to_use = max(1, os.cpu_count()-1)
         print(f"Running with {num_cores_to_use} cores.")
 
         try:
@@ -212,9 +232,9 @@ if __name__ == "__main__":
     simulation = SolarPlaneSimulation(
         lat=30, lon=-90, tz="Etc/GMT-0",  # Location parameters
         start_date="2024-03-01",          # Simulation start date
-        end_date="2024-03-10",            # Simulation end date
+        end_date="2024-04-01",            # Simulation end date
         dt=10,                            # Time step in minutes
-        num_runs=1,                     # Number of simulation runs
+        num_runs=1000,                     # Number of simulation runs
         visualize=False,                   # Enable visualization
         save_dir=r".", # Directory to save results
         show=False                        # Suppress immediate plot display
@@ -222,13 +242,14 @@ if __name__ == "__main__":
 
     # Define simulation parameters
     # capacities = [10,15,20,25,30]  # Battery capacities in Amp-hours
-    thresholds = [0.25] # Threshold values for 'Threshold' algorithm
-    capacities = [69]  # Battery capacities in Amp-hours
+    thresholds = [] # Threshold values for 'Threshold' algorithm
+    capacities = [20,30,40,50,60,70,80,90,100]  # Battery capacities in Amp-hours
+    charge_thresholds = [.1,.5,.95]
     # thresholds = [0,0.25] # Threshold values for 'Threshold' algorithm
-    mdp_probs = [0]#[0.99995]                              # MDP success probabilities for 'Optimal' algorithm
+    mdp_probs = []                              # MDP success probabilities for 'Optimal' algorithm
     success_prob = 0.99995                             # True success probability
 
     # Run the simulation
-    simulation.run(capacities=capacities, thresholds=thresholds, mdp_probs=mdp_probs, success_prob=success_prob)
+    simulation.run(capacities=capacities, thresholds=thresholds, mdp_probs=mdp_probs,charge_thresholds=charge_thresholds, success_prob=success_prob)
     # simulation.run_single(capacities=capacities, thresholds=thresholds, mdp_probs=mdp_probs, success_prob=success_prob)
 

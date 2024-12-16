@@ -163,7 +163,7 @@ class Simulation:
         # Simulate the behavior
         if algo == "Threshold":
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-                actual_data = self._load_weather_data(dt,directory=r"Data\SYNTHETIC_DATA",i=i)
+                actual_data = self._load_weather_data(dt,directory=r"Data\SYNTHETIC_DATA\lat30",i=i)
                 actual_data = actual_data.loc[start_date:end_date]
                 auto.data=actual_data
                 if self.save_history:

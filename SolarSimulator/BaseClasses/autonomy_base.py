@@ -84,6 +84,77 @@ class Autonomy:
         else:
             return reward,k
         
+    def simulate_fullcharge_behavior(self,
+                                initial_state,
+                                true_success_prob,
+                                simulate_failure = False,
+                                save_history = False,
+                                capacity_threshold = 0.95):
+
+        reward = 0
+        max_stages = len(self.data)-1
+        # print(f"Threshold = {threshold}\n")
+
+        self.stepwise_failure_prob = 1-true_success_prob
+        
+        # night_hours = 12
+        # nightly_idle_soc = np.ceil((self.mdp_model.plane.idle_power*night_hours*3600)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
+        # single_flight_soc = np.ceil((self.mdp_model.plane.get_required_power(20,1.2)*self.dt*60+self.mdp_model.plane.required_takeoff_energy)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
+        battery_capacity_J = self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600
+        
+
+        state_history_list = np.empty(max_stages,dtype=tuple)  # Adjust dimensions based on the state size
+        energy_history_list = np.empty(max_stages)
+        solar_power_list = np.empty(max_stages)
+        whale_list = np.empty(max_stages)
+
+        # Initialize the first elements
+        state_history_list[0] = initial_state
+        energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
+        solar_power_list[0] = 0.0
+        whale_list[0] = 0.0
+        shortwave_radiation = self.data["shortwave_radiation"].values
+
+        for k in range(max_stages-1):
+            current_state = state_history_list[k]
+            current_energy = energy_history_list[k]
+            solar_power_wpm2 = shortwave_radiation[k]
+            whale_prob = self.get_sighting_probability(self.whale_prob,k,self.dt,0)
+            # is_reward_sufficient = whale_prob>threshold and solar_power_wpm2>0
+            is_battery_sufficient = current_energy > battery_capacity_J*capacity_threshold
+
+            if is_battery_sufficient:
+                best_action = "fly"
+            else :
+                best_action = "float"
+
+            if simulate_failure:
+                _,failure_prob = self.calculate_maneuver_probabilities(current_state=current_state[1],
+                                                                                    action=best_action,
+                                                                                    stage=k)
+            else:
+                failure_prob = -1
+
+            is_action_successful = np.random.uniform(0,1) > failure_prob
+            
+            # Update state history
+            new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
+            new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
+            reward+=self.R(current_state,best_action,k,whale_prob)
+            state_history_list[k+1]=new_state
+            energy_history_list[k+1]=new_energy
+            whale_list[k+1]=whale_prob
+            solar_power_list[k+1] = solar_power_wpm2
+
+            if not is_action_successful or new_state[0] < 0:
+                reward -= self.failure_penalty
+                break
+        
+        if save_history:
+            return reward, k, state_history_list[:k + 1], solar_power_list[:k + 1], whale_list
+        else:
+            return reward,k
+        
 
 
     def simulate_mdp_behavior(self,

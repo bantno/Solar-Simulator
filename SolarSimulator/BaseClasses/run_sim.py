@@ -229,13 +229,13 @@ class SolarPlaneSimulation:
 if __name__ == "__main__":
     # Initialize the SolarPlaneSimulation with relevant parameters
     simulation = SolarPlaneSimulation(
-        lat=30, lon=-90, tz="Etc/GMT-0",  # Location parameters
-        start_date="2024-03-01",          # Simulation start date
-        end_date="2024-04-01",            # Simulation end date
+        lat=-30, lon=-90, tz="Etc/GMT-0",  # Location parameters
+        start_date="2024-01-01",          # Simulation start date
+        end_date="2024-12-10",            # Simulation end date
         dt=10,                            # Time step in minutes
-        num_runs=1000,                     # Number of simulation runs
+        num_runs=1,                     # Number of simulation runs
         visualize=False,                   # Enable visualization
-        save_dir=r"Results\Analysis", # Directory to save results
+        save_dir=r".", # Directory to save results
         show=False                      # Suppress immediate plot display
     )
 
@@ -244,7 +244,7 @@ if __name__ == "__main__":
     success_prob = 0.99995
     thresholds = [.25]                             # Threshold values for 'Threshold' algorithm
     charge_thresholds = []
-    capacities = [20,30,40,50,60,70,80,90,100]  # Battery capacities in Amp-hours
+    capacities = [50]  # Battery capacities in Amp-hours
     # mdp_probs = [success_prob]                  # MDP success probabilities for 'Optimal' algorithm
     mdp_probs = []
     

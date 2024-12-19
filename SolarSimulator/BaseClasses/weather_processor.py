@@ -7,6 +7,7 @@ from scipy.stats import beta, weibull_min
 from scipy.special import gamma
 from retry_requests import retry
 from tqdm import tqdm
+from multiprocessing import Pool
 
 class WeatherDataProcessor:
     def __init__(self, cache_file='.cache', retries=5, backoff_factor=0.2):
@@ -175,9 +176,6 @@ class WeatherDataProcessor:
         results_df.to_pickle(filename)
 
         return results_df
-    
-
-from multiprocessing import Pool
 
 def generate_single_synthetic_year(dataset_number, historical_data, years, timestep, points_per_week, save_path, seed=None):
     """
@@ -202,21 +200,26 @@ def generate_single_synthetic_year(dataset_number, historical_data, years, times
 
     # Generate data for 52 weeks
     for week_number in range(52):
-        # Randomly select a year
-        selected_year = random.choice(years)
+        valid_week = False
+        
+        while not valid_week:
+            # Randomly select a year
+            selected_year = random.choice(years)
 
-        # Extract data for the selected year
-        year_data = historical_data[historical_data.index.year == selected_year]
+            # Extract data for the selected year
+            year_data = historical_data[historical_data.index.year == selected_year]
 
-        # Calculate start and end indices for the selected week
-        week_start = week_number * points_per_week
-        week_end = (week_number + 1) * points_per_week
+            # Calculate start and end indices for the selected week
+            week_start = week_number * points_per_week
+            week_end = (week_number + 1) * points_per_week
 
-        # Extract the data for the selected week
-        weekly_data = year_data.iloc[week_start:week_end]
+            # Extract the data for the selected week
+            weekly_data = year_data.iloc[week_start:week_end]
 
-        # Append to the synthetic year list
-        synthetic_year.append(weekly_data)
+            # Check if the extracted data has the correct number of points
+            if len(weekly_data) == points_per_week:
+                valid_week = True
+                synthetic_year.append(weekly_data)
 
     # Concatenate all the weekly data into a single DataFrame
     synthetic_year_data = pd.concat(synthetic_year)
@@ -230,12 +233,13 @@ def generate_single_synthetic_year(dataset_number, historical_data, years, times
     )
 
     # Define the file path to save the dataset
-    file_path = f"{save_path}\data_{int(timestep / 60)}min_{dataset_number}.pkl"
+    file_path = f"{save_path}\\data_{int(timestep / 60)}min_{dataset_number}.pkl"
 
     # Save the synthetic year data to a file
     synthetic_year_data.to_pickle(file_path)
 
     return file_path
+
 
 
 def generate_yearly_weather_data(historical_data, N=1, seed=None, save_path="synthetic_data_"):
@@ -301,6 +305,6 @@ if __name__ == "__main__":
     timestep = 10
     resampled_df = processor.resample_data(interval_minutes=timestep, filename=f"data_{timestep}min.pkl")
     fitted_distributions = processor.fit_distributions(resampled_df,f"data_expected_{timestep}min.pkl")
-    generate_yearly_weather_data(resampled_df,N=10000,save_path=r"Data\SYNTHETIC_DATA")
+    generate_yearly_weather_data(resampled_df,N=10,save_path=r"Data\SYNTHETIC_DATA")
 
 

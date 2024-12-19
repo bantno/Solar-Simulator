@@ -99,7 +99,7 @@ class Autonomy:
         
         # night_hours = 12
         # nightly_idle_soc = np.ceil((self.mdp_model.plane.idle_power*night_hours*3600)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
-        # single_flight_soc = np.ceil((self.mdp_model.plane.get_required_power(20,1.2)*self.dt*60+self.mdp_model.plane.required_takeoff_energy)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
+        single_flight_soc = np.ceil((self.mdp_model.plane.get_required_power(20,1.2)*self.dt*60+self.mdp_model.plane.required_takeoff_energy)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
         battery_capacity_J = self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600
         
 
@@ -121,7 +121,7 @@ class Autonomy:
             solar_power_wpm2 = shortwave_radiation[k]
             whale_prob = self.get_sighting_probability(self.whale_prob,k,self.dt,0)
             # is_reward_sufficient = whale_prob>threshold and solar_power_wpm2>0
-            is_battery_sufficient = current_energy > battery_capacity_J*capacity_threshold
+            is_battery_sufficient = current_energy > battery_capacity_J*capacity_threshold or (current_state[1] == "flying" and current_state[0] > single_flight_soc)
 
             if is_battery_sufficient:
                 best_action = "fly"

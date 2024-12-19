@@ -86,62 +86,10 @@ class Simulation:
         times = pd.date_range(start_date,end_date,freq=f"{dt}min")
         
         return times,data
-    
-    def generate_simulation_summary_table(self, start_date: tuple, end_date: tuple, 
-                                    total_failure_prob: float,time_step: int) -> pd.DataFrame:
-        """
-        Generate a summary table for the simulation with key parameters formatted for PowerPoint.
-
-        Parameters:
-        ----------
-        start_date : datetime
-            The start date of the simulation.
-        end_date : datetime
-            The end date of the simulation.
-        total_failure_prob : float
-            The overall probability of failure across the simulation.
-        stepwise_failure_prob : float
-            The probability of failure at each simulation step.
-        time_step : int
-            The time step of the simulation in minutes.
-
-        Returns:
-        -------
-        pd.DataFrame
-            A formatted DataFrame containing the summary of the simulation.
-        """
-
-        # Format the start and end dates
-        start_date_str = f"{start_date[1]:04d}-{start_date[0]:02d} {start_date[2]:02d}:00"
-        end_date_str = f"{end_date[1]:04d}-{end_date[0]:02d} {end_date[2]:02d}:00"
-
-        # Construct the summary data as a dictionary
-        summary_data = {
-            "Simulation Parameter": [
-                "Battery Capacity (Ah)",
-                "Start Date", "End Date", "Cumulative Failure Probability", 
-                "Time Step (minutes)", "Latitude", "Longitude"
-            ],
-            "Value": [
-                self.plane.capacity,
-                start_date_str,
-                end_date_str,
-                f"{total_failure_prob:.2%}",  # Format as percentage
-                time_step,
-                self.lat,
-                self.lon
-            ]
-        }
-
-        # Create a DataFrame from the dictionary
-        summary_table = pd.DataFrame(summary_data)
-        # print(summary_table)
-        return summary_table
-
 
     def simulate_deployment(self,start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs, threshold):
         self.plane.calculate_weight()
-        actual_data, expected_data = self.get_weather_data(start_date, end_date, dt)
+        expected_data = self.get_expected_weather_data(start_date=start_date,end_date=end_date,dt=dt)
         vehicle_states = ["moored", "flying"]
         actions = ["float", "fly"]
         mdp_model = mdp(self.plane,
@@ -155,7 +103,7 @@ class Simulation:
                         dt=dt,
                         mission_success_prob=mdp_success_prob
                         )
-        auto = Autonomy(dt,mdp_model=mdp_model,data=actual_data,whale_probabilities=self.whale_table)
+        auto = Autonomy(dt,mdp_model=mdp_model,data=None,whale_probabilities=self.whale_table)
         mdp_model.show_progress=True
         data = {}
         loc = rf"Data\SYNTHETIC_DATA\lat{int(self.lat)}"
@@ -278,10 +226,8 @@ class Simulation:
         return df
  
         
-    def get_weather_data(self,start_date:datetime,end_date:datetime,dt:int):
+    def get_expected_weather_data(self,start_date:datetime,end_date:datetime,dt:int):
         """Return expected and actual solar and wind data for given indices."""
-        actual_data = self._load_weather_data(dt,r"Data\SYNTHETIC_DATA\lat30",i=0)
-        actual_data = actual_data.loc[start_date:end_date]
         df = self._load_expected_weather_data(dt)
         # Define start and end dates (month, day, hour, minute)
         start_month = start_date.month
@@ -308,12 +254,12 @@ class Simulation:
             ) #&
             # ~((df['month'] == 2) & (df['day'] == 29))  # Exclude leap day
         ]
-        if len(actual_data) != len(expected_data):
-            raise ValueError(f"Actual data and expected data have different lengths. Actual: {len(actual_data)}, Expected: {len(expected_data)}")
+        # if len(actual_data) != len(expected_data):
+            # raise ValueError(f"Actual data and expected data have different lengths. Actual: {len(actual_data)}, Expected: {len(expected_data)}")
         
-        return actual_data,expected_data
+        return expected_data
 
-    def _load_weather_data(self, dt: int, directory: str=r"Data\HISTORICAL_DATA", i=None):
+    def _load_weather_data(self, dt: int, directory: str=None, i=None):
         """Load actual solar and wind data from pickle files with a specific timestep in the filename."""
         # Create regex pattern to match files with the specified timestep (in minutes)
         if i is None :
@@ -330,7 +276,7 @@ class Simulation:
 
         if actual_file:
             actual_data = pd.read_pickle(actual_file)
-            actual_data = actual_data[~((actual_data.index.month == 2) & (actual_data.index.day == 29))]
+            # actual_data = actual_data[~((actual_data.index.month == 2) & (actual_data.index.day == 29))]
             return actual_data
         else:
             raise FileNotFoundError(f"No file found in '{directory}' with timestep '{dt}' minutes.")

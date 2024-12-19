@@ -155,17 +155,15 @@ class Simulation:
                         dt=dt,
                         mission_success_prob=mdp_success_prob
                         )
-        # if self.use_expected:
-        #     actual_data = expected_data.copy()
-        #     actual_data['shortwave_radiation'] = expected_data['expected_solar_rad']
-        #     actual_data['wind_speed_10m'] = expected_data['expected_wind_speed']
         auto = Autonomy(dt,mdp_model=mdp_model,data=actual_data,whale_probabilities=self.whale_table)
         mdp_model.show_progress=True
         data = {}
+        loc = rf"Data\SYNTHETIC_DATA\lat{int(self.lat)}"
+
         # Simulate the behavior
         if algo == "Threshold":
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-                actual_data = self._load_weather_data(dt,directory=r"Data\SYNTHETIC_DATA\lat30",i=i)
+                actual_data = self._load_weather_data(dt,directory=loc,i=i)
                 actual_data = actual_data.loc[start_date:end_date]
                 auto.data=actual_data
                 if self.save_history:
@@ -204,7 +202,7 @@ class Simulation:
         elif algo == "Optimal": 
             mdp_model.create_ev_table()
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-                actual_data = self._load_weather_data(dt,directory=r"Data\SYNTHETIC_DATA\lat30",i=i)
+                actual_data = self._load_weather_data(dt,directory=loc,i=i)
                 actual_data = actual_data.loc[start_date:end_date]
                 auto.data=actual_data
                 # Simulate the behavior
@@ -239,7 +237,7 @@ class Simulation:
                     }
         elif algo == "Charge Threshold": 
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-                actual_data = self._load_weather_data(dt,directory=r"Data\SYNTHETIC_DATA\lat30",i=i)
+                actual_data = self._load_weather_data(dt,directory=loc,i=i)
                 actual_data = actual_data.loc[start_date:end_date]
                 auto.data=actual_data
                 # Simulate the behavior

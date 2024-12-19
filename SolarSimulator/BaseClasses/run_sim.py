@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 
 from seaplane_base import Seaplane
 from simulation_base import Simulation
-from plotting_base import SolarChargePlotter
 
 class SolarPlaneSimulation:
     def __init__(self, lat=25, lon=-90, tz="Etc/GMT-5", pdc0=0, gamma=-0.0047,
@@ -236,20 +235,20 @@ if __name__ == "__main__":
         dt=10,                            # Time step in minutes
         num_runs=1000,                     # Number of simulation runs
         visualize=False,                   # Enable visualization
-        save_dir=r".", # Directory to save results
-        show=False                        # Suppress immediate plot display
+        save_dir=r"Results\Analysis", # Directory to save results
+        show=False                      # Suppress immediate plot display
     )
 
     # Define simulation parameters
-    # capacities = [10,15,20,25,30]  # Battery capacities in Amp-hours
-    thresholds = [] # Threshold values for 'Threshold' algorithm
+    # success_prob = 0.99995                      # True stepwise success probability
+    success_prob = 0.99995
+    thresholds = [.25]                             # Threshold values for 'Threshold' algorithm
+    charge_thresholds = []
     capacities = [20,30,40,50,60,70,80,90,100]  # Battery capacities in Amp-hours
-    charge_thresholds = [.1,.5,.95]
-    # thresholds = [0,0.25] # Threshold values for 'Threshold' algorithm
-    mdp_probs = []                              # MDP success probabilities for 'Optimal' algorithm
-    success_prob = 0.99995                             # True success probability
+    # mdp_probs = [success_prob]                  # MDP success probabilities for 'Optimal' algorithm
+    mdp_probs = []
+    
 
     # Run the simulation
     simulation.run(capacities=capacities, thresholds=thresholds, mdp_probs=mdp_probs,charge_thresholds=charge_thresholds, success_prob=success_prob)
-    # simulation.run_single(capacities=capacities, thresholds=thresholds, mdp_probs=mdp_probs, success_prob=success_prob)
 

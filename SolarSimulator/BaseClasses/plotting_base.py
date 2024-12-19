@@ -681,21 +681,16 @@ class DataProcessor:
 
 
 if __name__ == '__main__':
-    # # dire = r"Results\12-4\1month"
-    # dire = r"Results\12-4\3month"
-    # # dire = r"Results\12-4\8month"
-    # dire = r"Results\12-4\1month\1"
     dire = r"Results\Analysis"
     
     processor = DataProcessor(directory=dire)  # Use "." for the current directory
     processor.process_files()
     df = processor.get_results_df()
-    # print(df.head(100))
+    processor.plot_all_data(".")
     # processor.plot_optimal_battery_capacity(df)
     # processor.plot_percent_improvement(df,"Figures")
-    
     # processor.plot_reward_vs_threshold(df,r".")
-    processor.plot_all_data(".")
+    
     
     ## Histogram
     # processor.plot_reward_histogram(r"Figures\Histogram")

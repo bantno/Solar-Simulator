@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, timezone
 
-class SolarChargePlotter:
+class StateHistoryPlotter:
     def __init__(self, directory, start_date, time_step=None):
         """
         Initialize the SolarChargePlotter with directory, start date, and time step.
@@ -274,7 +274,7 @@ class DataProcessor:
         """Read all pickle files and store their mean results."""
         for filename in os.listdir(self.directory):
             if filename.endswith(".pkl"):
-                match = re.match(r"(\w+)_Data_c(\d+)(?:_t([\d.]+))?(?:_p([\d.]+))?_(\d+)min_(\d+-\d+)_(\d+)(?:_lat(\d+))?", filename)
+                match = re.match(r"([\w\s]+)_Data_c(\d+)(?:_t([\d.]+))?(?:_p([\d.]+))?_(\d+)min_(\d+-\d+)_(\d+)(?:_lat(\d+))?", filename)
                 if match:
                     algo, cap, threshold, prob, dt, date_range, runs, latitude = match.groups()
                     cap = int(cap)
@@ -402,47 +402,142 @@ class DataProcessor:
         plt.tight_layout()  # Adjust layout to prevent overlap
         plt.show()
 
+    def plot_all_data(self, save_dir):
+        """
+        Plot all data for each mission duration on separate plots, with series based on algorithm and threshold.
+        This includes plotting the 'Optimal', 'Threshold', and 'Charge Threshold' algorithms.
 
-    def plot_all_data(self):
-        """Plot all data on one plot with series based on algorithm and threshold."""
+        Parameters:
+            save_dir (str): The directory where the plots will be saved.
+        """
+        # Ensure the save directory exists
+        os.makedirs(save_dir, exist_ok=True)
+
         df = self.get_results_df()
         print(df)
 
-        # Separate the optimal algorithm (Threshold = NaN)
-        optimal_df = df[df['Threshold'].isna()]
-        other_df = df[df['Threshold'].notna()]
+        # Get unique mission durations (StartDate-EndDate)
+        mission_durations = df[['StartDate', 'EndDate']].drop_duplicates()
 
-        plt.figure(figsize=(12, 8))
-        # markers = ['o', 's', '^', 'D', 'P', 'X', '*']  # A list of markers for variety
-        # colors = plt.cm.tab20.colors  # Use a colormap for consistent color variety
+        for _, mission in mission_durations.iterrows():
+            start_date, end_date = mission['StartDate'], mission['EndDate']
+            mission_label = f"{start_date}-{end_date}"
 
-        # Plot the optimal algorithm
-        if not optimal_df.empty:
-            plt.scatter(
-                optimal_df['Capacity'], optimal_df['MeanReward'], 
-                # marker='X', color='black', s=100,  # Unique marker, size, and color
-                label="Optimal Algorithm"
-            )
+            # Filter data for the current mission duration
+            mission_df = df[(df['StartDate'] == start_date) & (df['EndDate'] == end_date)]
 
-        # Plot other algorithms grouped by Algorithm and Threshold
-        for i, ((algo_name, threshold), subset) in enumerate(other_df.groupby(['Algorithm', 'Threshold'])):
-            # marker = markers[i % len(markers)]  # Cycle through markers
-            # color = colors[i % len(colors)]    # Cycle through colors
+            # Separate the optimal algorithm (Threshold = NaN)
+            optimal_df = mission_df[mission_df['Threshold'].isna()]
+            # Separate Charge Threshold algorithm
+            charge_threshold_df = mission_df[mission_df['Algorithm'] == 'Charge Threshold']
+            # Separate other Threshold algorithms
+            threshold_df = mission_df[(mission_df['Algorithm'] == 'Threshold') & (mission_df['Threshold'].notna())]
 
-            plt.scatter(
-                subset['Capacity'], subset['MeanReward'], 
-                # marker=marker, color=color,  # Assign unique marker and color
-                label=f"{algo_name}, Threshold={threshold}"
-            )
+            plt.figure(figsize=(12, 8))
 
-        plt.title("Mean Reward vs Capacity for All Algorithms")
-        plt.xlabel("Capacity")
-        plt.ylabel("Mean Reward")
-        plt.legend(title="Algorithm", loc='best')
-        plt.grid(True)
-        plt.tight_layout()  # Adjust layout to prevent overlap
-        plt.show()
-    
+            # Plot the optimal algorithm
+            if not optimal_df.empty:
+                plt.scatter(
+                    optimal_df['Capacity'], optimal_df['MeanReward'],
+                    marker='X', color='black', s=100,  # Unique marker, size, and color
+                    label="Optimal Algorithm"
+                )
+
+            # Plot the Charge Threshold algorithm
+            if not charge_threshold_df.empty:
+                plt.scatter(
+                    charge_threshold_df['Capacity'], charge_threshold_df['MeanReward'],
+                    marker='D', color='blue', s=60,  # Diamond marker and blue color
+                    label="Charge Threshold"
+                )
+
+            # Plot the Threshold algorithm grouped by Threshold value
+            for threshold_value, subset in threshold_df.groupby('Threshold'):
+                plt.scatter(
+                    subset['Capacity'], subset['MeanReward'],
+                    label=f"Threshold, t={threshold_value}"
+                )
+
+            # Plot customization
+            plt.title(f"Mean Reward vs Capacity for All Algorithms\nMission Duration: {mission_label}")
+            plt.xlabel("Capacity (Ah)")
+            plt.ylabel("Mean Reward")
+            plt.legend(title="Algorithm", loc='best')
+            plt.grid(True)
+            plt.tight_layout()  # Adjust layout to prevent overlap
+
+            # Save the plot
+            save_path = os.path.join(save_dir, f"mean_reward_{mission_label}.png")
+            plt.savefig(save_path)
+            plt.close()
+
+
+    def plot_reward_vs_threshold(self, df, output_dir):
+        """
+        Create and save a separate plot of reward vs threshold for each battery capacity.
+
+        Parameters:
+        - df: DataFrame containing 'Capacity', 'Threshold', 'MeanReward', and 'Algorithm' columns.
+        - output_dir: Directory where the plots will be saved.
+        """
+        # Ensure the output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Get the unique battery capacities
+        capacities = df['Capacity'].unique()
+
+        for capacity in capacities:
+            plt.figure(figsize=(8, 6))
+
+            # Filter data for the current capacity
+            capacity_df = df[df['Capacity'] == capacity]
+
+            # Filter out rows where 'Threshold' is not NaN (for Threshold-based algorithms)
+            threshold_df = capacity_df[capacity_df['Threshold'].notna()]
+
+            # Extract thresholds and rewards
+            thresholds = threshold_df['Threshold'].values
+            rewards = threshold_df['MeanReward'].values
+
+            # Find the optimal reward (assuming 'Optimal' is in the 'Algorithm' column)
+            optimal_df = capacity_df[capacity_df['Algorithm'] == 'Optimal']
+            optimal_reward = optimal_df['MeanReward'].mean() if not optimal_df.empty else None
+
+            # Find the greedy reward (assuming a threshold of 0.0 represents Greedy)
+            greedy_df = threshold_df[threshold_df['Threshold'] == 0.0]
+            greedy_reward = greedy_df['MeanReward'].mean() if not greedy_df.empty else None
+
+            # Sort thresholds and rewards for plotting
+            sorted_indices = np.argsort(thresholds)
+            thresholds = thresholds[sorted_indices]
+            rewards = rewards[sorted_indices]
+
+            # Plot the threshold-based rewards
+            plt.plot(thresholds, rewards, marker='o', linestyle='-', color='orange', label='Threshold')
+
+            # Plot the optimal reward as a horizontal line if available
+            if optimal_reward is not None:
+                plt.axhline(y=optimal_reward, color='blue', linestyle='--', label='Optimal')
+
+            # Plot the greedy reward as a horizontal line if available
+            if greedy_reward is not None:
+                plt.axhline(y=greedy_reward, color='red', linestyle='--', label='Greedy')
+
+            # Customize the plot
+            plt.title(f'Reward vs Threshold (Battery Capacity: {capacity} Ah)')
+            plt.xlabel('Threshold')
+            plt.ylabel('Mean Reward')
+            plt.legend()
+            plt.grid(True)
+
+            # Save the plot to the specified directory
+            output_path = os.path.join(output_dir, f'reward_vs_threshold_c{capacity}.png')
+            plt.savefig(output_path)
+            plt.close()
+
+            print(f"Plot saved for battery capacity {capacity} Ah at: {output_path}")
+
+
     def plot_reward_histogram(self, directory, bins=50):
         """Plot histograms of Reward values from each file in a directory on separate subplots."""
         
@@ -504,19 +599,85 @@ class DataProcessor:
             filename = "histogram.png"
             plt.savefig(r"Figures\Histogram")# + f"\{filename}")
 
-    def calculate_percent_improvement(self,df):
-        # Separate data for Optimal and Threshold algorithms
-        optimal_df = df[df['Algorithm'] == 'Optimal'].set_index('Capacity')
-        threshold_df = df[df['Algorithm'] == 'Threshold'].set_index('Capacity')
+    def plot_percent_improvement(self, df, save_dir):
+        """
+        Calculate and plot the percent improvement of the Optimal algorithm over Threshold
+        and Charge Threshold algorithms for each mission duration.
 
-        # Align dataframes by Capacity to ensure we calculate the difference on matching capacities
-        merged_df = optimal_df[['MeanReward']].join(threshold_df[['MeanReward']], lsuffix='_optimal', rsuffix='_threshold')
+        Parameters:
+            df (DataFrame): The dataframe containing the results.
+            save_dir (str): The directory where the plots will be saved.
+        """
+        # Ensure the save directory exists
+        os.makedirs(save_dir, exist_ok=True)
 
-        # Calculate percent improvement
-        merged_df['Percent Improvement'] = ((merged_df['MeanReward_optimal'] - merged_df['MeanReward_threshold']) / merged_df['MeanReward_threshold']) * 100
-        
-        # Reset index for better readability if needed
-        return merged_df[['Percent Improvement']]
+        # Get unique mission durations (StartDate-EndDate)
+        mission_durations = df[['StartDate', 'EndDate']].drop_duplicates()
+
+        for _, mission in mission_durations.iterrows():
+            start_date, end_date = mission['StartDate'], mission['EndDate']
+            mission_label = f"{start_date}-{end_date}"
+
+            # Filter data for the current mission duration
+            mission_df = df[(df['StartDate'] == start_date) & (df['EndDate'] == end_date)]
+
+            # Get Optimal algorithm results
+            optimal_df = mission_df[mission_df['Algorithm'] == 'Optimal']
+
+            # Get Threshold algorithm results
+            threshold_df = mission_df[mission_df['Algorithm'] == 'Threshold']
+
+            # Get Charge Threshold algorithm results
+            charge_threshold_df = mission_df[mission_df['Algorithm'] == 'Charge Threshold']
+
+            # Create lists to store results
+            capacities = []
+            improvements_threshold = []
+            improvements_charge_threshold = []
+
+            # Calculate percent improvement over Threshold and Charge Threshold
+            for cap in mission_df['Capacity'].unique():
+                # Get the optimal mean reward for the current capacity
+                optimal_reward = optimal_df[optimal_df['Capacity'] == cap]['MeanReward'].max()
+
+                # Get the threshold mean reward for the current capacity
+                threshold_reward = threshold_df[threshold_df['Capacity'] == cap]['MeanReward'].max()
+
+                # Get the charge threshold mean reward for the current capacity
+                charge_threshold_reward = charge_threshold_df[charge_threshold_df['Capacity'] == cap]['MeanReward'].max()
+
+                if not np.isnan(optimal_reward) and not np.isnan(threshold_reward):
+                    improvement_threshold = ((optimal_reward - threshold_reward) / threshold_reward) * 100
+                    improvements_threshold.append(improvement_threshold)
+                else:
+                    improvements_threshold.append(np.nan)
+
+                if not np.isnan(optimal_reward) and not np.isnan(charge_threshold_reward):
+                    improvement_charge_threshold = ((optimal_reward - charge_threshold_reward) / charge_threshold_reward) * 100
+                    improvements_charge_threshold.append(improvement_charge_threshold)
+                else:
+                    improvements_charge_threshold.append(np.nan)
+
+                capacities.append(cap)
+
+            # Plot the results
+            plt.figure(figsize=(10, 6))
+            plt.scatter(capacities, improvements_threshold, marker='o', linestyle='-', label='Optimal vs Threshold', color='orange')
+            plt.scatter(capacities, improvements_charge_threshold, marker='o', linestyle='-', label='Optimal vs Charge Threshold', color='blue')
+
+            plt.title(f'Percent Improvement of Optimal Over Other Algorithms\nMission Duration: {mission_label}')
+            plt.xlabel('Battery Capacity (Ah)')
+            plt.ylabel('Percent Improvement (%)')
+            plt.grid(True)
+            plt.legend()
+
+            # Save the plot
+            plt.tight_layout()
+            save_path = os.path.join(save_dir, f'percent_improvement_{mission_label}.png')
+            plt.savefig(save_path)
+            plt.close()
+
+
 
 
 if __name__ == '__main__':
@@ -524,25 +685,25 @@ if __name__ == '__main__':
     # dire = r"Results\12-4\3month"
     # # dire = r"Results\12-4\8month"
     # dire = r"Results\12-4\1month\1"
-    dire = r"."
+    dire = r"Results\Analysis"
     
     processor = DataProcessor(directory=dire)  # Use "." for the current directory
     processor.process_files()
     df = processor.get_results_df()
-    processor.plot_optimal_battery_capacity(df)
-    print(df)
-    # processor.plot_all_data()
+    # print(df.head(100))
+    # processor.plot_optimal_battery_capacity(df)
+    # processor.plot_percent_improvement(df,"Figures")
     
-    # Histogram
-    # processor.process_files()
+    # processor.plot_reward_vs_threshold(df,r".")
+    processor.plot_all_data(".")
+    
+    ## Histogram
     # processor.plot_reward_histogram(r"Figures\Histogram")
-    # mcs_results = processor.get_results_df()
 
     # # Plot States
-    # direct = r"Figures\Histogram"
+    # direct = r"."
     # utc_offset = timezone(timedelta(hours=0))
     # start_date = pd.to_datetime(datetime(2024,3,1).replace(tzinfo=utc_offset))
-    # solar = SolarChargePlotter(direct,start_date,"10min")
-    # # solar.plot_data()
+    # solar = StateHistoryPlotter(direct,start_date,"10min")
+    # solar.plot_data()
     # solar.plot_reward_vs_threshold()
-    # # processor.calculate_percent_improvement(mcs_results).to_csv("Improvement.csv")

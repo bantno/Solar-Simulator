@@ -149,10 +149,6 @@ class SolarPlaneSimulation:
                 del data
                 gc.collect()
 
-        if self.visualize:
-            plotter = SolarChargePlotter(self.save_dir, start_date=self.start_date, time_step=f"{self.dt}min")
-            plotter.plot_data()
-
 
     def _run_simulation(self, args):
         """Helper function to execute a single simulation run."""
@@ -242,7 +238,7 @@ if __name__ == "__main__":
     # Define simulation parameters
     # success_prob = 0.99995                      # True stepwise success probability
     success_prob = 0.99995
-    thresholds = [.25]                             # Threshold values for 'Threshold' algorithm
+    thresholds = [.25]     # Threshold values for 'Threshold' algorithm
     charge_thresholds = []
     capacities = [50]  # Battery capacities in Amp-hours
     # mdp_probs = [success_prob]                  # MDP success probabilities for 'Optimal' algorithm

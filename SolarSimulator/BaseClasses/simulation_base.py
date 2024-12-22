@@ -133,7 +133,7 @@ class Simulation:
                         "LastStep": last_step
                     }
                 else:
-                    reward, last_step = auto.simulate_simple_behavior(
+                    reward, last_step, flight_minutes = auto.simulate_simple_behavior(
                         initial_state=(100, "moored"),
                         true_success_prob=true_success_prob,
                         simulate_failure=True,
@@ -144,7 +144,8 @@ class Simulation:
                     # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
                     data[i] = {
                         "Reward": reward,
-                        "LastStep": last_step
+                        "LastStep": last_step,
+                        "FlightHours": flight_minutes/(60/dt)
                     }
     
         elif algo == "Optimal": 
@@ -172,7 +173,7 @@ class Simulation:
                         "LastStep": last_step
                     }
                 else:
-                    reward, last_step = auto.simulate_mdp_behavior(
+                    reward, last_step, flight_minutes = auto.simulate_mdp_behavior(
                         initial_state=(100, "moored"),
                         true_success_prob=true_success_prob,
                         simulate_failure=True
@@ -181,7 +182,8 @@ class Simulation:
                     # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
                     data[i] = {
                         "Reward": reward,
-                        "LastStep": last_step
+                        "LastStep": last_step,
+                        "FlightHours": flight_minutes/(60/dt)
                     }
         elif algo == "Charge Threshold": 
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
@@ -207,7 +209,7 @@ class Simulation:
                         "LastStep": last_step
                     }
                 else:
-                    reward, last_step = auto.simulate_fullcharge_behavior(
+                    reward, last_step, flight_minutes = auto.simulate_fullcharge_behavior(
                         initial_state=(100, "moored"),
                         true_success_prob=true_success_prob,
                         simulate_failure=True
@@ -216,7 +218,8 @@ class Simulation:
                     # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
                     data[i] = {
                         "Reward": reward,
-                        "LastStep": last_step
+                        "LastStep": last_step,
+                        "FlightHours": flight_minutes/(60/dt)
                     }
         else:
             raise ValueError(f"Unknown algorithm: {algo}. Use 'Threshold' or 'Optimal'.")

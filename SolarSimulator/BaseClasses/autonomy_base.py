@@ -39,6 +39,7 @@ class Autonomy:
         energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
         solar_power_list[0] = 0.0
         whale_list[0] = 0.0
+        flight_minutes = 0.0
         shortwave_radiation = self.data["shortwave_radiation"].values
 
         for k in range(max_stages-1):
@@ -51,6 +52,7 @@ class Autonomy:
 
             if is_reward_sufficient and is_battery_sufficient:
                 best_action = "fly"
+                flight_minutes += self.dt
             else :
                 best_action = "float"
 
@@ -82,7 +84,7 @@ class Autonomy:
         if save_history:
             return reward, k, state_history_list[:k + 1], solar_power_list[:k + 1], whale_list
         else:
-            return reward,k
+            return reward,k,flight_minutes
         
     def simulate_fullcharge_behavior(self,
                                 initial_state,
@@ -113,6 +115,7 @@ class Autonomy:
         energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
         solar_power_list[0] = 0.0
         whale_list[0] = 0.0
+        flight_minutes = 0.0
         shortwave_radiation = self.data["shortwave_radiation"].values
 
         for k in range(max_stages-1):
@@ -125,6 +128,7 @@ class Autonomy:
 
             if is_battery_sufficient:
                 best_action = "fly"
+                flight_minutes += self.dt
             else :
                 best_action = "float"
 
@@ -153,7 +157,7 @@ class Autonomy:
         if save_history:
             return reward, k, state_history_list[:k + 1], solar_power_list[:k + 1], whale_list
         else:
-            return reward,k
+            return reward,k,flight_minutes
         
 
 
@@ -180,6 +184,7 @@ class Autonomy:
         energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
         solar_power_list[0] = 0.0
         whale_list[0] = 0.0
+        flight_minutes = 0.0
         shortwave_radiation = self.data["shortwave_radiation"].values
         
         for k in range(max_stages-1):
@@ -195,6 +200,9 @@ class Autonomy:
                                                                                     stage=k)
             else:
                 failure_prob = -1
+
+            if best_action == "fly" :
+                flight_minutes += self.dt
 
             if np.random.uniform(0,1) > failure_prob :
                 new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
@@ -216,7 +224,7 @@ class Autonomy:
         if save_history:
             return reward, k, state_history_list[:k + 1], solar_power_list[:k + 1], whale_list
         else:
-            return reward,k
+            return reward,k, flight_minutes
 
     
 

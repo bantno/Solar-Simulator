@@ -195,7 +195,7 @@ class SolarPlaneSimulation:
             for charge_threshold in charge_thresholds:
                 tasks.append((cap, "Charge Threshold", None, charge_threshold, success_prob))
 
-        num_cores_to_use = max(1, os.cpu_count()-1)
+        num_cores_to_use = max(1, os.cpu_count())
         print(f"Running with {num_cores_to_use} cores.")
 
         try:

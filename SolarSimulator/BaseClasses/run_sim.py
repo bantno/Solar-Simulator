@@ -195,7 +195,7 @@ class SolarPlaneSimulation:
             for charge_threshold in charge_thresholds:
                 tasks.append((cap, "Charge Threshold", None, charge_threshold, success_prob))
 
-        num_cores_to_use = max(1, os.cpu_count()-1)
+        num_cores_to_use = max(1, os.cpu_count())
         print(f"Running with {num_cores_to_use} cores.")
 
         try:
@@ -225,24 +225,24 @@ class SolarPlaneSimulation:
 if __name__ == "__main__":
     # Initialize the SolarPlaneSimulation with relevant parameters
     simulation = SolarPlaneSimulation(
-        lat=-30, lon=-90, tz="Etc/GMT-0",  # Location parameters
+        lat=0, lon=-90, tz="Etc/GMT-0",  # Location parameters
         start_date="2024-01-01",          # Simulation start date
-        end_date="2024-12-10",            # Simulation end date
+        end_date="2024-05-30",            # Simulation end date
         dt=10,                            # Time step in minutes
         num_runs=1,                     # Number of simulation runs
-        visualize=False,                   # Enable visualization
+        visualize=True,                   # Enable visualization
         save_dir=r".", # Directory to save results
         show=False                      # Suppress immediate plot display
     )
 
     # Define simulation parameters
     # success_prob = 0.99995                      # True stepwise success probability
-    success_prob = 0.99995
-    thresholds = [.25]     # Threshold values for 'Threshold' algorithm
+    success_prob = 1.0
+    thresholds = []     # Threshold values for 'Threshold' algorithm
     charge_thresholds = []
-    capacities = [50]  # Battery capacities in Amp-hours
+    capacities = [100]  # Battery capacities in Amp-hours
     # mdp_probs = [success_prob]                  # MDP success probabilities for 'Optimal' algorithm
-    mdp_probs = []
+    mdp_probs = [.99995]
     
 
     # Run the simulation

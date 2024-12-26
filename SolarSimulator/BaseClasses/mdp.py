@@ -19,7 +19,7 @@ class mdp:
         self.vehicle_states = vehicle_states
         self.actions = actions
         self.dt = dt
-        self.gamma = 1.0
+        self.gamma = 0.99
         self.epsilon = epsilon
         self.show_progress = False
 
@@ -118,6 +118,8 @@ class mdp:
                 max_reward = np.max(reward_list)
                 self.ev_table.loc[state, stage] = max_reward
                 self.policy_table.loc[state, stage] = self.actions[np.argmax(reward_list)]
+
+        self.policy_table.to_csv("policy.csv") # TODO: Remove
     
     @staticmethod
     def expected_reward(P, C, I, k, l, solar_alpha, solar_beta, p_H_1:float, p_B_1:float)->float:

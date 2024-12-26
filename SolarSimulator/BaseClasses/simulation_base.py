@@ -89,7 +89,7 @@ class Simulation:
 
     def simulate_deployment(self,start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs, threshold):
         self.plane.calculate_weight()
-        expected_data = self.get_expected_weather_data(start_date=start_date,end_date=end_date,dt=dt)
+        expected_data = self.get_expected_weather_data(start_date=start_date,end_date=end_date,dt=dt,lat=self.lat)
         vehicle_states = ["moored", "flying"]
         actions = ["float", "fly"]
         mdp_model = mdp(self.plane,
@@ -229,9 +229,9 @@ class Simulation:
         return df
  
         
-    def get_expected_weather_data(self,start_date:datetime,end_date:datetime,dt:int):
+    def get_expected_weather_data(self,start_date:datetime,end_date:datetime,dt:int,lat):
         """Return expected and actual solar and wind data for given indices."""
-        df = self._load_expected_weather_data(dt)
+        df = self._load_expected_weather_data(dt,lat)
         # Define start and end dates (month, day, hour, minute)
         start_month = start_date.month
         start_day = start_date.day
@@ -284,10 +284,11 @@ class Simulation:
         else:
             raise FileNotFoundError(f"No file found in '{directory}' with timestep '{dt}' minutes.")
 
-    def _load_expected_weather_data(self, dt: int, directory: str=r"Data\EXPECTED_DATA"):
+    def _load_expected_weather_data(self, dt: int, lat, directory: str=r"Data\EXPECTED_DATA"):
         """Load expected solar and wind data from pickle files with a specific timestep in the filename."""
         # Create regex pattern to match files with the specified timestep (in minutes)
-        pattern = rf"data_expected_{dt}min\.pkl$"
+        directory = rf"Data\EXPECTED_DATA\lat{lat}"
+        pattern = rf"data_expected_{dt}min_lat{lat}\.pkl$"
         
         # Search for the file in the specified directory
         expected_file = None
@@ -300,5 +301,5 @@ class Simulation:
             expected_data = pd.read_pickle(expected_file)
             return expected_data
         else:
-            raise FileNotFoundError(f"No file found in '{directory}' with timestep '{dt}' minutes.")
+            raise FileNotFoundError(f"No file found in '{directory}' with timestep '{dt}' minutes and latitude '{lat}'.")
 

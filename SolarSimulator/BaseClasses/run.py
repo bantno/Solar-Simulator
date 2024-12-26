@@ -7,7 +7,7 @@ def load_simulations_config(file_path):
         config = yaml.safe_load(file)
     return config["simulations"]
 
-def run_simulation(params, algorithm):
+def run_simulation(params):
     """Initialize and run a SolarPlaneSimulation with the given parameters for a specific algorithm."""
     simulation = SolarPlaneSimulation(
         lat=params["latitude"],
@@ -21,26 +21,25 @@ def run_simulation(params, algorithm):
         save_dir=params["save_dir"],
         show=False
     )
-    print(f"Running simulation for {algorithm} algorithm with parameters:")
+    print(f"Running simulation with parameters:")
     print(params)
 
     simulation.run(
         capacities=params["capacities"],
-        thresholds=params.get("thresholds", []) if algorithm == "Threshold" else [],
-        mdp_probs=params.get("mdp_probs", []) if algorithm == "Optimal" else [],
+        thresholds=params.get("thresholds", []),
+        mdp_probs=params.get("mdp_probs", []),
         charge_thresholds=params.get("charge_thresholds", []),
         success_prob=params["success_prob"]
     )
 
 def main():
-    config_file = r"Results\Analysis\sim_params.yaml"  # Update path as needed
+    config_file = r"Results\Analysis\simulation_params.yaml"  # Update path as needed
     simulations = load_simulations_config(config_file)
+    print(f"Number of simulations: {len(simulations)}")
 
     for i, params in enumerate(simulations, start=1):
         print(f"Running simulation set {i}/{len(simulations)}...")
-        algorithms = params["algorithms"]
-        for algorithm in algorithms:
-            run_simulation(params, algorithm)
+        run_simulation(params)
 
 if __name__ == "__main__":
     main()

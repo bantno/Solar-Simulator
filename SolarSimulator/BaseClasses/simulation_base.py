@@ -88,7 +88,7 @@ class Simulation:
         return times,data
 
     def simulate_deployment(self,start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs, threshold):
-        self.plane.calculate_weight()
+        self.plane.update_plane()
         expected_data = self.get_expected_weather_data(start_date=start_date,end_date=end_date,dt=dt,lat=self.lat)
         vehicle_states = ["moored", "flying"]
         actions = ["float", "fly"]

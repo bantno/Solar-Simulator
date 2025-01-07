@@ -24,6 +24,7 @@ class mdp:
         self.show_progress = False
 
         # Plane and state of charge settings
+        plane.update_plane()
         self.plane = plane
         self.soc_increment = soc_increment
         self.states = self.create_states(soc_increment, vehicle_states)
@@ -119,7 +120,8 @@ class mdp:
                 self.ev_table.loc[state, stage] = max_reward
                 self.policy_table.loc[state, stage] = self.actions[np.argmax(reward_list)]
 
-        self.policy_table.to_csv("policy.csv") # TODO: Remove
+        print(required_cruise_energy)
+
     
     @staticmethod
     def expected_reward(P, C, I, k, l, solar_alpha, solar_beta, p_H_1:float, p_B_1:float)->float:

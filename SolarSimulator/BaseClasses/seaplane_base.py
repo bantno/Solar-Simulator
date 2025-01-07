@@ -1,14 +1,8 @@
 import os
 import warnings
-
 import numpy as np
-import pandas as pd
-
 from pvlib import location
-from pvlib import tracking
-from pvlib.bifacial.pvfactors import pvfactors_timeseries
-from pvlib import temperature
-from pvlib import pvsystem
+
 
 
 
@@ -37,7 +31,6 @@ class Seaplane:
         self.n_tot = n_tot
         self.S = S
 
-        path = r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data"
         # self.af_mass = self.get_total_mass(path)
         # self.af_mass = 8
 
@@ -71,6 +64,9 @@ class Seaplane:
     def update_plane(self):
         self.calculate_pdc0()
         self.calculate_weight()
+        self.required_cruise_power = self.get_required_power(20,1.2)
+        self.required_takeoff_energy = self.get_required_takeoff_energy(1)
+
 
     def update_location(self,lat):
         self.lat = lat
@@ -127,6 +123,11 @@ class Seaplane:
         
         """
         return 0.5*rho*U**2
+    def get_lift_coefficient(self,rho,U):
+        self.calculate_weight()
+        C_l = self.weight/(0.5*rho*U**2*self.S)
+        return C_l
+
 
     def get_required_power(self,U,rho) -> float:
         """Returns required cruise power consumption

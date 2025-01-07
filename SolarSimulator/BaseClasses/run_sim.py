@@ -115,6 +115,7 @@ class SolarPlaneSimulation:
     def run(self, capacities=[], thresholds=[], mdp_probs=[], charge_thresholds=[], success_prob=0.0):
         for cap in tqdm(capacities, desc="Processing capacities"):
             self.simulation.plane.capacity = cap
+            self.simulation.plane.update_plane()
 
             for threshold in tqdm(thresholds, desc=f"Processing for cap={cap}", leave=False):
                 algo = 'Threshold'

@@ -681,12 +681,12 @@ class DataProcessor:
 
 
 if __name__ == '__main__':
-    dire = r"Results\Analysis"
+    # dire = r"Results\Analysis"
     
-    processor = DataProcessor(directory=dire)  # Use "." for the current directory
-    processor.process_files()
-    df = processor.get_results_df()
-    processor.plot_all_data(".")
+    # processor = DataProcessor(directory=dire)  # Use "." for the current directory
+    # processor.process_files()
+    # df = processor.get_results_df()
+    # processor.plot_all_data("Results\Analysis")
     # processor.plot_optimal_battery_capacity(df)
     # processor.plot_percent_improvement(df,"Figures")
     # processor.plot_reward_vs_threshold(df,r".")
@@ -696,9 +696,8 @@ if __name__ == '__main__':
     # processor.plot_reward_histogram(r"Figures\Histogram")
 
     # # Plot States
-    # direct = r"."
-    # utc_offset = timezone(timedelta(hours=0))
-    # start_date = pd.to_datetime(datetime(2024,3,1).replace(tzinfo=utc_offset))
-    # solar = StateHistoryPlotter(direct,start_date,"10min")
-    # solar.plot_data()
-    # solar.plot_reward_vs_threshold()
+    direct = r"."
+    utc_offset = timezone(timedelta(hours=0))
+    start_date = pd.to_datetime(datetime(2024,1,1).replace(tzinfo=utc_offset))
+    solar = StateHistoryPlotter(direct,start_date,"10min")
+    solar.plot_data()

@@ -48,7 +48,7 @@ class StateHistoryPlotter:
         else:
             return "Unknown"
 
-    def plot_data(self):
+    def plot_data(self,save_dir):
         """Plot the state of charge, solar history, and cumulative hours flown for the first entry in each file in the directory."""
 
         plt.figure(figsize=(15, 10))
@@ -172,8 +172,7 @@ class StateHistoryPlotter:
         plt.grid(True)
 
         plt.tight_layout(rect=[0, 0, 1, 0.96])  # Adjust layout to fit title
-        plt.savefig(r"Figures\StatePlot\state_plot_" + f"{self.start_date.day_of_year}_{self.dt}.png")
-        plt.show()
+        plt.savefig(save_dir + rf"\state_plot_{self.start_date.day_of_year}_{self.dt}.png")
 
     # Helper method for regex extraction
     def extract_parameter_from_filename(self, filename, pattern, default_value):

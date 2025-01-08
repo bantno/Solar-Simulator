@@ -28,6 +28,7 @@ class Autonomy:
         nightly_idle_soc = np.ceil((self.mdp_model.plane.idle_power*night_hours*3600)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
         single_flight_soc = np.ceil((self.mdp_model.plane.get_required_power(20,1.2)*self.dt*60+self.mdp_model.plane.required_takeoff_energy)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
         battery_capacity_J = self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600
+        
         # Preallocate arrays with a fixed size
         state_history_list = np.empty(max_stages,dtype=tuple)  # Adjust dimensions based on the state size
         energy_history_list = np.empty(max_stages)
@@ -37,10 +38,11 @@ class Autonomy:
         # Initialize the first elements
         state_history_list[0] = initial_state
         energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
-        solar_power_list[0] = 0.0
+        shortwave_radiation = self.data["shortwave_radiation"].values
+        solar_power_list[0] = shortwave_radiation[0]
         whale_list[0] = 0.0
         flight_minutes = 0.0
-        shortwave_radiation = self.data["shortwave_radiation"].values
+        
 
         for k in range(max_stages-1):
             current_state = state_history_list[k]
@@ -82,7 +84,7 @@ class Autonomy:
         
         # print(reward)
         if save_history:
-            return reward, k, state_history_list[:k + 1], solar_power_list[:k + 1], whale_list
+            return reward, k, state_history_list[1:k], solar_power_list[1:k], whale_list
         else:
             return reward,k,flight_minutes
         
@@ -155,7 +157,7 @@ class Autonomy:
                 break
         
         if save_history:
-            return reward, k, state_history_list[:k + 1], solar_power_list[:k + 1], whale_list
+            return reward, k, state_history_list[1:k], solar_power_list[1:k], whale_list
         else:
             return reward,k,flight_minutes
         
@@ -222,7 +224,7 @@ class Autonomy:
         
         # print(reward)
         if save_history:
-            return reward, k, state_history_list[:k + 1], solar_power_list[:k + 1], whale_list
+            return reward, k, state_history_list[1:k], solar_power_list[1:k], whale_list
         else:
             return reward,k, flight_minutes
 

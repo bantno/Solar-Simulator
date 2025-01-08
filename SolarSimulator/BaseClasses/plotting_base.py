@@ -403,7 +403,7 @@ class DataProcessor:
 
     def plot_all_data(self, save_dir):
         """
-        Plot all data for each mission duration on separate plots, with series based on algorithm and threshold.
+        Plot all data for each mission duration on separate plots, with series based on algorithm, threshold, and latitude.
         This includes plotting the 'Optimal', 'Threshold', and 'Charge Threshold' algorithms.
 
         Parameters:
@@ -425,50 +425,57 @@ class DataProcessor:
             # Filter data for the current mission duration
             mission_df = df[(df['StartDate'] == start_date) & (df['EndDate'] == end_date)]
 
-            # Separate the optimal algorithm (Threshold = NaN)
-            optimal_df = mission_df[mission_df['Threshold'].isna()]
-            # Separate Charge Threshold algorithm
-            charge_threshold_df = mission_df[mission_df['Algorithm'] == 'Charge Threshold']
-            # Separate other Threshold algorithms
-            threshold_df = mission_df[(mission_df['Algorithm'] == 'Threshold') & (mission_df['Threshold'].notna())]
+            # Get unique latitudes
+            latitudes = mission_df['Latitude'].unique()
 
-            plt.figure(figsize=(12, 8))
+            for lat in latitudes:
+                # Filter data for the current latitude
+                lat_df = mission_df[mission_df['Latitude'] == lat]
 
-            # Plot the optimal algorithm
-            if not optimal_df.empty:
-                plt.scatter(
-                    optimal_df['Capacity'], optimal_df['MeanReward'],
-                    marker='X', color='black', s=100,  # Unique marker, size, and color
-                    label="Optimal Algorithm"
-                )
+                # Separate the optimal algorithm (Threshold = NaN)
+                optimal_df = lat_df[lat_df['Threshold'].isna()]
+                # Separate Charge Threshold algorithm
+                charge_threshold_df = lat_df[lat_df['Algorithm'] == 'Charge Threshold']
+                # Separate other Threshold algorithms
+                threshold_df = lat_df[(lat_df['Algorithm'] == 'Threshold') & (lat_df['Threshold'].notna())]
 
-            # Plot the Charge Threshold algorithm
-            if not charge_threshold_df.empty:
-                plt.scatter(
-                    charge_threshold_df['Capacity'], charge_threshold_df['MeanReward'],
-                    marker='D', color='blue', s=60,  # Diamond marker and blue color
-                    label="Charge Threshold"
-                )
+                plt.figure(figsize=(12, 8))
 
-            # Plot the Threshold algorithm grouped by Threshold value
-            for threshold_value, subset in threshold_df.groupby('Threshold'):
-                plt.scatter(
-                    subset['Capacity'], subset['MeanReward'],
-                    label=f"Threshold, t={threshold_value}"
-                )
+                # Plot the optimal algorithm
+                if not optimal_df.empty:
+                    plt.scatter(
+                        optimal_df['Capacity'], optimal_df['MeanReward'],
+                        marker='X', color='black', s=100,
+                        label="Optimal Algorithm"
+                    )
 
-            # Plot customization
-            plt.title(f"Mean Reward vs Capacity for All Algorithms\nMission Duration: {mission_label}")
-            plt.xlabel("Capacity (Ah)")
-            plt.ylabel("Mean Reward")
-            plt.legend(title="Algorithm", loc='best')
-            plt.grid(True)
-            plt.tight_layout()  # Adjust layout to prevent overlap
+                # Plot the Charge Threshold algorithm
+                if not charge_threshold_df.empty:
+                    plt.scatter(
+                        charge_threshold_df['Capacity'], charge_threshold_df['MeanReward'],
+                        marker='D', color='blue', s=60,
+                        label="Charge Threshold"
+                    )
 
-            # Save the plot
-            save_path = os.path.join(save_dir, f"mean_reward_{mission_label}.png")
-            plt.savefig(save_path)
-            plt.close()
+                # Plot the Threshold algorithm grouped by Threshold value
+                for threshold_value, subset in threshold_df.groupby('Threshold'):
+                    plt.scatter(
+                        subset['Capacity'], subset['MeanReward'],
+                        label=f"Threshold, t={threshold_value}"
+                    )
+
+                # Plot customization
+                plt.title(f"Mean Reward vs Capacity\nMission: {mission_label}, Latitude: {lat}")
+                plt.xlabel("Capacity (Ah)")
+                plt.ylabel("Mean Reward")
+                plt.legend(title="Algorithm", loc='best')
+                plt.grid(True)
+                plt.tight_layout()  # Adjust layout to prevent overlap
+
+                # Save the plot
+                save_path = os.path.join(save_dir, f"mean_reward_{mission_label}_lat{lat}.png")
+                plt.savefig(save_path)
+                plt.close()
 
 
     def plot_reward_vs_threshold(self, df, output_dir):

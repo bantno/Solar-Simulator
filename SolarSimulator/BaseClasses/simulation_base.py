@@ -104,7 +104,7 @@ class Simulation:
                         mission_success_prob=mdp_success_prob
                         )
         auto = Autonomy(dt,mdp_model=mdp_model,data=None,whale_probabilities=self.whale_table)
-        mdp_model.show_progress=True
+        mdp_model.show_progress=False
         data = {}
         loc = rf"Data\SYNTHETIC_DATA\lat{int(self.lat)}"
 

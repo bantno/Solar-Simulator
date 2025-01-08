@@ -368,3 +368,44 @@ class Autonomy:
         
         # Return the probability, or None if out of range
         return probability_map.get(nearest_start)
+    
+    @staticmethod
+    def expected_reward(P, C, k, l, collected_energy, p_H_1:float, p_B_1:float)->float:
+        """
+        Calculate the expected reward E[R(X, H)].
+        
+        Parameters:
+        - P (float): Required energy.
+        - C (float): Stored energy.
+        - k (float): Absolute values of penalty for vehicle failure.
+        - l (float): Reward if X > 0 and H = 1.
+        - P_H_1 (float): Probability that whale is at the surface.
+        - P_B_1 (float): Probability that B = 1.
+        
+        Returns:
+        - float: Expected reward E[R(X, H)].
+        """
+        # Probability that H = 1
+        p_H_0 = 1 - p_H_1
+        p_B_0 = 1 - p_B_1
+        
+        # If no energy is collected, handle the penalty based on stored energy
+        if C + collected_energy < P:
+            # If stored energy is insufficient to meet required energy, apply penalty
+            F_S = 1
+        else:
+            # If stored energy + collected energy is sufficient, no penalty
+            F_S = 0
+
+        # Calculate the expected rewards for each case
+        reward_H0_B0 = -k * F_S
+        reward_H0_B1 = -k
+        reward_H1_B0 = l - k * F_S
+        reward_H1_B1 = l - k
+
+        expected_reward = (reward_H0_B0 * p_H_0 * p_B_0 +
+                        reward_H0_B1 * p_H_0 * p_B_1 +
+                        reward_H1_B0 * p_H_1 * p_B_0 +
+                        reward_H1_B1 * p_H_1 * p_B_1)
+
+        return expected_reward

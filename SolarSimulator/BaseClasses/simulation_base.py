@@ -282,7 +282,7 @@ class Simulation:
             # actual_data = actual_data[~((actual_data.index.month == 2) & (actual_data.index.day == 29))]
             return actual_data
         else:
-            raise FileNotFoundError(f"No file found in '{directory}' with timestep '{dt}' minutes.")
+            raise FileNotFoundError(f"No weather file found in '{directory}' with timestep '{dt}' minutes.")
 
     def _load_expected_weather_data(self, dt: int, lat, directory: str=r"Data\EXPECTED_DATA"):
         """Load expected solar and wind data from pickle files with a specific timestep in the filename."""
@@ -301,5 +301,5 @@ class Simulation:
             expected_data = pd.read_pickle(expected_file)
             return expected_data
         else:
-            raise FileNotFoundError(f"No file found in '{directory}' with timestep '{dt}' minutes and latitude '{lat}'.")
+            raise FileNotFoundError(f"No expected weather file found in '{directory}' with timestep '{dt}' minutes and latitude '{lat}'.")
 

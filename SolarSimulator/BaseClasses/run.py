@@ -17,9 +17,10 @@ def run_simulation(params):
         end_date=params["end_date"],
         dt=params["dt"],
         num_runs=params["num_runs"],
-        visualize=False,
+        visualize=params["save_states"],
         save_dir=params["save_dir"],
-        show=False
+        show=False,
+        use_expected=params["use_expected"]
     )
     print(f"Running simulation with parameters:")
     print(params)

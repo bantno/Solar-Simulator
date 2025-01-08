@@ -18,7 +18,7 @@ class SolarPlaneSimulation:
                  capacity_ah=50.0, voltage=22.2, Cdtot=0.0, Cd0=0.02584, S=0.653,
                  af_mass=8.8, cruise_speed=20.0, rho=1.19, N_PROP=0.82, N_ESC=0.9,
                  start_date="2019-07-01", end_date="2019-08-02", dt=30,
-                 num_runs=10000, visualize=False, save_dir=".", show=False):
+                 num_runs=10000, visualize=False, save_dir=".", show=False, use_expected=False):
         
         # Define plane parameters
         self.lat = lat
@@ -55,45 +55,8 @@ class SolarPlaneSimulation:
         )
 
         # Initialize the simulation
-        self.simulation = Simulation(self.plane, self.lat, self.lon, self.tz, save_history=self.visualize)
+        self.simulation = Simulation(self.plane, self.lat, self.lon, self.tz, save_history=self.visualize,use_expected=use_expected)
         self.results = []  # To store processed results
-
-    def run_single(self, capacities=[], thresholds=[], mdp_probs=[], success_prob=1.0):
-        """
-        Run the simulation without multiprocessing. 
-        Sequentially processes capacities, thresholds, and MDP probabilities.
-
-        Parameters:
-        - capacities: List of battery capacities to simulate.
-        - thresholds: List of thresholds for 'Threshold' algorithm.
-        - mdp_probs: List of MDP success probabilities for 'Optimal' algorithm.
-        - success_prob: True success probability for simulations.
-        """
-        for cap in tqdm(capacities, desc="Processing capacities"):
-            self.simulation.plane.capacity = cap
-
-            # Run Threshold Algorithm
-            for threshold in tqdm(thresholds, desc=f"Processing thresholds for cap={cap}", leave=False):
-                algo = "Threshold"
-                times, data = self.simulation.run_simulation(
-                    self.start_date, self.end_date, self.dt,
-                    algo=algo, mdp_success_prob=0.9,
-                    true_success_prob=success_prob, runs=self.num_runs,
-                    threshold=threshold
-                )
-                filename = f"{self.save_dir}/{algo}_Data_c{cap}_t{threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl"
-                self._save_data(data, filename)
-
-            # Run Optimal Algorithm
-            for mdp_prob in tqdm(mdp_probs, desc=f"Processing probabilities for cap={cap}", leave=False):
-                algo = "Optimal"
-                times, data = self.simulation.run_simulation(
-                    self.start_date, self.end_date, self.dt,
-                    algo=algo, mdp_success_prob=mdp_prob,
-                    true_success_prob=success_prob, runs=self.num_runs
-                )
-                filename = f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl"
-                self._save_data(data, filename)
 
     def _save_data(self, data, filename):
         """
@@ -151,7 +114,7 @@ class SolarPlaneSimulation:
                 gc.collect()
 
 
-    def _run_simulation(self, args):
+    def _simulation_task(self, args):
         """Helper function to execute a single simulation run."""
         cap, algo, threshold, mdp_success_prob, success_prob = args
         self.simulation.plane.capacity = cap
@@ -187,6 +150,9 @@ class SolarPlaneSimulation:
         return filename
 
     def run(self, capacities=[], thresholds=[], mdp_probs=[], charge_thresholds = [], success_prob=1.0):
+        """
+        Assign tasks for a simulation run.
+        """
         tasks = []
         for cap in capacities:
             for threshold in thresholds:
@@ -205,7 +171,7 @@ class SolarPlaneSimulation:
                 signal.signal(signal.SIGINT, lambda sig, frame: pool.terminate())
 
                 # Run tasks with progress bar
-                for _ in tqdm(pool.imap_unordered(self._run_simulation, tasks), total=len(tasks), desc="Running simulations"):
+                for _ in tqdm(pool.imap_unordered(self._simulation_task, tasks), total=len(tasks), desc="Running simulations"):
                     pass
 
         except KeyboardInterrupt:
@@ -226,25 +192,22 @@ class SolarPlaneSimulation:
 if __name__ == "__main__":
     # Initialize the SolarPlaneSimulation with relevant parameters
     simulation = SolarPlaneSimulation(
-        lat=0, lon=-90, tz="Etc/GMT-0",  # Location parameters
-        start_date="2024-01-01",          # Simulation start date
-        end_date="2024-05-30",            # Simulation end date
-        dt=10,                            # Time step in minutes
+        lat=0, lon=-90, tz="Etc/GMT-0", # Location parameters
+        start_date="2024-01-01",        # Simulation start date
+        end_date="2024-05-30",          # Simulation end date
+        dt=10,                          # Time step in minutes
         num_runs=1,                     # Number of simulation runs
-        visualize=True,                   # Enable visualization
-        save_dir=r".", # Directory to save results
+        visualize=True,                 # Enable visualization
+        save_dir=r".",                  # Directory to save results
         show=False                      # Suppress immediate plot display
     )
 
     # Define simulation parameters
-    # success_prob = 0.99995                      # True stepwise success probability
-    success_prob = 1.0
-    thresholds = []     # Threshold values for 'Threshold' algorithm
+    success_prob = 0.99995              # True stepwise success probability
+    thresholds = []                     # Threshold values for 'Threshold' algorithm
     charge_thresholds = []
-    capacities = [100]  # Battery capacities in Amp-hours
-    # mdp_probs = [success_prob]                  # MDP success probabilities for 'Optimal' algorithm
-    mdp_probs = [.99995]
-    
+    capacities = [100]                  # Battery capacities in Amp-hours
+    mdp_probs = [success_prob]          # MDP success probabilities for 'Optimal' algorithm
 
     # Run the simulation
     simulation.run(capacities=capacities, thresholds=thresholds, mdp_probs=mdp_probs,charge_thresholds=charge_thresholds, success_prob=success_prob)

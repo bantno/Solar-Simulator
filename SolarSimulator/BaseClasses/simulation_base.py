@@ -42,7 +42,7 @@ class Simulation:
         self.tz = tz
         self.whale_table = WhaleSighting().probability_map
         self.save_history = save_history
-        self.use_expected = False
+        self.use_expected = use_expected
 
     def run_simulation(self,
                     start_date:datetime,
@@ -113,6 +113,9 @@ class Simulation:
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
                 actual_data = self._load_weather_data(dt,directory=loc,i=i)
                 actual_data = actual_data.loc[start_date:end_date]
+                if self.use_expected:
+                    expected_data["shortwave_radiation"] = expected_data["expected_solar_rad"]
+                    actual_data = expected_data
                 auto.data=actual_data
                 if self.save_history:
                     reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_simple_behavior(
@@ -153,6 +156,10 @@ class Simulation:
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
                 actual_data = self._load_weather_data(dt,directory=loc,i=i)
                 actual_data = actual_data.loc[start_date:end_date]
+                if self.use_expected:
+                    expected_data["shortwave_radiation"] = expected_data["expected_solar_rad"]
+                    actual_data = expected_data
+                    
                 auto.data=actual_data
                 # Simulate the behavior
                 if self.save_history:
@@ -189,6 +196,9 @@ class Simulation:
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
                 actual_data = self._load_weather_data(dt,directory=loc,i=i)
                 actual_data = actual_data.loc[start_date:end_date]
+                if self.use_expected:
+                    expected_data["shortwave_radiation"] = expected_data["expected_solar_rad"]
+                    actual_data = expected_data
                 auto.data=actual_data
                 # Simulate the behavior
                 if self.save_history:

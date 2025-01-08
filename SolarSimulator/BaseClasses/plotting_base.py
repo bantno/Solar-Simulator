@@ -50,7 +50,6 @@ class StateHistoryPlotter:
 
     def plot_data(self):
         """Plot the state of charge, solar history, and cumulative hours flown for the first entry in each file in the directory."""
-        import re
 
         plt.figure(figsize=(15, 10))
 
@@ -274,7 +273,7 @@ class DataProcessor:
         """Read all pickle files and store their mean results."""
         for filename in os.listdir(self.directory):
             if filename.endswith(".pkl"):
-                match = re.match(r"([\w\s]+)_Data_c(\d+)(?:_t([\d.]+))?(?:_p([\d.]+))?_(\d+)min_(\d+-\d+)_(\d+)(?:_lat(\d+))?", filename)
+                match = re.match(r"([\w\s]+)_Data_c(\d+)(?:_t([\d.]+))?(?:_p([\d.]+))?_(\d+)min_(\d+-\d+)_(\d+)(?:_lat(-?\d+))?", filename)
                 if match:
                     algo, cap, threshold, prob, dt, date_range, runs, latitude = match.groups()
                     cap = int(cap)
@@ -681,12 +680,12 @@ class DataProcessor:
 
 
 if __name__ == '__main__':
-    # dire = r"Results\Analysis"
+    dire = r"Results\Analysis"
     
-    # processor = DataProcessor(directory=dire)  # Use "." for the current directory
-    # processor.process_files()
-    # df = processor.get_results_df()
-    # processor.plot_all_data("Results\Analysis")
+    processor = DataProcessor(directory=dire)  # Use "." for the current directory
+    processor.process_files()
+    df = processor.get_results_df()
+    processor.plot_all_data(r"Results\Analysis")
     # processor.plot_optimal_battery_capacity(df)
     # processor.plot_percent_improvement(df,"Figures")
     # processor.plot_reward_vs_threshold(df,r".")
@@ -695,8 +694,8 @@ if __name__ == '__main__':
     ## Histogram
     # processor.plot_reward_histogram(r"Figures\Histogram")
 
-    # # Plot States
-    direct = r"."
+    # # # Plot States
+    direct = r"Results\Analysis"
     utc_offset = timezone(timedelta(hours=0))
     start_date = pd.to_datetime(datetime(2024,1,1).replace(tzinfo=utc_offset))
     solar = StateHistoryPlotter(direct,start_date,"10min")

@@ -312,8 +312,8 @@ class DataProcessor:
                     })
                 else:
                     print(f"Filename {filename} does not match expected pattern.")
-    @staticmethod
-    def plot_optimal_battery_capacity(df):
+
+    def plot_optimal_battery_capacity(self,df,save_dir):
         """
         Plot the optimal battery capacity against mission duration for different latitudes using Matplotlib.
         
@@ -346,11 +346,12 @@ class DataProcessor:
         plt.title('Optimal Battery Capacity vs Mission Duration')
         plt.xlabel('Mission Duration (Days)')
         plt.ylabel('Optimal Battery Capacity (Ah)')
-        plt.legend(title='Latitude')
+        plt.legend(title='Latitude',loc='upper left', bbox_to_anchor=(1.05, 1))
+        plt.tight_layout()
         plt.grid(True)
 
-        # Show the plot
-        plt.show()
+        plt.savefig(save_dir + rf"\optimal_battery_plot.png")
+
 
     def calculate_mean_rewards_and_failures(self, filepath):
         """Calculate the mean reward and failure step for a given pickle file."""
@@ -475,6 +476,85 @@ class DataProcessor:
                 save_path = os.path.join(save_dir, f"mean_reward_{mission_label}_lat{lat}.png")
                 plt.savefig(save_path)
                 plt.close()
+
+    def plot_combined_data(self, save_dir):
+        """
+        Plot all data for each mission duration on separate plots, with series based on latitude,
+        algorithm, and threshold. This includes plotting the 'Optimal', 'Threshold', and 'Charge Threshold' algorithms.
+
+        Parameters:
+            save_dir (str): The directory where the plots will be saved.
+        """
+        import os
+        import matplotlib.pyplot as plt
+
+        # Ensure the save directory exists
+        os.makedirs(save_dir, exist_ok=True)
+
+        df = self.get_results_df()
+        print(df)
+
+        # Get unique mission durations (StartDate-EndDate)
+        mission_durations = df[['StartDate', 'EndDate']].drop_duplicates()
+
+        for _, mission in mission_durations.iterrows():
+            start_date, end_date = mission['StartDate'], mission['EndDate']
+            mission_label = f"{start_date}-{end_date}"
+
+            # Filter data for the current mission duration
+            mission_df = df[(df['StartDate'] == start_date) & (df['EndDate'] == end_date)]
+
+            plt.figure(figsize=(12, 8))
+
+            # Get unique latitudes
+            latitudes = mission_df['Latitude'].unique()
+
+            for lat in latitudes:
+                lat_df = mission_df[mission_df['Latitude'] == lat]
+
+                # Separate the optimal algorithm (Threshold = NaN)
+                optimal_df = lat_df[lat_df['Threshold'].isna()]
+                # Separate Charge Threshold algorithm
+                charge_threshold_df = lat_df[lat_df['Algorithm'] == 'Charge Threshold']
+                # Separate other Threshold algorithms
+                threshold_df = lat_df[(lat_df['Algorithm'] == 'Threshold') & (lat_df['Threshold'].notna())]
+
+                # Plot the optimal algorithm
+                if not optimal_df.empty:
+                    plt.scatter(
+                        optimal_df['Capacity'], optimal_df['MeanReward'],
+                        marker='X', s=100,
+                        label=f"Optimal Algorithm (Lat {lat})"
+                    )
+
+                # Plot the Charge Threshold algorithm
+                if not charge_threshold_df.empty:
+                    plt.scatter(
+                        charge_threshold_df['Capacity'], charge_threshold_df['MeanReward'],
+                        marker='D', s=60,
+                        label=f"Charge Threshold (Lat {lat})"
+                    )
+
+                # Plot the Threshold algorithm grouped by Threshold value
+                for threshold_value, subset in threshold_df.groupby('Threshold'):
+                    plt.scatter(
+                        subset['Capacity'], subset['MeanReward'],
+                        label=f"Threshold, t={threshold_value} (Lat {lat})"
+                    )
+
+            # Plot customization
+            plt.title(f"Mean Reward vs Capacity\nMission: {mission_label}")
+            plt.xlabel("Capacity (Ah)")
+            plt.ylabel("Mean Reward")
+            plt.legend(title="Algorithm & Latitude", loc='best')
+            plt.grid(True)
+            plt.tight_layout()  # Adjust layout to prevent overlap
+
+            # Save the plot
+            save_path = os.path.join(save_dir, f"mean_reward_{mission_label}.png")
+            plt.savefig(save_path)
+            plt.close()
+
 
 
     def plot_reward_vs_threshold(self, df, output_dir):

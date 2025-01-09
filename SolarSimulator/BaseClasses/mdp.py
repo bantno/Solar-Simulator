@@ -120,8 +120,6 @@ class mdp:
                 self.ev_table.loc[state, stage] = max_reward
                 self.policy_table.loc[state, stage] = self.actions[np.argmax(reward_list)]
 
-        print(required_cruise_energy)
-
     
     @staticmethod
     def expected_reward(P, C, I, k, l, solar_alpha, solar_beta, p_H_1:float, p_B_1:float)->float:

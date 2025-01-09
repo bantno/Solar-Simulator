@@ -206,25 +206,34 @@ def generate_yearly_weather_data(historical_data, N=1, seed=None, save_path="syn
     saved_files = []
 
     # Generate datasets
-    for i in range(N):
-        # Select a random year
-        selected_year = random.choice(years)
-        
-        # Filter data for the selected year
-        year_data = historical_data[historical_data.index.year == selected_year]
-        
-        # Check for leap day
-        if '02-29' not in year_data.index.strftime('%m-%d'):
-            # Add leap day data using February 28th's data
-            feb_28_data = year_data[year_data.index.strftime('%m-%d') == '02-28']
-            leap_day_data = feb_28_data.copy()
-            leap_day_data.index = leap_day_data.index + pd.Timedelta(days=1)  # Set index to February 29th
-            year_data = pd.concat([year_data, leap_day_data]).sort_index()
+    done= False
+    for i in tqdm(range(N)):
+        while not done:
+            # Select a random year
+            selected_year = random.choice(years)
+            
+            # Filter data for the selected year
+            year_data = historical_data[historical_data.index.year == selected_year]
+            
+            # Adjust the year to 2024
+            year_data.index = year_data.index.map(lambda dt: dt.replace(year=2024))
+            
+            # Check for leap day
+            if '02-29' not in year_data.index.strftime('%m-%d'):
+                # Add leap day data using February 28th's data
+                feb_28_data = year_data[year_data.index.strftime('%m-%d') == '02-28']
+                leap_day_data = feb_28_data.copy()
+                leap_day_data.index = leap_day_data.index + pd.Timedelta(days=1)  # Set index to February 29th
+                year_data = pd.concat([year_data, leap_day_data]).sort_index()
+            
+            if year_data.size == 26352:
+                done = True
 
         # Save the synthetic dataset
         file_path = f"{save_path}\\data_{int(timestep)}min_{i}.pkl"
         year_data.to_pickle(file_path)
         saved_files.append(file_path)
+        done = False
 
     return saved_files
 
@@ -301,9 +310,9 @@ if __name__ == "__main__":
     processor = WeatherDataProcessor()
 
     # Fetch and process data
-    lat = -30
+    lat = 0
     lon = -90
-    processor.fetch_weather_data(latitude=lat, longitude=lon, start_date="2000-01-01", end_date="2023-12-31", hourly_vars=["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
+    processor.fetch_weather_data(latitude=lat, longitude=lon, start_date="2000-01-01", end_date="2022-12-31", hourly_vars=["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
     hourly_df = processor.process_hourly_data()
     # fitted_distributions = processor.fit_distributions(hourly_df,"data_expected.pkl")
     # hourly_df.to_pickle(r"Data\HISTORICAL_DATA")
@@ -312,6 +321,6 @@ if __name__ == "__main__":
     timestep = 60
     resampled_df = processor.resample_data(interval_minutes=timestep, filename=f"Data\HISTORICAL_DATA\data_{timestep}min.pkl")
     fitted_distributions = processor.fit_distributions(resampled_df,rf"Data\EXPECTED_DATA\lat{lat}\data_expected_{timestep}min_lat{lat}.pkl")
-    generate_yearly_weather_data(resampled_df,N=10,save_path=rf"Data\SYNTHETIC_DATA\lat{lat}")
+    generate_yearly_weather_data(resampled_df,N=1000,save_path=rf"Data\SYNTHETIC_DATA\lat{lat}")
 
 

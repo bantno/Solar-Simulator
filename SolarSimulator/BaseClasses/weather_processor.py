@@ -49,7 +49,13 @@ class WeatherDataProcessor:
         }
         self.hourly_dataframe = pd.DataFrame(data=data)
         self.hourly_dataframe.set_index('date', inplace=True)
-        print("Hourly data processed.")
+
+        # Postprocessing: Remove rows for February 29th
+        self.hourly_dataframe = self.hourly_dataframe[
+            ~((self.hourly_dataframe.index.month == 2) & (self.hourly_dataframe.index.day == 29))
+        ]
+
+        print("Hourly data processed, leap days removed.")
         return self.hourly_dataframe
 
     def save_hourly_data(self, filename="data_hourly.pkl"):
@@ -177,69 +183,6 @@ class WeatherDataProcessor:
 
         return results_df
 
-def generate_yearly_weather_data(historical_data, N=1, seed=None, save_path="synthetic_data_"):
-    """
-    Generates multiple synthetic years of weather data by randomly selecting weeks
-    from the available historical data and saves each dataset to a file.
-
-    Parameters:
-        historical_data (pd.DataFrame): DataFrame containing historical weather data with a DatetimeIndex.
-        N (int): Number of synthetic datasets to generate.
-        seed (int, optional): Seed for random number generation to ensure reproducibility.
-        save_path (str): Path prefix to save the generated datasets (files will be named with indices like 'synthetic_data_0.pkl').
-        
-    Returns:
-        list: A list of file paths where the datasets are saved.
-    """
-    # Ensure the index is a DatetimeIndex
-    if not isinstance(historical_data.index, pd.DatetimeIndex):
-        raise ValueError("The historical_data DataFrame must have a DatetimeIndex.")
-
-    # Set the random seed for reproducibility
-    if seed is not None:
-        random.seed(seed)
-
-    # Extract unique years from the historical data
-    years = historical_data.index.year.unique()
-
-    # Initialize a list to store the paths of the saved files
-    saved_files = []
-
-    # Generate datasets
-    done= False
-    for i in tqdm(range(N)):
-        while not done:
-            # Select a random year
-            selected_year = random.choice(years)
-            
-            # Filter data for the selected year
-            year_data = historical_data[historical_data.index.year == selected_year]
-            
-            # Adjust the year to 2024
-            year_data.index = year_data.index.map(lambda dt: dt.replace(year=2024))
-            
-            # Check for leap day
-            if '02-29' not in year_data.index.strftime('%m-%d'):
-                # Add leap day data using February 28th's data
-                feb_28_data = year_data[year_data.index.strftime('%m-%d') == '02-28']
-                leap_day_data = feb_28_data.copy()
-                leap_day_data.index = leap_day_data.index + pd.Timedelta(days=1)  # Set index to February 29th
-                year_data = pd.concat([year_data, leap_day_data]).sort_index()
-            
-            if year_data.size == 26352:
-                done = True
-
-        # Save the synthetic dataset
-        file_path = f"{save_path}\\data_{int(timestep)}min_{i}.pkl"
-        year_data.to_pickle(file_path)
-        saved_files.append(file_path)
-        done = False
-
-    return saved_files
-
-
-
-
 def generate_single_synthetic_year(dataset_number, historical_data, years, timestep, points_per_week, save_path, seed=None):
     """
     Generates a single synthetic year's weather data by randomly selecting weeks from the available historical data.
@@ -296,12 +239,60 @@ def generate_single_synthetic_year(dataset_number, historical_data, years, times
     )
 
     # Define the file path to save the dataset
-    file_path = f"{save_path}\\data_{int(timestep)}min_{dataset_number}.pkl"
+    file_path = f"{save_path}\\data_{int(timestep / 60)}min_{dataset_number}.pkl"
 
     # Save the synthetic year data to a file
     synthetic_year_data.to_pickle(file_path)
 
     return file_path
+
+def generate_yearly_weather_data(historical_data, N=1, seed=None, save_path="synthetic_data_"):
+    """
+    Generates multiple synthetic years of weather data by randomly selecting weeks
+    from the available historical data and saves each dataset to a file.
+
+    Parameters:
+        historical_data (pd.DataFrame): DataFrame containing historical weather data with a DatetimeIndex.
+        N (int): Number of synthetic datasets to generate.
+        seed (int, optional): Seed for random number generation to ensure reproducibility.
+        save_path (str): Path prefix to save the generated datasets (files will be named with indices like 'synthetic_data_0.pkl').
+        
+    Returns:
+        list: A list of file paths where the datasets are saved.
+    """
+    # Ensure the index is a DatetimeIndex
+    if not isinstance(historical_data.index, pd.DatetimeIndex):
+        raise ValueError("The historical_data DataFrame must have a DatetimeIndex.")
+
+    # Set the random seed for reproducibility
+    if seed is not None:
+        random.seed(seed)
+
+    # Calculate the timestep of the data
+    timestep = (historical_data.index[1] - historical_data.index[0]).total_seconds()  # in seconds
+    if not np.all(np.diff(historical_data.index) == pd.Timedelta(seconds=timestep)):
+        raise ValueError("The input DataFrame must have a uniform timestep.")
+
+    # Determine the length of a week in terms of data points
+    points_per_week = int((7 * 24 * 3600) / timestep)
+
+    # Extract unique years from the historical data
+    years = historical_data.index.year.unique()
+
+    # Initialize a list to store the paths of the saved files
+    saved_files = []
+
+    # Create a Pool of workers to generate datasets in parallel
+    with Pool() as pool:
+        results = pool.starmap(generate_single_synthetic_year, [
+            (i, historical_data, years, timestep, points_per_week, save_path, seed) for i in range(N)
+        ])
+
+    # Collect the paths of the saved datasets
+    saved_files.extend(results)
+
+    return saved_files
+
 
 
 # Example usage
@@ -310,7 +301,7 @@ if __name__ == "__main__":
     processor = WeatherDataProcessor()
 
     # Fetch and process data
-    lat = 0
+    lat = 30
     lon = -90
     processor.fetch_weather_data(latitude=lat, longitude=lon, start_date="2000-01-01", end_date="2022-12-31", hourly_vars=["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
     hourly_df = processor.process_hourly_data()
@@ -318,9 +309,9 @@ if __name__ == "__main__":
     # hourly_df.to_pickle(r"Data\HISTORICAL_DATA")
     # fitted_distributions.to_pickle(r"Data\EXPECTED_DATA\data_expected_60min")
     
-    timestep = 60
+    timestep = 10
     resampled_df = processor.resample_data(interval_minutes=timestep, filename=f"Data\HISTORICAL_DATA\data_{timestep}min.pkl")
     fitted_distributions = processor.fit_distributions(resampled_df,rf"Data\EXPECTED_DATA\lat{lat}\data_expected_{timestep}min_lat{lat}.pkl")
-    generate_yearly_weather_data(resampled_df,N=1000,save_path=rf"Data\SYNTHETIC_DATA\lat{lat}")
+    generate_yearly_weather_data(resampled_df,N=100,save_path=rf"Data\SYNTHETIC_DATA\lat{lat}")
 
 

@@ -94,18 +94,17 @@ class mdp:
 
         failure_penalty, whale_found_reward = 25, 1
         stages = tqdm(range(self.max_stages-1, -1, -1), desc="EV", leave=False) if self.show_progress else range(self.max_stages-1, -1, -1)
+        max_collected_energy = 1367 * S * dt * 60 * efficiency
 
         for stage in stages:
             for state in self.states:
-                reward_list = [-1e12] * len(self.actions)
+                reward_list = [-1e5] * len(self.actions)
 
                 for idx, action in enumerate(self.actions):
                     required_energy = required_cruise_energy if idx else 0
                     if state[1] == "moored" and action=="fly":
                         required_energy = required_cruise_energy+required_takeoff_energy
                     current_energy = state[0] / 100 * capacity_j
-                    max_collected_energy = 1367 * S * dt * 60 * efficiency
-
                     solar_alpha, solar_beta = alphas[stage], betas[stage]
                     whale_surface_probability = self.get_sighting_probability(stage, dt, self.start_time)
                     broken_probability = self.T(state, action, stage)
@@ -121,10 +120,7 @@ class mdp:
                 max_reward = np.max(reward_list)
                 self.ev_table.loc[state, stage] = max_reward
                 self.policy_table.loc[state, stage] = self.actions[np.argmax(reward_list)]
-        self.ev_table.loc[(-1,"broken")] = -25
-        # print("Done!")
-        # self.plot_surfaces_by_state(50,self.max_stages)
-
+        self.ev_table.loc[(-1,"broken")] = 0
     
     @staticmethod
     def expected_reward(P, C, I, k, l, solar_alpha, solar_beta, p_H_1:float, p_B_1:float)->float:

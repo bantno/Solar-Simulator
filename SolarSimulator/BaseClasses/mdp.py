@@ -57,6 +57,7 @@ class mdp:
         Generate a list of states based on state of charge (SoC) increments and vehicle states.
         """
         states = [(soc, state) for state in vehicle_states for soc in range(0, 101, soc_increment)]
+        states.append((-1,"broken"))
         return states
 
     def T(self, state, action, stage):
@@ -120,8 +121,9 @@ class mdp:
                 max_reward = np.max(reward_list)
                 self.ev_table.loc[state, stage] = max_reward
                 self.policy_table.loc[state, stage] = self.actions[np.argmax(reward_list)]
-        print("Done!")
-        self.plot_surfaces_by_state(50,self.max_stages)
+        self.ev_table.loc[(-1,"broken")] = -25
+        # print("Done!")
+        # self.plot_surfaces_by_state(50,self.max_stages)
 
     
     @staticmethod
@@ -194,9 +196,6 @@ class mdp:
         Returns:
         - float: Expected reward E[R(X, H)].
         """
-        # Probability that H = 1
-        p_H_0 = 1 - p_H_1
-        p_B_0 = 1 - p_B_1
 
         # Calculate the threshold for X <= 0 condition (S <= (P - C) / I)
         threshold = ((P-C) / I)

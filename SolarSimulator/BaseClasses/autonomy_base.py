@@ -10,6 +10,7 @@ class Autonomy:
         self.data = data
         self.whale_prob = whale_probabilities
         self.failure_penalty = 25
+        self.soc_increment = 1
 
     def simulate_simple_behavior(self,
                                  initial_state,
@@ -170,10 +171,11 @@ class Autonomy:
                               save_history = False):
 
         battery_capacity_J = self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600
+        required_cruise_energy = self.mdp_model.plane.required_cruise_power*self.dt*60
+        required_takeoff_energy = self.mdp_model.plane.required_takeoff_energy
         reward = 0
         max_stages = len(self.data)-1
         self.stepwise_failure_prob = 1-true_success_prob
-        optimal_policy = self.mdp_model.policy_table
 
         # Preallocate arrays with a fixed size
         state_history_list = np.empty(max_stages,dtype=tuple)  # Adjust dimensions based on the state size
@@ -187,21 +189,40 @@ class Autonomy:
         solar_power_list[0] = 0.0
         whale_list[0] = 0.0
         flight_minutes = 0.0
+        action_list = ["float","fly"]
         shortwave_radiation = self.data["shortwave_radiation"].values
         
         for k in range(max_stages-1):
             current_state = state_history_list[k]
-            best_action = optimal_policy.loc[current_state,k]
             current_energy = energy_history_list[k]
             solar_power_wpm2 = shortwave_radiation[k]
             whale_prob = self.get_sighting_probability(self.whale_prob,k,self.dt,0)
 
-            if simulate_failure :
-                _,failure_prob = self.calculate_maneuver_probabilities(current_state=current_state[1],
-                                                                                    action=best_action,
-                                                                                    stage=k)
-            else:
-                failure_prob = -1
+            # best_action = self.mdp_model.policy_table.loc[current_state,k]
+            collected_energy = self.mdp_model.plane.S*solar_power_wpm2*self.dt*60
+            value_list = []
+            for action in action_list:
+                required_energy = required_cruise_energy if action=="fly" else 0
+                if current_state[1] == "moored" and action=="fly":
+                    required_energy = required_cruise_energy+required_takeoff_energy
+                current_energy = current_state[0] / 100 * battery_capacity_J
+                if action == "fly" :
+                    whale_surface_prob = whale_prob
+                else :
+                    whale_surface_prob = 0
+                current_reward = self.current_reward(current_state,action,k,required_energy,current_energy,collected_energy,
+                                                     self.failure_penalty,1,whale_surface_prob)
+                future_state = self.calculate_next_state(current_state=current_state,action=action,solar_power_wpm2=solar_power_wpm2)
+                expected_future_reward = self.mdp_model.ev_table.loc[future_state,k+1]
+                value = current_reward + expected_future_reward
+                value_list.append(value)
+
+            # TODO: Determine which action to take based on value
+            best_action = action_list[np.argmax(value_list)]
+
+            _,failure_prob = self.calculate_maneuver_probabilities(current_state=current_state[1],
+                                                                                action=best_action,
+                                                                                stage=k)
 
             if best_action == "fly" :
                 flight_minutes += self.dt
@@ -215,7 +236,7 @@ class Autonomy:
                 whale_list[k+1]=whale_prob
                 solar_power_list[k+1] = solar_power_wpm2
             else :
-                reward = reward-self.failure_penalty
+                reward -= self.failure_penalty
                 break
 
             if new_state[0] < 0 :
@@ -274,6 +295,53 @@ class Autonomy:
         soc = min(round(energy/max_capacity*100),100)
         return (soc,state)
 
+    def calculate_next_state(self,current_state,action,solar_power_wpm2):
+        soc = current_state[0]
+        delta_soc = self.calculate_soc_update(self.mdp_model.plane,current_state,action,self.dt,solar_power_wpm2)
+        new_soc = min(soc + delta_soc, 100)  # Limit SoC to 100
+        new_vehicle_state = "flying" if action == "fly" else "moored"
+
+        # Set state to "broken" if SoC falls below 0
+        if new_soc < 0:
+            new_soc, new_vehicle_state = -1, "broken"
+        return (new_soc, new_vehicle_state)
+    
+    def calculate_soc_update(self, plane, state, action, dt, solar_power):
+        """
+        Calculate the change in State of Charge (SoC) after performing the specified action.
+
+        Parameters:
+        - plane: The plane object containing power and battery specifications.
+        - action (str): Action to perform, either "float" or "fly".
+        - dt (float): Time step in minutes.
+        - solar_power (float): Available solar power in watts per square meter.
+
+        Returns:
+        - int: The rounded change in SoC based on the action and environmental conditions.
+        """
+        panel_efficiency = 0.15  # TODO: Update using PVWATTS for more accurate efficiency
+        required_takeoff_energy = 0
+        # Determine required power based on action
+        if action == "float":
+            required_power = 0
+        elif action == "fly":
+            required_power = plane.required_cruise_power
+            if state[1] == "moored":
+                required_takeoff_energy = plane.required_takeoff_energy
+        else:
+            raise ValueError(f"Expected action 'float' or 'fly'. Got {action}.")
+
+        # Calculate the net power balance
+        avionics_power = plane.idle_power
+        solar_input = solar_power * panel_efficiency * plane.S
+        net_power = solar_input - required_power - avionics_power
+
+        # Convert power (W) to energy (Joules) and then to change in SoC (%)
+        energy_change = net_power * dt * 60 - required_takeoff_energy # Convert power to energy
+        soc_change = (energy_change / (plane.voltage * plane.capacity * 3600)) * 100  # Energy to SoC %
+
+        # Round to the nearest SoC increment and return
+        return self.soc_increment * round(soc_change / self.soc_increment)
 
     def calculate_maneuver_probabilities(self,current_state,action,stage):
         """
@@ -294,6 +362,53 @@ class Autonomy:
         failure_prob = base_failure_prob * state_action_factor
         success_prob = 1-failure_prob
         return success_prob, failure_prob
+    
+    def reward(self,state,current_action,stage,collected_solar_energy,current_whale_surface_prob):
+        if current_action == "fly":
+            whale_finding_reward = 1*current_whale_surface_prob+0*(1-current_whale_surface_prob)
+        else:
+            whale_finding_reward = 0
+
+    def current_reward(self,current_state,current_action,current_stage,
+                       P, C, I, failure_penalty,whale_finding_reward,
+                       p_H_1:float)->float:
+        """
+        Calculate the expected reward E[R(X, H)].
+        
+        Parameters:
+        - P (float): Required energy.
+        - C (float): Stored energy.
+        - I (float): Collected energy.
+        - k (float): Absolute values of penalty for vehicle failure.
+        - l (float): Reward if X > 0 and H = 1.
+        - alpha (float): Shape parameter for the Beta distribution.
+        - beta (float): Shape parameter for the Beta distribution.
+        - P_H_1 (float): Probability that whale is at the surface.
+        - P_B_1 (float): Probability that B = 1.
+        
+        Returns:
+        - float: Expected reward E[R(X, H)].
+        """
+
+        if P > C + I:
+            energy_failure_probability = 1
+        else:
+            energy_failure_probability = 0
+
+        transition_failure_probability = self.mdp_model.T(current_state,current_action,current_stage)
+        failure_probability = 1-(1-energy_failure_probability)*(1-transition_failure_probability)
+
+        reward = p_H_1*whale_finding_reward+failure_probability*(-failure_penalty)
+
+        return reward
+        
+
+    def decision(self):
+        pass
+        # if the current reward is greater than the difference between the current and future values in the expected value table, choose to fly.
+        # otherwise, choose to do nothing?
+        
+
     
     # @staticmethod
     # def calculate_step_transition_prob(period_min, no_failure_probability, step_length_min):

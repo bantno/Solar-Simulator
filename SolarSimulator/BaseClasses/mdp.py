@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from scipy.stats import beta
 from tqdm import tqdm
+from seaplane_base import Seaplane
 
 class mdp:
     """
@@ -109,7 +110,7 @@ class mdp:
                     broken_probability = self.T(state, action, stage)
                     k = whale_found_reward if idx else 0
 
-                    reward = self.expected_reward(
+                    reward = self.current_reward(state,action,stage,
                         required_energy, current_energy, max_collected_energy, failure_penalty,
                         k, solar_alpha, solar_beta, whale_surface_probability, broken_probability
                     )
@@ -119,6 +120,8 @@ class mdp:
                 max_reward = np.max(reward_list)
                 self.ev_table.loc[state, stage] = max_reward
                 self.policy_table.loc[state, stage] = self.actions[np.argmax(reward_list)]
+        print("Done!")
+        self.plot_surfaces_by_state(50,self.max_stages)
 
     
     @staticmethod
@@ -170,6 +173,53 @@ class mdp:
                         reward_H1_B1 * p_H_1 * p_B_1)
 
         return expected_reward
+    
+    def current_reward(self,current_state,current_action,current_stage,
+                       P, C, I, failure_penalty,whale_finding_reward, solar_alpha, solar_beta,
+                       p_H_1:float, p_B_1:float)->float:
+        """
+        Calculate the expected reward E[R(X, H)].
+        
+        Parameters:
+        - P (float): Required energy.
+        - C (float): Stored energy.
+        - I (float): Maximum collected energy.
+        - k (float): Absolute values of penalty for vehicle failure.
+        - l (float): Reward if X > 0 and H = 1.
+        - alpha (float): Shape parameter for the Beta distribution.
+        - beta (float): Shape parameter for the Beta distribution.
+        - P_H_1 (float): Probability that whale is at the surface.
+        - P_B_1 (float): Probability that B = 1.
+        
+        Returns:
+        - float: Expected reward E[R(X, H)].
+        """
+        # Probability that H = 1
+        p_H_0 = 1 - p_H_1
+        p_B_0 = 1 - p_B_1
+
+        # Calculate the threshold for X <= 0 condition (S <= (P - C) / I)
+        threshold = ((P-C) / I)
+        if solar_alpha==0 or solar_beta==0:
+            # If no energy is collected, handle the penalty based on stored energy
+            if C < P:
+                # If stored energy is insufficient to meet required energy, apply penalty
+                energy_failure_probability = 1
+            else:
+                # If stored energy is sufficient, no penalty
+                energy_failure_probability = 0
+        else:
+            # Probability that S <= threshold, i.e., F_S
+            energy_failure_probability = beta.cdf(threshold, solar_alpha, solar_beta)
+
+        transition_failure_probability = self.T(current_state,current_action,current_stage)
+        failure_probability = 1-(1-energy_failure_probability)*(1-transition_failure_probability)
+
+
+
+        reward = p_H_1*whale_finding_reward+failure_probability*(-failure_penalty)
+
+        return reward
 
     def get_future_reward(self, state, action, stage):
         """
@@ -331,8 +381,7 @@ class mdp:
         """
         current_time = (start_time + (current_step * timestep)+60) % 1440
         nearest_start = (current_time // 120) * 120
-        return self.whale_surface_probs.get(nearest_start)
-    
+        return self.whale_surface_probs.get(nearest_start)    
     
     def plot_surface(self, df, title, battery_capacity_ah, max_stages):
         """
@@ -390,6 +439,115 @@ class mdp:
             # Plot the surface for this state
             self.plot_surface(df_state, state, battery_capacity_ah, max_stages)
 
+class simHelper:
+    def __init__(self,plane:Seaplane,failure_penalty,float_failure_probability,soc_increment,dt_min):
+        self.failure_penalty = failure_penalty
+        self.float_failure_probability = float_failure_probability
+        self.plane = plane
+        self.soc_increment = soc_increment
+        self.battery_capacity_J = plane.capacity*plane.voltage*3600
+        self.dt = dt_min
+
+    def current_reward(self,current_state,current_action,current_stage,
+                       collected_solar_energy,current_failure_probability,current_whale_surface_prob):
+        if current_action == "fly":
+            whale_finding_reward = 1*current_whale_surface_prob+0*(1-current_whale_surface_prob)
+        else:
+            whale_finding_reward = 0
+        
+        failure_reward = current_failure_probability * self.failure_penalty
+
+        current_reward = whale_finding_reward + failure_reward
+
+        return current_reward
+
+    def value_function(self,current_state,current_action,current_stage,collected_solar_energy,current_failure_probability,current_whale_surface_probability,ev_table):
+        """Evaluates the value function V(current_state,current_stage,current_environmental_conditions)"""
+        
+        reward_for_current_action = self.current_reward(current_state,
+                                                        current_action,
+                                                        current_stage,
+                                                        collected_solar_energy,
+                                                        current_failure_probability,
+                                                        current_whale_surface_probability)
+        
+        current_energy = self.get_joules_from_state(current_state)
+        
+        future_state = self.calculate_new_state(current_action,current_energy,self.battery_capacity_J)
+        future_stage = current_stage+1
+        expected_future_reward_after_current_action = ev_table.loc[future_state,future_stage]
+        
+        value = reward_for_current_action + expected_future_reward_after_current_action
+        return value
+    
+    def calculate_new_state(self, state, action, solar_power):
+        """
+        Calculate the new state of charge after performing the action.
+        """
+        soc = state[0]
+        delta_soc = self.calculate_soc_update(self.plane,state, action, self.dt, solar_power)
+        new_soc = min(soc + delta_soc, 100)  # Limit SoC to 100
+        if state[1] == "broken":
+            new_vehicle_state = "broken"
+        elif action == "fly":
+            new_vehicle_state = "flying"
+        elif action == "float":
+            new_vehicle_state = "moored"
+        else:
+            raise ValueError()
+
+        # Set state to "broken" if SoC falls below 0
+        if new_soc < 0:
+            new_soc, new_vehicle_state = -1, "broken"
+        
+        return (new_soc, new_vehicle_state)
+
+    def calculate_soc_update(self, plane, state, action, dt, solar_power):
+        """
+        Calculate the change in State of Charge (SoC) after performing the specified action.
+
+        Parameters:
+        - plane: The plane object containing power and battery specifications.
+        - action (str): Action to perform, either "float" or "fly".
+        - dt (float): Time step in minutes.
+        - solar_power (float): Available solar power in watts per square meter.
+
+        Returns:
+        - int: The rounded change in SoC based on the action and environmental conditions.
+        """
+        # Initialize constants
+        panel_efficiency = 0.10  # TODO: Update using PVWATTS for more accurate efficiency
+        required_takeoff_energy = 0
+        
+
+        if action == "float":
+            required_power = 0.0
+        elif action == "fly":
+            required_power = plane.required_cruise_power
+            if state[1] == "moored":
+                required_takeoff_energy = plane.required_takeoff_energy
+        else:
+            raise ValueError(f"Expected action 'float' or 'fly'. Got {action}.")
+
+        # Calculate the net power balance
+        avionics_power = plane.idle_power
+        solar_input = solar_power * panel_efficiency * plane.S
+        net_power = solar_input - required_power - avionics_power
+
+        # Convert power (W) to energy (Joules) and then to change in SoC (%)
+        energy_change = net_power * dt * 60 - required_takeoff_energy # Convert power to energy
+        soc_change = (energy_change / (self.battery_capacity_J)) * 100  # Energy to SoC %
+
+        # Round to the nearest SoC increment and return
+        return self.soc_increment * round(soc_change / self.soc_increment)
+
+    def get_joules_from_state(self,state:tuple)->int:
+        """Calculate stored energy in Joules from a state tuple ("action",battery_level)"""
+        battery_percentage = state[0]/100
+        battery_energy_J = self.battery_capacity_J*battery_percentage
+        return battery_energy_J
+    
+    
 if __name__ == "__main__":
     expected_data = pd.read_pickle(r"Data\EXPECTED_DATA\data_expected_60min.pkl")
     print(expected_data.columns)

@@ -22,7 +22,7 @@ def run_simulation(params):
         show=False,
         use_expected=params["use_expected"]
     )
-    print(f"Running simulation with parameters:")
+    print("Running simulation with parameters:")
     print(params)
 
     simulation.run(

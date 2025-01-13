@@ -161,8 +161,6 @@ class Autonomy:
         else:
             return reward,k,flight_minutes
         
-
-
     def simulate_mdp_behavior(self,
                               initial_state,
                               true_success_prob,
@@ -175,6 +173,7 @@ class Autonomy:
         reward = 0
         max_stages = len(self.data)-1
         self.stepwise_failure_prob = 1-true_success_prob
+        panel_efficiency = 0.10 # 10% efficiency assumed
 
         # Preallocate arrays with a fixed size
         state_history_list = np.empty(max_stages,dtype=tuple)  # Adjust dimensions based on the state size
@@ -198,7 +197,7 @@ class Autonomy:
             whale_prob = self.get_sighting_probability(self.whale_prob,k,self.dt,0)
 
             # best_action = self.mdp_model.policy_table.loc[current_state,k]
-            collected_energy = self.mdp_model.plane.S*solar_power_wpm2*self.dt*60
+            collected_energy = self.mdp_model.plane.S*solar_power_wpm2*self.dt*60*panel_efficiency
             value_list = []
             for action in action_list:
                 required_energy = required_cruise_energy if action=="fly" else 0
@@ -215,7 +214,6 @@ class Autonomy:
                 value = current_reward + expected_future_reward
                 value_list.append(value)
 
-            # TODO: Determine which action to take based on value
             best_action = action_list[np.argmax(value_list)]
 
             _,failure_prob = self.calculate_maneuver_probabilities(current_state=current_state[1],
@@ -295,6 +293,8 @@ class Autonomy:
             state = "moored"
         elif best_action=="fly":
             state = "flying"
+        else:
+            raise ValueError(f"Action: {best_action} is not a valid action.")
         soc = min(round(energy/max_capacity*100),100)
         return (soc,state)
 
@@ -365,12 +365,6 @@ class Autonomy:
         failure_prob = base_failure_prob * state_action_factor
         success_prob = 1-failure_prob
         return success_prob, failure_prob
-    
-    def reward(self,state,current_action,stage,collected_solar_energy,current_whale_surface_prob):
-        if current_action == "fly":
-            whale_finding_reward = 1*current_whale_surface_prob+0*(1-current_whale_surface_prob)
-        else:
-            whale_finding_reward = 0
 
     def current_reward(self,current_state,current_action,current_stage,
                        P, C, I, failure_penalty,whale_finding_reward,
@@ -393,7 +387,7 @@ class Autonomy:
         - float: Expected reward E[R(X, H)].
         """
 
-        if P > C + I:
+        if P > (C + I):
             energy_failure_probability = 1
         else:
             energy_failure_probability = 0
@@ -404,55 +398,6 @@ class Autonomy:
         reward = p_H_1*whale_finding_reward+failure_probability*(-failure_penalty)
 
         return reward
-        
-
-    def decision(self):
-        pass
-        # if the current reward is greater than the difference between the current and future values in the expected value table, choose to fly.
-        # otherwise, choose to do nothing?
-        
-
-    
-    # @staticmethod
-    # def calculate_step_transition_prob(period_min, no_failure_probability, step_length_min):
-    #     """
-    #     Calculate the stepwise transition probability for each step within a specified period.
-
-    #     This method computes the probability of failure for a single step given the total 
-    #     failure probability over a period and the number of steps within that period. 
-    #     It ensures that the compounded stepwise failure matches the specified total failure 
-    #     probability over the entire period.
-
-    #     Parameters:
-    #         period_min (float): The total length of the period in minutes.
-    #         failure_probability (float): The overall failure probability for the entire period 
-    #             (value between 0 and 1).
-    #         step_length_min (float): The length of each step in minutes.
-
-    #     Returns:
-    #         float: The stepwise failure probability for each individual step.
-
-    #     Example:
-    #         If the total period is 60 minutes with a failure probability of 0.5 and 
-    #         step length is 15 minutes, this method returns the stepwise probability for 
-    #         each 15-minute interval.
-
-    #     Raises:
-    #         ValueError: If any input is non-positive or the failure_probability is not in [0, 1].
-    #     """
-    #     # Validate inputs
-    #     if period_min <= 0:
-    #         raise ValueError("Period_min must be a positive number.")
-    #     if not (0 <= no_failure_probability <= 1):
-    #         raise ValueError("Failure_probability must be between 0 and 1, inclusive.")
-    #     if step_length_min <= 0:
-    #         raise ValueError("Step_length_min must be a positive number.")
-
-    #     # Calculate the number of steps and the stepwise failure probability
-    #     num_steps = np.ceil(period_min / step_length_min)
-    #     stepwise_failure_probability = 1 - (no_failure_probability ** (1 / num_steps))
-    #     # print(stepwise_failure_probability)
-    #     return stepwise_failure_probability
     
     def calculate_energy_update(self, plane, state, action, dt, solar_power):
         """
@@ -488,44 +433,3 @@ class Autonomy:
         
         # Return the probability, or None if out of range
         return probability_map.get(nearest_start)
-    
-    @staticmethod
-    def expected_reward(P, C, k, l, collected_energy, p_H_1:float, p_B_1:float)->float:
-        """
-        Calculate the expected reward E[R(X, H)].
-        
-        Parameters:
-        - P (float): Required energy.
-        - C (float): Stored energy.
-        - k (float): Absolute values of penalty for vehicle failure.
-        - l (float): Reward if X > 0 and H = 1.
-        - P_H_1 (float): Probability that whale is at the surface.
-        - P_B_1 (float): Probability that B = 1.
-        
-        Returns:
-        - float: Expected reward E[R(X, H)].
-        """
-        # Probability that H = 1
-        p_H_0 = 1 - p_H_1
-        p_B_0 = 1 - p_B_1
-        
-        # If no energy is collected, handle the penalty based on stored energy
-        if C + collected_energy < P:
-            # If stored energy is insufficient to meet required energy, apply penalty
-            F_S = 1
-        else:
-            # If stored energy + collected energy is sufficient, no penalty
-            F_S = 0
-
-        # Calculate the expected rewards for each case
-        reward_H0_B0 = -k * F_S
-        reward_H0_B1 = -k
-        reward_H1_B0 = l - k * F_S
-        reward_H1_B1 = l - k
-
-        expected_reward = (reward_H0_B0 * p_H_0 * p_B_0 +
-                        reward_H0_B1 * p_H_0 * p_B_1 +
-                        reward_H1_B0 * p_H_1 * p_B_0 +
-                        reward_H1_B1 * p_H_1 * p_B_1)
-
-        return expected_reward

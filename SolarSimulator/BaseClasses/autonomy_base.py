@@ -68,14 +68,13 @@ class Autonomy:
 
             is_action_successful = np.random.uniform(0,1) > failure_prob
             
-            if True:
-                new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
-                new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
-                reward+=self.R(current_state,best_action,k,whale_prob)
-                state_history_list[k+1]=new_state
-                energy_history_list[k+1]=new_energy
-                whale_list[k+1]=whale_prob
-                solar_power_list[k+1] = solar_power_wpm2
+            new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
+            new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
+            reward+=self.R(current_state,best_action,k,whale_prob)
+            state_history_list[k+1]=new_state
+            energy_history_list[k+1]=new_energy
+            whale_list[k+1]=whale_prob
+            solar_power_list[k+1] = solar_power_wpm2
             if not is_action_successful :
                 reward -= self.failure_penalty # TODO MAKE whale penalty a parameter
                 break
@@ -205,7 +204,6 @@ class Autonomy:
                 required_energy = required_cruise_energy if action=="fly" else 0
                 if current_state[1] == "moored" and action=="fly":
                     required_energy = required_cruise_energy+required_takeoff_energy
-                current_energy = current_state[0] / 100 * battery_capacity_J
                 if action == "fly" :
                     whale_surface_prob = whale_prob
                 else :
@@ -227,23 +225,28 @@ class Autonomy:
             if best_action == "fly" :
                 flight_minutes += self.dt
 
-            if np.random.uniform(0,1) > failure_prob :
-                new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
-                new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
-                reward+=self.R(current_state,best_action,k,whale_prob)
-                state_history_list[k+1]=new_state
-                energy_history_list[k+1]=new_energy
-                whale_list[k+1]=whale_prob
-                solar_power_list[k+1] = solar_power_wpm2
-            else :
+            if simulate_failure:
+                _,failure_prob = self.calculate_maneuver_probabilities(current_state=current_state[1],
+                                                                                    action=best_action,
+                                                                                    stage=k)
+            else:
+                failure_prob = -1
+
+            is_action_successful = np.random.uniform(0,1) > failure_prob
+            
+            # Update state history
+            new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
+            new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
+            reward+=self.R(current_state,best_action,k,whale_prob)
+            state_history_list[k+1]=new_state
+            energy_history_list[k+1]=new_energy
+            whale_list[k+1]=whale_prob
+            solar_power_list[k+1] = solar_power_wpm2
+
+            if not is_action_successful or new_state[0] < 0:
                 reward -= self.failure_penalty
                 break
-
-            if new_state[0] < 0 :
-                reward -=self.failure_penalty
-                break
         
-        # print(reward)
         if save_history:
             return reward, k, state_history_list[1:k], solar_power_list[1:k], whale_list
         else:
@@ -319,7 +322,7 @@ class Autonomy:
         Returns:
         - int: The rounded change in SoC based on the action and environmental conditions.
         """
-        panel_efficiency = 0.15  # TODO: Update using PVWATTS for more accurate efficiency
+        panel_efficiency = 0.10  # TODO: Update using PVWATTS for more accurate efficiency
         required_takeoff_energy = 0
         # Determine required power based on action
         if action == "float":

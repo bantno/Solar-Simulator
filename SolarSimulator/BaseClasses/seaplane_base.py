@@ -123,7 +123,9 @@ class Seaplane:
         
         """
         return 0.5*rho*U**2
+    
     def get_lift_coefficient(self,rho,U):
+        """Calculate the lift coefficient required to fly."""
         self.calculate_weight()
         C_l = self.weight/(0.5*rho*U**2*self.S)
         return C_l
@@ -145,6 +147,7 @@ class Seaplane:
         # D = self.cdtot*rho*0.5*self.S*(U**2) # U in m/s
         D = .5*rho*U**3*self.S*self.cd0 + 2*self.weight**2*self.k/(rho*U*self.S) # From Traub
         return D
+    
 
     def get_required_takeoff_energy(self,takeoff_time_min) -> float:
         """Determine energy cost of taking off in Joules"""
@@ -152,3 +155,11 @@ class Seaplane:
         seconds_to_takeoff = 60.*takeoff_time_min
         required_takeoff_energy_J = required_power_w*seconds_to_takeoff
         return required_takeoff_energy_J
+    
+    def soc_to_joules(self,timestep_min)->int:
+        """Convert battery energy level from state of charge [% of total capacity] to Joules"""
+        pass
+
+    def joules_to_soc(self,timestep_min)->int:
+        """Convert battery energy level from Joules to state of charge [% of total capacity]"""
+        pass

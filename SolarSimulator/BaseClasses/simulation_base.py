@@ -111,11 +111,12 @@ class Simulation:
         # Simulate the behavior
         if algo == "Threshold":
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-                actual_data = self._load_weather_data(dt,directory=loc,i=i)
-                actual_data = actual_data.loc[start_date:end_date]
                 if self.use_expected:
                     expected_data["shortwave_radiation"] = expected_data["expected_solar_rad"]
                     actual_data = expected_data
+                else:
+                    actual_data = self._load_weather_data(dt,directory=loc,i=i)
+                    actual_data = actual_data.loc[start_date:end_date]
                 auto.data=actual_data
                 if self.save_history:
                     reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_simple_behavior(
@@ -154,11 +155,12 @@ class Simulation:
         elif algo == "Optimal": 
             mdp_model.create_ev_table()
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-                actual_data = self._load_weather_data(dt,directory=loc,i=i)
-                actual_data = actual_data.loc[start_date:end_date]
                 if self.use_expected:
                     expected_data["shortwave_radiation"] = expected_data["expected_solar_rad"]
                     actual_data = expected_data
+                else:
+                    actual_data = self._load_weather_data(dt,directory=loc,i=i)
+                    actual_data = actual_data.loc[start_date:end_date]
                     
                 auto.data=actual_data
                 # Simulate the behavior
@@ -194,11 +196,12 @@ class Simulation:
                     }
         elif algo == "Charge Threshold": 
             for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-                actual_data = self._load_weather_data(dt,directory=loc,i=i)
-                actual_data = actual_data.loc[start_date:end_date]
                 if self.use_expected:
                     expected_data["shortwave_radiation"] = expected_data["expected_solar_rad"]
                     actual_data = expected_data
+                else:
+                    actual_data = self._load_weather_data(dt,directory=loc,i=i)
+                    actual_data = actual_data.loc[start_date:end_date]
                 auto.data=actual_data
                 # Simulate the behavior
                 if self.save_history:

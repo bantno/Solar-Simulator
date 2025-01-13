@@ -159,16 +159,12 @@ class mdp:
             # Probability that S <= threshold, i.e., F_S
             F_S = beta.cdf(threshold, solar_alpha, solar_beta)
 
-        # Calculate the expected rewards for each case
-        reward_H0_B0 = -k * F_S
-        reward_H0_B1 = -k
-        reward_H1_B0 = l - k * F_S
-        reward_H1_B1 = l - k
-
-        expected_reward = (reward_H0_B0 * p_H_0 * p_B_0 +
-                        reward_H0_B1 * p_H_0 * p_B_1 +
-                        reward_H1_B0 * p_H_1 * p_B_0 +
-                        reward_H1_B1 * p_H_1 * p_B_1)
+        energy_failure_probability = F_S
+        transition_failure_probability = p_B_0
+        failure_probability = 1-(1-energy_failure_probability)*(1-transition_failure_probability)
+        whale_finding_reward = l
+        failure_penalty = k
+        expected_reward = p_H_1*whale_finding_reward+failure_probability*(-failure_penalty)
 
         return expected_reward
     
@@ -261,7 +257,7 @@ class mdp:
         Returns:
         - int: The rounded change in SoC based on the action and environmental conditions.
         """
-        panel_efficiency = 0.15  # TODO: Update using PVWATTS for more accurate efficiency
+        panel_efficiency = 0.10  # TODO: Update using PVWATTS for more accurate efficiency
         required_takeoff_energy = 0
         # Determine required power based on action
         if action == "float":
@@ -302,8 +298,8 @@ class mdp:
         # Determine failure probability factor based on state-action combinations
         state_action_factors = {
             ("moored", "float"): 1.0,
-            ("moored", "fly"): 5.0,
-            ("flying", "float"): 5.0,
+            ("moored", "fly"): 15.0,
+            ("flying", "float"): 15.0,
             ("flying", "fly"): 2.0
         }
 

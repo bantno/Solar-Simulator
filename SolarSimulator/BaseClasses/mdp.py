@@ -20,7 +20,7 @@ class mdp:
         self.vehicle_states = vehicle_states
         self.actions = actions
         self.dt = dt
-        self.gamma = 1.0
+        self.gamma = 0.99999
         self.epsilon = epsilon
         self.show_progress = False
 
@@ -141,30 +141,31 @@ class mdp:
         Returns:
         - float: Expected reward E[R(X, H)].
         """
-        # Probability that H = 1
+
         p_H_0 = 1 - p_H_1
         p_B_0 = 1 - p_B_1
 
-        # Calculate the threshold for X <= 0 condition (S <= (P - C) / I)
-        threshold = ((P-C) / I)
-        if solar_alpha==0 or solar_beta==0:
-            # If no energy is collected, handle the penalty based on stored energy
+        threshold = ((P-C) / I) # Calculate the threshold for X <= 0 condition (S <= (P - C) / I)
+        if solar_alpha==0 or solar_beta==0: # If no energy is collected
+            
             if C < P:
-                # If stored energy is insufficient to meet required energy, apply penalty
-                F_S = 1
+                F_S = 1 # If stored energy is insufficient to meet required energy, apply penalty
             else:
-                # If stored energy is sufficient, no penalty
-                F_S = 0
+                F_S = 0 # If stored energy is sufficient, no penalty
         else:
             # Probability that S <= threshold, i.e., F_S
             F_S = beta.cdf(threshold, solar_alpha, solar_beta)
 
-        energy_failure_probability = F_S
-        transition_failure_probability = p_B_0
-        failure_probability = 1-(1-energy_failure_probability)*(1-transition_failure_probability)
-        whale_finding_reward = l
-        failure_penalty = k
-        expected_reward = p_H_1*whale_finding_reward+failure_probability*(-failure_penalty)
+        # Calculate the expected rewards for each case
+        reward_H0_B0 = -k * F_S
+        reward_H0_B1 = -k
+        reward_H1_B0 = l - k * F_S
+        reward_H1_B1 = l - k
+
+        expected_reward = (reward_H0_B0 * p_H_0 * p_B_0 +
+                        reward_H0_B1 * p_H_0 * p_B_1 +
+                        reward_H1_B0 * p_H_1 * p_B_0 +
+                        reward_H1_B1 * p_H_1 * p_B_1)
 
         return expected_reward
     

@@ -145,15 +145,15 @@ class WeatherDataProcessor:
                 beta_params = (np.nan, np.nan, np.nan, np.nan)  # Not enough data to fit
                 expected_beta = np.nan
 
-            # # Fit wind speed data to a Weibull distribution
-            # wind_data = group['wind_speed_10m'].dropna()
-            # if len(wind_data) > 1:
-            #     weibull_params = weibull_min.fit(wind_data, floc=0)
-            #     k, loc, scale = weibull_params
-            #     expected_weibull = scale * gamma(1 + 1 / k)
-            # else:
-            #     weibull_params = (np.nan, np.nan, np.nan)  # Not enough data to fit
-            #     expected_weibull = np.nan  # Not enough data to fit
+            # Fit wind speed data to a Weibull distribution
+            wind_data = group['wind_speed_10m'].dropna()
+            if len(wind_data) > 1:
+                weibull_params = weibull_min.fit(wind_data, floc=0)
+                k, loc, scale = weibull_params
+                expected_weibull = scale * gamma(1 + 1 / k)
+            else:
+                weibull_params = (np.nan, np.nan, np.nan)  # Not enough data to fit
+                expected_weibull = np.nan  # Not enough data to fit
 
             # Store results in a list
             results.append({
@@ -164,10 +164,10 @@ class WeatherDataProcessor:
                 'beta_alpha': beta_params[0],
                 'beta_beta': beta_params[1],
                 'expected_solar_rad': expected_beta,
-                # 'weibull_k': weibull_params[0],
-                # 'weibull_loc': weibull_params[1],
-                # 'weibull_scale': weibull_params[2],
-                # 'expected_wind_speed': expected_weibull
+                'weibull_k': weibull_params[0],
+                'weibull_loc': weibull_params[1],
+                'weibull_scale': weibull_params[2],
+                'expected_wind_speed': expected_weibull
             })
 
         df = pd.DataFrame(results)
@@ -301,17 +301,18 @@ if __name__ == "__main__":
     processor = WeatherDataProcessor()
 
     # Fetch and process data
-    lat = 30
-    lon = -90
-    processor.fetch_weather_data(latitude=lat, longitude=lon, start_date="2000-01-01", end_date="2022-12-31", hourly_vars=["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
-    hourly_df = processor.process_hourly_data()
+    # lat = 30
+    # lon = -90
+    # processor.fetch_weather_data(latitude=lat, longitude=lon, start_date="1950-01-01", end_date="2022-12-31", hourly_vars=["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
+    # hourly_df = processor.process_hourly_data()
     # fitted_distributions = processor.fit_distributions(hourly_df,"data_expected.pkl")
-    # hourly_df.to_pickle(r"Data\HISTORICAL_DATA")
+    # hourly_df.to_pickle(r"Data\HISTORICAL_DATA\data_60min.pkl")
     # fitted_distributions.to_pickle(r"Data\EXPECTED_DATA\data_expected_60min")
     
-    timestep = 10
-    resampled_df = processor.resample_data(interval_minutes=timestep, filename=f"Data\HISTORICAL_DATA\data_{timestep}min.pkl")
-    fitted_distributions = processor.fit_distributions(resampled_df,rf"Data\EXPECTED_DATA\lat{lat}\data_expected_{timestep}min_lat{lat}.pkl")
-    generate_yearly_weather_data(resampled_df,N=100,save_path=rf"Data\SYNTHETIC_DATA\lat{lat}")
-
+    # timestep = 10
+    # resampled_df = processor.resample_data(interval_minutes=timestep, filename=f"Data\HISTORICAL_DATA\data_{timestep}min.pkl")
+    # fitted_distributions = processor.fit_distributions(resampled_df,rf"Data\EXPECTED_DATA\lat{lat}\data_expected_{timestep}min_lat{lat}.pkl")
+    # generate_yearly_weather_data(resampled_df,N=100,save_path=rf"Data\SYNTHETIC_DATA\lat{lat}")
+    pd.read_pickle(r"Data\HISTORICAL_DATA\data_60min.pkl")
+    print("Done!")
 

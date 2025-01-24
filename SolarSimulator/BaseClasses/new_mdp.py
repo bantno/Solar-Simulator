@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+from tqdm import tqdm
 from scipy.stats import beta as betaDist
 from scipy.stats import weibull_min
 from scipy.integrate import quad
@@ -16,15 +17,27 @@ class ExpectedValueTable:
         self.soc_increment = soc_increment
         self.expected_solar = expected_solar_data
         self.expected_wind = expected_wind_data
+        self.states = self._create_states(soc_increment,["moored","flying"])
 
         if 100 % soc_increment != 0:
             raise ValueError("Specified state of charge increment does not divide evenly into 100%.")
         else:
-            self.ev_table = np.zeros((int(2*100/soc_increment+1),expected_solar_data.shape[0]))
+            self.ev_table = np.zeros((int(2*(100/soc_increment+1)+1),expected_solar_data.shape[0]))
         self.whale_probability_data = whale_observation_data
 
+    
+    def _create_states(self, soc_increment: int, vehicle_states: list) -> list:
+        """
+        Generate a list of states based on state of charge (SoC) increments and vehicle states.
+        """
+        states = [(soc, state) for state in vehicle_states for soc in range(0, 101, soc_increment)]
+        states.append((-1,"broken"))
+        return states
+
     def generate_ev_table(self):
-        pass
+        for k in tqdm(range(self.ev_table.shape[1]-1,-1,-1)):
+            for idx,state in enumerate(self.states[:-1]):
+                self.ev_table[idx,k] = self._ev_entry(k,state)
     
     def _calculate_case_probabilities(self,stage,state,reward_k):
         """
@@ -104,7 +117,7 @@ class ExpectedValueTable:
         F_S = betaDist.cdf(threshold, alpha, beta)
         return 1-F_S
     
-    def _calculate_sufficient_reward_probability(self,stage,state,reward_k,alpha_k,beta_k,n=1000):
+    def _calculate_sufficient_reward_probability(self,stage,state,reward_k,alpha_k,beta_k,n=100):
         """
         Calculate the probability of obtaining sufficient reward for a given action.
 
@@ -339,7 +352,7 @@ class ExpectedValueTable:
         # Round to the nearest SoC increment and return
         return self.soc_increment * round(soc_change / self.soc_increment)
     
-    def _P_S_given_w(w, u_k, state, p_f=1.0):
+    def _P_S_given_w(self, w, u_k, state, p_f=1.0):
         """
         Compute the conditional probability P(S|w_k) based on the state and wind speed.
         
@@ -383,7 +396,8 @@ class ExpectedValueTable:
         - float: Probability density f_W(w).
         """
         if w >= 0:  # Weibull is defined for w >= 0
-            return weibull_min.pdf(w, c_k, scale=scale_k)
+            return (c_k / scale_k) * (w / scale_k)**(c_k - 1) * np.exp(-(w / scale_k)**c_k)
+            # return weibull_min.pdf(w, c_k, scale=scale_k)
         else:
             return 0
 
@@ -403,7 +417,7 @@ class ExpectedValueTable:
             return self._P_S_given_w(w, u_k, state_k) * self.f_W(w,c_k,scale_k)
         
         # Integrate over the domain of the Weibull distribution [0, ∞)
-        result, _ = quad(integrand, 0, np.inf)
+        result, _ = quad(integrand, 0, 100)
         return result
 
     def _ev_entry(self,k,state):
@@ -472,3 +486,41 @@ class ExpectedValueTable:
             raise IndexError(f"Stage index out of bounds. Stage {stage} > max stage {array.shape[1]-1}.")
 
         return array[row_index, stage]
+    
+if __name__ == "__main__":
+    class SeaplaneMock(Seaplane):
+        def __init__(self):
+            # Initialize with some example values
+            self.capacity = 50  # Battery capacity (Ah)
+            self.voltage = 24   # Battery voltage (V)
+            self.S = 50         # Wing area (m^2)
+            self.idle_power = 100  # Idle power consumption (W)
+            self.required_cruise_power = 300  # Required power during cruise (W)
+            self.required_takeoff_energy = 2000  # Energy needed for takeoff (J)
+
+    # Sample data for solar, wind, and whale observation
+
+    stages = 100
+
+    # Solar: [Stage, Alpha, Beta]
+    solar_data = np.random.uniform(5, 15, size=(stages,3))
+
+    # Wind: Random wind data for testing
+    wind_data = np.random.uniform(5, 15, size=(stages,3))
+
+    # Whale Observation Data: Random probabilities (dummy values)
+    whale_data = np.random.random(size=(stages,))
+    whale_data[stages-1] = 0.
+
+    # Initialize SeaplaneMock
+    plane = SeaplaneMock()
+
+    # Create ExpectedValueTable instance with a smaller SOC increment and timestep
+    ev_table_instance = ExpectedValueTable(plane, solar_data, wind_data, whale_data, soc_increment=1, timestep_min=10)
+
+    # Generate the expected value table
+    ev_table_instance.generate_ev_table()
+
+    # Print the generated table
+    print("Expected Value Table (EV Table):")
+    print(ev_table_instance.ev_table)

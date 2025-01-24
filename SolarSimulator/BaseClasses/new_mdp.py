@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 from scipy.stats import beta as betaDist
 from scipy.stats import weibull_min
-from scipy.integrate import quad
+from scipy.integrate import quad, simps
 sys.path.append(r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\SolarSimulator\BaseClasses")
 from seaplane_base import Seaplane
 
@@ -152,10 +152,17 @@ class ExpectedValueTable:
             solar_power_w = sample*self.max_collected_power
             ev_0[i] = self._alpha(stage,state,0,solar_power_w)
             ev_1[i] = self._alpha(stage,state,1,solar_power_w)
+        
         d_alpha = ev_1-ev_0
         greater = sum(reward_k >= d_alpha)
         p_sufficient_reward = greater/n
         return p_sufficient_reward,np.mean(ev_0),np.mean(ev_1)
+
+        # solar_power_w = alpha_k/(alpha_k+beta_k)*self.max_collected_power
+        # ev_0 = self._alpha(stage,state,0,solar_power_w)
+        # ev_1 = self._alpha(stage,state,1,solar_power_w)
+        # d_alpha = ev_1-ev_0
+        # return int(reward_k>d_alpha),ev_0,ev_1
 
     def _calculate_required_energy(self,state,action):
         """
@@ -400,6 +407,24 @@ class ExpectedValueTable:
             # return weibull_min.pdf(w, c_k, scale=scale_k)
         else:
             return 0
+        
+    def f_W_vectorized(self, w, c_k, scale_k):
+        """
+        Compute the Weibull distribution PDF for a vector of wind speeds.
+
+        Parameters:
+        - w (np.ndarray): Array of wind speeds.
+        - c_k (float): Shape parameter of the Weibull distribution.
+        - scale_k (float): Scale parameter of the Weibull distribution.
+
+        Returns:
+        - np.ndarray: Array of PDF values corresponding to the input wind speeds.
+        """
+        w = np.asarray(w)  # Ensure w is a numpy array
+        pdf = np.zeros_like(w)  # Initialize result with zeros
+        valid = w >= 0  # Boolean mask for valid wind speeds (w >= 0)
+        pdf[valid] = (c_k / scale_k) * (w[valid] / scale_k)**(c_k - 1) * np.exp(-(w[valid] / scale_k)**c_k)
+        return pdf
 
     def _compute_success_probability(self, u_k, state_k,c_k,scale_k):
         """
@@ -414,11 +439,18 @@ class ExpectedValueTable:
         """
         # Define the integrand
         def integrand(w):
-            return self._P_S_given_w(w, u_k, state_k) * self.f_W(w,c_k,scale_k)
+            # return self._P_S_given_w(w, u_k, state_k) * self.f_W(w,c_k,scale_k)
+            return self._P_S_given_w(w, u_k, state_k) * self.f_W_vectorized(w,c_k,scale_k)
         
         # Integrate over the domain of the Weibull distribution [0, ∞)
-        result, _ = quad(integrand, 0, 100)
+        # result, _ = quad(integrand, 0, 100)
+        # return result
+
+        x = np.linspace(0, 45, 1000) 
+        y = integrand(x)
+        result = simps(y,x)
         return result
+        
 
     def _ev_entry(self,k,state):
 

@@ -44,202 +44,95 @@ class Simulation:
         self.save_history = save_history
         self.use_expected = use_expected
 
-    def run_simulation(self,
-                    start_date:datetime,
-                    end_date:datetime,
-                    dt,
-                    algo=None,
-                    mdp_success_prob=0,
-                    true_success_prob=0,
-                    runs=1,
-                    threshold=None):
-    
-        """
-        Simulates and plots the duty cycle for the given plane, solar data file, cruise speed, air density, and algorithm.
-        """        
-
-        # NEED TO FIX THIS TO BE ABLE TO RUN 3rd algorithm type.
-
-        plane = self.plane
-        plane.update_plane()
-        if isinstance(threshold,float):
-            data = self.simulate_deployment(
-                    start_date=start_date,
-                    end_date=end_date,
-                    dt=dt,
-                    algo=algo,
-                    mdp_success_prob=mdp_success_prob,
-                    true_success_prob=true_success_prob,
-                    num_runs=runs,
-                    threshold=threshold)
-        else:
-            data = self.simulate_deployment(
-                    start_date=start_date,
-                    end_date=end_date,
-                    dt=dt,
-                    algo=algo,
-                    mdp_success_prob=mdp_success_prob,
-                    true_success_prob=true_success_prob,
-                    num_runs=runs,
-                    threshold=0.1)
-                    
-        times = pd.date_range(start_date,end_date,freq=f"{dt}min")
-        
-        return times,data
-
-    def simulate_deployment(self,start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs, threshold):
+    def run_simulation(self, start_date: datetime, end_date: datetime, dt, algo=None, mdp_success_prob=0, true_success_prob=0, runs=1, threshold=None):
+        """Simulates and plots the duty cycle for the given parameters."""
         self.plane.update_plane()
-        expected_data = self.get_expected_weather_data(start_date=start_date,end_date=end_date,dt=dt,lat=self.lat)
-        vehicle_states = ["moored", "flying"]
-        actions = ["float", "fly"]
-        mdp_model = mdp(self.plane,
-                        soc_increment=1,
-                        vehicle_states=vehicle_states,
-                        actions=actions,
-                        start_date=start_date,
-                        end_date=end_date,
-                        expected_data=expected_data,
-                        whale_surface_probs=self.whale_table,
-                        dt=dt,
-                        mission_success_prob=mdp_success_prob
-                        )
-        auto = Autonomy(dt,mdp_model=mdp_model,data=None,whale_probabilities=self.whale_table)
-        mdp_model.show_progress=True
-        data = {}
+        threshold = threshold if isinstance(threshold, float) else 0.1
+
+        data = self.simulate_deployment(
+            start_date=start_date,
+            end_date=end_date,
+            dt=dt,
+            algo=algo,
+            mdp_success_prob=mdp_success_prob,
+            true_success_prob=true_success_prob,
+            num_runs=runs,
+            threshold=threshold
+        )
+
+        times = pd.date_range(start_date, end_date, freq=f"{dt}min")
+        return times, data
+
+    def simulate_deployment(self, start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs, threshold):
+        self.plane.update_plane()
+        expected_data = self.get_expected_weather_data(start_date, end_date, dt, self.lat)
         loc = rf"Data\SYNTHETIC_DATA\lat{int(self.lat)}"
 
-        # Simulate the behavior
-        if algo == "Threshold":
-            for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-                if self.use_expected:
-                    expected_data["shortwave_radiation"] = expected_data["expected_solar_rad"]
-                    actual_data = expected_data
-                else:
-                    actual_data = self._load_weather_data(dt,directory=loc,i=i)
-                    actual_data = actual_data.loc[start_date:end_date]
-                auto.data=actual_data
-                if self.save_history:
-                    reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_simple_behavior(
-                        initial_state=(100, "moored"),
-                        true_success_prob=true_success_prob,
-                        simulate_failure=True,
-                        save_history = self.save_history,
-                        threshold=threshold
-                    )
+        mdp_model = mdp(
+            self.plane,
+            soc_increment=1,
+            vehicle_states=["moored", "flying"],
+            actions=["float", "fly"],
+            start_date=start_date,
+            end_date=end_date,
+            expected_data=expected_data,
+            whale_surface_probs=self.whale_table,
+            dt=dt,
+            mission_success_prob=mdp_success_prob
+        )
 
-                    data[i] = {
-                        "Iteration": i,
-                        "StateHistory": state_history_list,
-                        "SolarHistory":solar_list,
-                        "ExpectedSolarHistory":expected_data["expected_solar_rad"].values,
-                        "WhaleHistory":whale_list,
-                        "Reward": reward,
-                        "LastStep": last_step
-                    }
-                else:
-                    reward, last_step, flight_minutes = auto.simulate_simple_behavior(
-                        initial_state=(100, "moored"),
-                        true_success_prob=true_success_prob,
-                        simulate_failure=True,
-                        save_history = self.save_history,
-                        threshold=threshold
-                    )
+        auto = Autonomy(dt, mdp_model=mdp_model, data=None, whale_probabilities=self.whale_table)
+        mdp_model.show_progress = True
 
-                    # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
-                    data[i] = {
-                        "Reward": reward,
-                        "LastStep": last_step,
-                        "FlightHours": flight_minutes/(60/dt)
-                    }
-    
-        elif algo == "Optimal": 
+        data = {}
+        simulation_methods = {
+            "Threshold": auto.simulate_simple_behavior,
+            "Optimal": auto.simulate_mdp_behavior,
+            "Charge Threshold": auto.simulate_fullcharge_behavior
+        }
+
+        if algo not in simulation_methods:
+            raise ValueError(f"Unknown algorithm: {algo}. Use 'Threshold', 'Optimal', or 'Charge Threshold'.")
+
+        simulate_method = simulation_methods[algo]
+        if algo == "Optimal":
             mdp_model.create_ev_table()
-            for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-                if self.use_expected:
-                    expected_data["shortwave_radiation"] = expected_data["expected_solar_rad"]
-                    actual_data = expected_data
-                else:
-                    actual_data = self._load_weather_data(dt,directory=loc,i=i)
-                    actual_data = actual_data.loc[start_date:end_date]
-                    
-                auto.data=actual_data
-                # Simulate the behavior
-                if self.save_history:
-                    reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_mdp_behavior(
-                        initial_state=(100, "moored"),
-                        true_success_prob=true_success_prob,
-                        simulate_failure=True,
-                        save_history = self.save_history
-                    )
 
-                    data[i] = {
-                        "Iteration": i,
-                        "StateHistory": state_history_list,
-                        "SolarHistory":solar_list,
-                        "ExpectedSolarHistory":expected_data["expected_solar_rad"].values,
-                        "WhaleHistory":whale_list,
-                        "Reward": reward,
-                        "LastStep": last_step
-                    }
-                else:
-                    reward, last_step, flight_minutes = auto.simulate_mdp_behavior(
-                        initial_state=(100, "moored"),
-                        true_success_prob=true_success_prob,
-                        simulate_failure=True
-                    )
+        for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
+            actual_data = self._load_weather_data(dt, directory=loc, i=i) if not self.use_expected else expected_data
+            actual_data = actual_data.loc[start_date:end_date]
+            auto.data = actual_data
 
-                    # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
-                    data[i] = {
-                        "Reward": reward,
-                        "LastStep": last_step,
-                        "FlightHours": flight_minutes/(60/dt)
-                    }
-        elif algo == "Charge Threshold": 
-            for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-                if self.use_expected:
-                    expected_data["shortwave_radiation"] = expected_data["expected_solar_rad"]
-                    actual_data = expected_data
-                else:
-                    actual_data = self._load_weather_data(dt,directory=loc,i=i)
-                    actual_data = actual_data.loc[start_date:end_date]
-                auto.data=actual_data
-                # Simulate the behavior
-                if self.save_history:
-                    reward, last_step,state_history_list,solar_list,whale_list = auto.simulate_fullcharge_behavior(
-                        initial_state=(100, "moored"),
-                        true_success_prob=true_success_prob,
-                        simulate_failure=True,
-                        save_history = self.save_history
-                    )
+            result = simulate_method(
+                initial_state=(100, "moored"),
+                true_success_prob=true_success_prob,
+                simulate_failure=True,
+                save_history=self.save_history,
+                threshold=threshold if algo == "Threshold" else None
+            )
 
-                    data[i] = {
-                        "Iteration": i,
-                        "StateHistory": state_history_list,
-                        "SolarHistory":solar_list,
-                        "ExpectedSolarHistory":expected_data["expected_solar_rad"].values,
-                        "WhaleHistory":whale_list,
-                        "Reward": reward,
-                        "LastStep": last_step
-                    }
-                else:
-                    reward, last_step, flight_minutes = auto.simulate_fullcharge_behavior(
-                        initial_state=(100, "moored"),
-                        true_success_prob=true_success_prob,
-                        simulate_failure=True
-                    )
+            data[i] = self._format_simulation_result(result, expected_data)
 
-                    # Store the data in a multilevel dictionary: {iteration: {reward: value, last_step: value}}
-                    data[i] = {
-                        "Reward": reward,
-                        "LastStep": last_step,
-                        "FlightHours": flight_minutes/(60/dt)
-                    }
+        return pd.DataFrame.from_dict(data, orient='index')
+    
+    def _format_simulation_result(self, result, expected_data):
+        if self.save_history:
+            reward, last_step, state_history, solar_list, whale_list = result
+            return {
+                "Reward": reward,
+                "LastStep": last_step,
+                "StateHistory": state_history,
+                "SolarHistory": solar_list,
+                "ExpectedSolarHistory": expected_data["expected_solar_rad"].values,
+                "WhaleHistory": whale_list
+            }
         else:
-            raise ValueError(f"Unknown algorithm: {algo}. Use 'Threshold' or 'Optimal'.")
-
-        # Convert the multilevel dictionary to a DataFrame
-        df = pd.DataFrame.from_dict(data, orient='index')  # 'index' means the outer keys become the rows
-        return df
+            reward, last_step, flight_minutes = result
+            return {
+                "Reward": reward,
+                "LastStep": last_step,
+                "FlightHours": flight_minutes / 60
+            }
  
         
     def get_expected_weather_data(self,start_date:datetime,end_date:datetime,dt:int,lat):

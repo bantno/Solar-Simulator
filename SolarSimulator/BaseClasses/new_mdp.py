@@ -152,6 +152,10 @@ class ExpectedValueTable:
             solar_power_w = sample*self.max_collected_power
             ev_0[i] = self._alpha(stage,state,0,solar_power_w)
             ev_1[i] = self._alpha(stage,state,1,solar_power_w)
+
+        # states = np.array([state]*n)
+        # ev_0 = self.alpha_vectorized(stage,states,np.array([0]*n),samples,self.ev_table,self.dt,self.plane,self.battery_capacity_wh,self.soc_increment,discretization=0.01)
+        # ev_1 = self.alpha_vectorized(stage,states,np.array([1]*n),samples,self.ev_table,self.dt,self.plane,self.battery_capacity_wh,self.soc_increment,discretization=0.01)
         
         d_alpha = ev_1-ev_0
         greater = sum(reward_k >= d_alpha)
@@ -227,8 +231,10 @@ class ExpectedValueTable:
         """
         next_state = self.calculate_next_state(state,action,solar_power_w)
         ev = self.lookup_expected_value(self.ev_table,stage+1,next_state)
+
         return ev
     
+   
     def soc_to_joules(self,soc):
         """
         Convert state of charge (SOC) to energy in Joules.
@@ -249,6 +255,197 @@ class ExpectedValueTable:
         """
         joules = soc/100*self.battery_capacity_wh*3600
         return int(joules)
+
+    def calculate_next_state_vectorized(self,states, actions, solar_powers, dt, plane, battery_capacity_wh, soc_increment):
+        """
+        Vectorized calculation of the next state of the system based on the current state, action, and solar power.
+
+        Args:
+            states (np.ndarray): Array of current states. Each state is a tuple where:
+                - `state[0]` is the SOC as a percentage (0 to 100).
+                - `state[1]` is the vehicle's current state ("flying", "moored", or "broken").
+            actions (np.ndarray): Array of actions (0 for "float", 1 for "fly").
+            solar_powers (np.ndarray): Array of available solar power values (in Watts).
+            dt (float): Time step duration (in minutes).
+            plane (object): The plane object with parameters for power and efficiency.
+            battery_capacity_wh (float): Battery capacity in Watt-hours.
+            soc_increment (float): Increment for SOC rounding.
+
+        Returns:
+            np.ndarray: Array of next states as tuples:
+                - new_soc (float): The updated SOC (limited to 100, or set to -1 if SOC < 0).
+                - new_vehicle_state (str): The updated vehicle state ("flying", "moored", or "broken").
+        """
+        # Extract SOC and vehicle states
+        socs = np.array([state[0] for state in states]).astype(int)
+        vehicle_states = np.array([state[1] for state in states])
+
+        # Calculate SOC changes using the vectorized SOC update function
+        delta_socs = self.calculate_soc_change_vectorized(plane, states, actions, solar_powers, dt, battery_capacity_wh, soc_increment)
+
+        # Update SOC and cap at 100
+        new_socs = np.minimum(socs + delta_socs, 100)
+
+        # Initialize new vehicle states with default transitions based on actions
+        new_vehicle_states = np.where(actions == 1, "flying", "moored")
+
+        # Handle "broken" states
+        broken_condition = (new_socs < 0) | (vehicle_states == "broken")
+        new_socs[broken_condition] = -1
+        new_vehicle_states[broken_condition] = "broken"
+
+        # Combine results into a structured array
+        next_states = np.array(list(zip(new_socs, new_vehicle_states)), dtype=object)
+
+        return next_states
+    def alpha_vectorized(self, stage, states, actions, solar_powers, ev_table, dt, plane, battery_capacity_wh, soc_increment, discretization):
+            """
+            Vectorized computation of the expected value for a given set of actions and states.
+
+            Args:
+                stage (int): The current stage of the system.
+                states (np.ndarray): Array of current states. Each state is a tuple:
+                    - `state[0]`: SOC as a percentage (0-100).
+                    - `state[1]`: Vehicle state ("flying", "moored", or "broken").
+                actions (np.ndarray): Array of actions (0 for "float", 1 for "fly").
+                solar_powers (np.ndarray): Array of solar power values (in Watts).
+                ev_table (np.ndarray): Precomputed lookup table for expected values.
+                dt (float): Time step duration (in minutes).
+                plane (object): The plane object with parameters for power and efficiency.
+                battery_capacity_wh (float): Battery capacity in Watt-hours.
+                soc_increment (float): Increment for SOC rounding.
+                discretization (float): SOC discretization step.
+
+            Returns:
+                np.ndarray: Array of expected values for the given actions and states.
+            """
+            # Calculate next states using the vectorized next state function
+            next_states = self.calculate_next_state_vectorized(
+                states, actions, solar_powers, dt, plane, battery_capacity_wh, soc_increment
+            )
+
+            # Extract next state SOC and vehicle states
+            next_socs = np.array([state[0] for state in next_states])
+            next_vehicle_states = np.array([state[1] for state in next_states])
+
+            # Map vehicle states to lookup indices
+            n_discrete = int(1 / discretization) + 1
+            row_indices = np.zeros_like(next_socs, dtype=int)
+            row_indices[next_vehicle_states == "moored"] = (next_socs / discretization).astype(int)
+            row_indices[next_vehicle_states == "flying"] = n_discrete + (next_socs / discretization).astype(int)
+            row_indices[next_vehicle_states == "broken"] = 2 * n_discrete
+
+            # Ensure row indices are valid (cap at array bounds)
+            row_indices = np.clip(row_indices, 0, ev_table.shape[0] - 1)
+
+            # Compute column indices for the next stage
+            column_indices = np.full_like(row_indices, stage + 1)
+            column_indices = np.clip(column_indices, 0, ev_table.shape[1] - 1)
+
+            # Lookup expected values in the table
+            expected_values = ev_table[row_indices, column_indices]
+
+            return expected_values
+    def calculate_soc_change_vectorized(self, plane, states, actions, solar_powers, dt, battery_capacity_wh, soc_increment):
+            """
+            Vectorized calculation of state of charge (SOC) change based on actions, solar power, and a single time step.
+
+            Args:
+                plane (object): The plane object containing operational parameters:
+                    - `required_cruise_power`
+                    - `required_takeoff_energy`
+                    - `idle_power`
+                    - `S` (wing area).
+                states (np.ndarray): Array of current states. Each state is a tuple where `state[1]` is "moored" or other.
+                actions (np.ndarray): Array of actions (0 for "float", 1 for "fly").
+                solar_powers (np.ndarray): Array of available solar power values (in Watts).
+                dt (float): Time step duration (in minutes).
+                battery_capacity_wh (float): Battery capacity in Watt-hours.
+                soc_increment (float): Increment for SOC rounding.
+
+            Returns:
+                np.ndarray: Array of SOC changes as percentages, rounded to the nearest SOC increment.
+            """
+            # Constants
+            panel_efficiency = 0.10  # Solar panel efficiency
+
+            # Map actions to required power and takeoff energy
+            required_power = np.where(actions == 1, plane.required_cruise_power, 0.0)
+            required_takeoff_energy = np.where(
+                (actions == 1) & (np.array([state[1] for state in states]) == "moored"),
+                plane.required_takeoff_energy,
+                0.0,
+            )
+
+            # Calculate net power
+            avionics_power = plane.idle_power
+            solar_input = solar_powers * panel_efficiency * plane.S
+            net_power = solar_input - required_power - avionics_power
+
+            # Convert power to energy change
+            energy_change = net_power * dt * 60 - required_takeoff_energy  # Power (W) to energy (J)
+            soc_changes = (energy_change / (battery_capacity_wh * 3600)) * 100  # Energy to SOC %
+
+            # Round to the nearest SOC increment
+            rounded_soc_changes = soc_increment * np.round(soc_changes / soc_increment)
+
+            return rounded_soc_changes
+    def f_W_vectorized(self, w, c_k, scale_k):
+        """
+        Compute the Weibull distribution PDF for a vector of wind speeds.
+
+        Parameters:
+        - w (np.ndarray): Array of wind speeds.
+        - c_k (float): Shape parameter of the Weibull distribution.
+        - scale_k (float): Scale parameter of the Weibull distribution.
+
+        Returns:
+        - np.ndarray: Array of PDF values corresponding to the input wind speeds.
+        """
+        w = np.asarray(w)  # Ensure w is a numpy array
+        pdf = np.zeros_like(w)  # Initialize result with zeros
+        valid = w >= 0  # Boolean mask for valid wind speeds (w >= 0)
+        pdf[valid] = (c_k / scale_k) * (w[valid] / scale_k)**(c_k - 1) * np.exp(-(w[valid] / scale_k)**c_k)
+        return pdf
+    def lookup_expected_value_vectorized(self,array, stages, states, discretization=0.01):
+        """
+        Vectorized version to look up values in a numpy array based on stages, states of charge, 
+        and vehicle states.
+
+        Parameters:
+            array (np.ndarray): The 2*n*1 by k numpy array to look up values from.
+            stages (np.ndarray): Array of column indices in the array.
+            states (list of tuples): A list of tuples, each containing:
+                - state_of_charge (float): The state of charge percentage (0-100 range).
+                - vehicle_state (str): The state of the vehicle, either "moored", "flying", or "broken".
+            discretization (float): The discretization step for the state of charge. Default is 0.01.
+
+        Returns:
+            np.ndarray: Array of values from the array corresponding to the inputs.
+        """
+        # Extract state_of_charge and vehicle_state from states
+        state_of_charge = np.array([state[0] for state in states]) / 100.0
+        vehicle_state = np.array([state[1] for state in states])
+
+        # Check bounds for state_of_charge
+        if not np.all((-1 <= state_of_charge) & (state_of_charge <= 1)):
+            raise ValueError(f"State of charge not within valid range. Expected 0 <= soc <= 100.")
+
+        # Calculate the number of discrete states based on discretization
+        n = int(1 / discretization) + 1
+
+        # Map vehicle states to row indices
+        row_indices = np.zeros_like(state_of_charge, dtype=int)
+        row_indices[vehicle_state == "moored"] = (state_of_charge / discretization).astype(int)
+        row_indices[vehicle_state == "flying"] = n + (state_of_charge / discretization).astype(int)
+        row_indices[vehicle_state == "broken"] = 2 * n
+
+        # Ensure stages are within bounds
+        if np.any((stages < 0) | (stages >= array.shape[1])):
+            raise IndexError("Some stage indices are out of bounds.")
+
+        # Gather the values using row_indices and stages
+        return array[row_indices, stages]
 
     def calculate_next_state(self, state, action, solar_power_w):
         """
@@ -408,24 +605,6 @@ class ExpectedValueTable:
         else:
             return 0
         
-    def f_W_vectorized(self, w, c_k, scale_k):
-        """
-        Compute the Weibull distribution PDF for a vector of wind speeds.
-
-        Parameters:
-        - w (np.ndarray): Array of wind speeds.
-        - c_k (float): Shape parameter of the Weibull distribution.
-        - scale_k (float): Scale parameter of the Weibull distribution.
-
-        Returns:
-        - np.ndarray: Array of PDF values corresponding to the input wind speeds.
-        """
-        w = np.asarray(w)  # Ensure w is a numpy array
-        pdf = np.zeros_like(w)  # Initialize result with zeros
-        valid = w >= 0  # Boolean mask for valid wind speeds (w >= 0)
-        pdf[valid] = (c_k / scale_k) * (w[valid] / scale_k)**(c_k - 1) * np.exp(-(w[valid] / scale_k)**c_k)
-        return pdf
-
     def _compute_success_probability(self, u_k, state_k,c_k,scale_k):
         """
         Compute the overall probability P(S) by integrating P(S|w_k) * f_W(w).
@@ -472,7 +651,7 @@ class ExpectedValueTable:
         
         E_J_k = (1-p_4)*(p_success_u_0)*(alpha_u_0) + p_4*(reward_k + p_success_u_1*alpha_u_1)
         return E_J_k
-    
+
     @staticmethod
     def lookup_expected_value(array, stage, state, discretization=0.01):
         """
@@ -532,7 +711,7 @@ if __name__ == "__main__":
 
     # Sample data for solar, wind, and whale observation
 
-    stages = 100
+    stages = 144*30
 
     # Solar: [Stage, Alpha, Beta]
     solar_data = np.random.uniform(5, 15, size=(stages,3))

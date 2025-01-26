@@ -298,8 +298,8 @@ class ExpectedValueTable:
         # Set state to 2 if SoC falls below 0, and handle the vehicle state update
         new_soc, new_vehicle_states = np.where(new_soc < 0, -1, new_soc), np.where(new_soc < 0, 2, new_vehicle_state)
 
-        if new_soc.size == 1:
-            return (new_soc[0], new_vehicle_states[0])
+        if new_soc.ndim == 0:
+            return (new_soc, new_vehicle_states)
 
         # Return updated states as a list of tuples
         return np.column_stack((new_soc, new_vehicle_states))

@@ -20,7 +20,7 @@ class mdp:
         self.vehicle_states = vehicle_states
         self.actions = actions
         self.dt = dt
-        self.gamma = 0.99999
+        self.gamma = 1.0
         self.epsilon = epsilon
         self.show_progress = False
 

@@ -146,27 +146,15 @@ class ExpectedValueTable:
             - The method evaluates the proportion of samples where the reward 
             difference `d_alpha` is greater than or equal to the threshold `reward_k`.
         """
-        start_time = time.time()
-        # samples = betaDist.rvs(alpha_k, beta_k, size=n) * self.max_collected_power
         samples = np.random.beta(alpha_k,beta_k,size=n)*self.max_collected_power
-        elapsed_time = time.time() - start_time
-        # print(f"Function took {elapsed_time:.8f} seconds to run.")
-        # start_time = time.time()
+        
         ev_0 = np.array(self._alpha(stage, state, 0, samples))
         ev_1 = np.array(self._alpha(stage, state, 1, samples))
-        # elapsed_time = time.time() - start_time
-        # print(f"Function took {elapsed_time:.8f} seconds to run.")
 
         d_alpha = ev_1-ev_0
         p_sufficient_reward = np.mean(reward_k >= d_alpha)
 
         return p_sufficient_reward,np.mean(ev_0),np.mean(ev_1)
-
-        # solar_power_w = alpha_k/(alpha_k+beta_k)*self.max_collected_power
-        # ev_0 = self._alpha(stage,state,0,solar_power_w)
-        # ev_1 = self._alpha(stage,state,1,solar_power_w)
-        # d_alpha = ev_1-ev_0
-        # return int(reward_k>d_alpha),ev_0,ev_1
 
     def _calculate_required_energy(self,state,action):
         """
@@ -229,9 +217,8 @@ class ExpectedValueTable:
             - The expected value for the next state is retrieved from a precomputed 
             lookup table (`self.ev_table`) for the subsequent stage (`stage + 1`).
         """
-        start_time = time.time()
+
         next_state = self.calculate_next_state(state,action,solar_power_w)
-        state_time = time.time()
         ev = self.lookup_expected_value(self.ev_table,stage+1,next_state)
         # print(state_time-start_time,time.time()-state_time)
         return ev
@@ -312,10 +299,10 @@ class ExpectedValueTable:
         new_soc, new_vehicle_states = np.where(new_soc < 0, -1, new_soc), np.where(new_soc < 0, "broken", new_vehicle_state)
 
         if new_soc.size == 1:
-            return new_soc[0], new_vehicle_states[0]
+            return (new_soc[0], new_vehicle_states[0])
 
         # Return updated states as a list of tuples
-        return list(zip(new_soc, new_vehicle_states))
+        return np.column_stack((new_soc, new_vehicle_states))
 
     def _calculate_soc_update(self, plane, state, action, dt, solar_power):
         """
@@ -547,7 +534,7 @@ if __name__ == "__main__":
 
     # Sample data for solar, wind, and whale observation
 
-    stages = 10
+    stages = 144
 
     # Solar: [Stage, Alpha, Beta]
     solar_data = np.random.uniform(5, 15, size=(stages,3))

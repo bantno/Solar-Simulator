@@ -15,6 +15,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
 from BaseClasses.mdp import mdp
+from BaseClasses.new_mdp import ExpectedValueTable
 from BaseClasses.whale_sighting_base import WhaleSighting
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.autonomy_base import Autonomy
@@ -65,21 +66,30 @@ class Simulation:
 
     def simulate_deployment(self, start_date, end_date, dt, algo: str, mdp_success_prob, true_success_prob, num_runs, threshold):
         self.plane.update_plane()
-        expected_data = self.get_expected_weather_data(start_date, end_date, dt, self.lat)
+        times = pd.date_range(
+                start=start_date,
+                end=end_date,
+                freq=pd.Timedelta(minutes=dt),
+                inclusive="both"
+            )
+        expected_data = self.get_expected_weather_data(start_date, end_date, dt, self.lat, self.lon)
+        
+        solar_columns = ['beta_alpha', 'beta_beta', 'expected_solar_rad']
+        expected_solar_data = expected_data[solar_columns].to_numpy()
+
+        wind_columns = ['weibull_k', 'weibull_scale', 'expected_wind_speed']
+        expected_wind_data = expected_data[wind_columns].to_numpy()
+
+
         loc = rf"Data\SYNTHETIC_DATA\lat{int(self.lat)}"
 
-        mdp_model = mdp(
-            self.plane,
-            soc_increment=1,
-            vehicle_states=["moored", "flying"],
-            actions=["float", "fly"],
-            start_date=start_date,
-            end_date=end_date,
-            expected_data=expected_data,
-            whale_surface_probs=self.whale_table,
-            dt=dt,
-            mission_success_prob=mdp_success_prob
-        )
+        whale_observation_data = self.get_whale_observation_probabilities(times)
+        mdp_model = ExpectedValueTable(self.plane,
+                                       expected_solar_data,
+                                       expected_wind_data,
+                                       whale_observation_data,
+                                       soc_increment=1,
+                                       timestep_min=dt)
 
         auto = Autonomy(dt, mdp_model=mdp_model, data=None, whale_probabilities=self.whale_table)
         mdp_model.show_progress = True
@@ -96,10 +106,10 @@ class Simulation:
 
         simulate_method = simulation_methods[algo]
         if algo == "Optimal":
-            mdp_model.create_ev_table()
+            mdp_model.generate_ev_table()
 
         for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-            actual_data = self._load_weather_data(dt, directory=loc, i=i) if not self.use_expected else expected_data
+            actual_data = self._load_weather_data(dt, directory=loc, i=i, lat=self.lat, lon=self.lon) if not self.use_expected else expected_data
             actual_data = actual_data.loc[start_date:end_date]
             auto.data = actual_data
 
@@ -135,9 +145,9 @@ class Simulation:
             }
  
         
-    def get_expected_weather_data(self,start_date:datetime,end_date:datetime,dt:int,lat):
+    def get_expected_weather_data(self,start_date:datetime,end_date:datetime,dt:int,lat,lon):
         """Return expected and actual solar and wind data for given indices."""
-        df = self._load_expected_weather_data(dt,lat)
+        df = self._load_expected_weather_data(dt,lat,lon)
         # Define start and end dates (month, day, hour, minute)
         start_month = start_date.month
         start_day = start_date.day
@@ -168,13 +178,19 @@ class Simulation:
         
         return expected_data
 
-    def _load_weather_data(self, dt: int, directory: str=None, i=None):
-        """Load actual solar and wind data from pickle files with a specific timestep in the filename."""
-        # Create regex pattern to match files with the specified timestep (in minutes)
-        if i is None :
-            pattern = rf"data_{dt}min\.pkl$"
+    def _load_weather_data(self, dt: int, directory: str=None, i=None, lat=None, lon=None):
+        """Load actual solar and wind data from pickle files with a specific timestep and optional index in the filename."""
+        # Create regex pattern to match files with the specified timestep, latitude, longitude, and index
+        if i is None:
+            if lat is not None and lon is not None:
+                pattern = rf"data_lat{lat}_lon{lon}_{dt}min(_{i})?\.pkl$"
+            else:
+                pattern = rf"data_{dt}min(_{i})?\.pkl$"
         else:
-            pattern = rf"data_{dt}min_{i}\.pkl$"
+            if lat is not None and lon is not None:
+                pattern = rf"data_lat{lat}_lon{lon}_{dt}min_{i}\.pkl$"
+            else:
+                pattern = rf"data_{dt}min_{i}\.pkl$"
         
         # Search for the file in the specified directory
         actual_file = None
@@ -185,16 +201,16 @@ class Simulation:
 
         if actual_file:
             actual_data = pd.read_pickle(actual_file)
-            # actual_data = actual_data[~((actual_data.index.month == 2) & (actual_data.index.day == 29))]
+            # actual_data = actual_data[~((actual_data.index.month == 2) & (actual_data.index.day == 29))]  # Uncomment if needed
             return actual_data
         else:
-            raise FileNotFoundError(f"No weather file found in '{directory}' with timestep '{dt}' minutes.")
+            raise FileNotFoundError(f"No weather file found in '{directory}' with timestep '{dt}' minutes, latitude '{lat}', longitude '{lon}', and index '{i}'.")
 
-    def _load_expected_weather_data(self, dt: int, lat, directory: str=r"Data\EXPECTED_DATA"):
+
+    def _load_expected_weather_data(self, dt: int, lat: float, lon: float, directory: str=r"Data\EXPECTED_DATA"):
         """Load expected solar and wind data from pickle files with a specific timestep in the filename."""
-        # Create regex pattern to match files with the specified timestep (in minutes)
-        directory = rf"Data\EXPECTED_DATA\lat{lat}"
-        pattern = rf"data_expected_{dt}min_lat{lat}\.pkl$"
+        # Create regex pattern to match files with the specified timestep, latitude, and longitude
+        pattern = rf"data_expected_lat{lat}_lon{lon}_{dt}min.pkl$"
         
         # Search for the file in the specified directory
         expected_file = None
@@ -207,5 +223,28 @@ class Simulation:
             expected_data = pd.read_pickle(expected_file)
             return expected_data
         else:
-            raise FileNotFoundError(f"No expected weather file found in '{directory}' with timestep '{dt}' minutes and latitude '{lat}'.")
+            raise FileNotFoundError(f"No expected weather file found in '{directory}' with timestep '{dt}' minutes, latitude '{lat}', and longitude '{lon}'.")
 
+    @staticmethod
+    def get_whale_observation_probabilities(time_index: pd.DatetimeIndex):
+        # Define the time intervals and probabilities
+        time_intervals = [
+            ("0600", "0800", 0.082),
+            ("0800", "1000", 0.098),
+            ("1000", "1200", 0.095),
+            ("1200", "1400", 0.217),
+            ("1400", "1600", 0.215),
+            ("1600", "2000", 0.278)
+        ]
+        
+        # Function to get the whale observation probability for a given time
+        def get_probability_for_time(time):
+            time_str = time.strftime("%H%M")
+            for interval_start, interval_end, prob in time_intervals:
+                if interval_start <= time_str < interval_end:
+                    return prob
+            return 0.0  # Return 0.0 if the time doesn't fall into any interval
+
+        # Apply the function to the DatetimeIndex and return the probabilities
+        probabilities = np.array(time_index.map(get_probability_for_time))
+        return probabilities

@@ -4,7 +4,7 @@ import time
 from tqdm import tqdm
 from scipy.stats import beta as betaDist
 from scipy.stats import weibull_min
-from scipy.integrate import quad, simps
+from scipy.integrate import quad, simpson
 sys.path.append(r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\SolarSimulator\BaseClasses")
 from seaplane_base import Seaplane
 
@@ -18,7 +18,7 @@ class ExpectedValueTable:
         self.soc_increment = soc_increment
         self.expected_solar = expected_solar_data
         self.expected_wind = expected_wind_data
-        self.states = self._create_states(soc_increment,["moored","flying"])
+        self.states = self._create_states(soc_increment,[0,1])
 
         if 100 % soc_increment != 0:
             raise ValueError("Specified state of charge increment does not divide evenly into 100%.")
@@ -32,7 +32,7 @@ class ExpectedValueTable:
         Generate a list of states based on state of charge (SoC) increments and vehicle states.
         """
         states = [(soc, state) for state in vehicle_states for soc in range(0, 101, soc_increment)]
-        states.append((-1,"broken"))
+        states.append((-1,2))
         return states
 
     def generate_ev_table(self):
@@ -165,7 +165,7 @@ class ExpectedValueTable:
 
         Args:
             state (tuple): The current state of the system, where `state[1]` indicates 
-                whether the plane is "moored" or in another state.
+                whether the plane is 0 or in another state.
             action (int): The action to evaluate:
                 - 0: Idle.
                 - 1: Cruise (with potential takeoff if moored).
@@ -188,7 +188,7 @@ class ExpectedValueTable:
             required_energy_J += self.plane.idle_power*timestep_s
         elif action == 1 :
             required_energy_J += self.plane.required_cruise_power*timestep_s
-            if state[1] == "moored":
+            if state[1] == 0:
                 required_energy_J += self.plane.required_takeoff_energy
         else:
             raise ValueError("Invlaid action specified.")
@@ -256,15 +256,15 @@ class ExpectedValueTable:
         Args:
             state (tuple): The current state of the system, where:
                 - `state[0]` represents the SOC as a percentage (0 to 100).
-                - `state[1]` represents the vehicle's current state ("flying", "moored", or "broken").
+                - `state[1]` represents the vehicle's current state (1, 0, or 2).
             action (str): The action to perform ("fly" or "float").
             solar_power_w (float): The available solar power (in Watts).
 
         Returns:
             tuple: The next state of the system as:
                 - new_soc (float): The updated SOC (limited to a maximum of 100, 
-                or set to -1 if the SOC falls below 0, indicating a "broken" state).
-                - new_vehicle_state (str): The updated vehicle state ("flying", "moored", or "broken").
+                or set to -1 if the SOC falls below 0, indicating a 2 state).
+                - new_vehicle_state (str): The updated vehicle state (1, 0, or 2).
 
         Raises:
             ValueError: If an invalid action is specified.
@@ -273,15 +273,15 @@ class ExpectedValueTable:
             - The SOC update is calculated using `_calculate_soc_update`, which incorporates 
             energy consumption and solar power input over the time step (`self.dt`).
             - The vehicle state transitions based on the action and current state:
-                - "broken" state is maintained if already broken or if the SOC falls below 0.
-                - "fly" action transitions the vehicle to "flying".
-                - "float" action transitions the vehicle to "moored".
+                - 2 state is maintained if already broken or if the SOC falls below 0.
+                - "fly" action transitions the vehicle to 1.
+                - "float" action transitions the vehicle to 0.
         """
         soc = state[0]
 
         # Handle broken state upfront
-        if state[1] == "broken":
-            return (-1, "broken")
+        if state[1] == 2:
+            return (-1, 2)
 
         # Calculate SoC update
         delta_soc = self._calculate_soc_update(self.plane, state, action, self.dt, solar_power_w)
@@ -289,14 +289,14 @@ class ExpectedValueTable:
 
         # Determine new vehicle state
         if action == 1:
-            new_vehicle_state = "flying"
+            new_vehicle_state = 1
         elif action == 0:
-            new_vehicle_state = "moored"
+            new_vehicle_state = 0
         else:
             raise ValueError(f"Invalid action. Expected action 0 or 1, got {action}.")
 
-        # Set state to "broken" if SoC falls below 0, and handle the vehicle state update
-        new_soc, new_vehicle_states = np.where(new_soc < 0, -1, new_soc), np.where(new_soc < 0, "broken", new_vehicle_state)
+        # Set state to 2 if SoC falls below 0, and handle the vehicle state update
+        new_soc, new_vehicle_states = np.where(new_soc < 0, -1, new_soc), np.where(new_soc < 0, 2, new_vehicle_state)
 
         if new_soc.size == 1:
             return (new_soc[0], new_vehicle_states[0])
@@ -312,7 +312,7 @@ class ExpectedValueTable:
             plane (object): The plane object containing operational parameters such as 
                 required cruise power, takeoff energy, idle power, and wing area (`S`).
             state (tuple): The current state of the system, where `state[1]` indicates 
-                whether the plane is "moored" or in another state.
+                whether the plane is 0 or in another state.
             action (np.ndarray): Array of actions (0 for "float", 1 for "fly") of shape (n,).
             solar_power (np.ndarray): Available solar power values (in Watts) of shape (n, 1).
             dt (float): The duration of the time step (in minutes).
@@ -326,7 +326,7 @@ class ExpectedValueTable:
 
         # Initialize constants
         panel_efficiency = 0.10
-        required_takeoff_energy = plane.required_takeoff_energy if state[1] == "moored" and action == 1 else 0
+        required_takeoff_energy = plane.required_takeoff_energy if state[1] == 0 and action == 1 else 0
 
         # Map actions to required power
         required_power = plane.required_cruise_power if action == 1 else 0
@@ -358,11 +358,11 @@ class ExpectedValueTable:
         Returns:
         - float: Probability of success P(S|w_k).
         """
-        if state[1] == "moored":
+        if state[1] == 0:
             x_2 = 0
-        elif state[1] == "flying":
+        elif state[1] == 1:
             x_2 = 1
-        elif state[1] == "broken":
+        elif state[1] == 2:
             return 0
         else:
             raise ValueError("Invalid state.")
@@ -414,9 +414,9 @@ class ExpectedValueTable:
         # result, _ = quad(integrand, 0, 100)
         # return result
 
-        x = np.linspace(0, 45, 1000) 
+        x = np.linspace(0, 45, 501) 
         y = integrand(x)
-        result = simps(y,x)
+        result = simpson(x=x,y=y)
         return result
         
 
@@ -469,7 +469,7 @@ class ExpectedValueTable:
             stage (int): The column index in the array.
             states (list): A list of tuples, each containing:
                 - state_of_charge (float): The state of charge percentage (0-100 range).
-                - vehicle_state (str): The state of the vehicle, either "moored", "flying", or "broken".
+                - vehicle_state (str): The state of the vehicle, either 0, 1, or 2.
             discretization (float): The discretization step for the state of charge. Default is 0.01.
         
         Returns:
@@ -482,7 +482,7 @@ class ExpectedValueTable:
             states_array = np.expand_dims(states_array, axis=0)
         state_of_charge = states_array[:, 0].astype(float)  # Extract the state of charge values
         vehicle_state = states_array[:, 1]    # Extract the vehicle state values
-        valid_options = ["moored", "flying", "broken"]
+        valid_options = [0, 1, 2]
 
         invalid_values = ~np.isin(vehicle_state, valid_options)
         if np.any(invalid_values):
@@ -501,9 +501,9 @@ class ExpectedValueTable:
 
         # Map vehicle state to row indices using numpy vectorized operations
         row_indices = np.zeros_like(state_of_charge, dtype=int)
-        row_indices[vehicle_state == "moored"] = (state_of_charge[vehicle_state == "moored"] / discretization).astype(int)
-        row_indices[vehicle_state == "flying"] = n + (state_of_charge[vehicle_state == "flying"] / discretization).astype(int)
-        row_indices[vehicle_state == "broken"] = 2 * n
+        row_indices[vehicle_state == 0] = (state_of_charge[vehicle_state == 0] / discretization).astype(int)
+        row_indices[vehicle_state == 1] = n + (state_of_charge[vehicle_state == 1] / discretization).astype(int)
+        row_indices[vehicle_state == 2] = 2 * n
 
         # Ensure the stage index is within bounds
         if stage < 0 or stage > array.shape[1]:
@@ -534,7 +534,7 @@ if __name__ == "__main__":
 
     # Sample data for solar, wind, and whale observation
 
-    stages = 144
+    stages = 96*30
 
     # Solar: [Stage, Alpha, Beta]
     solar_data = np.random.uniform(5, 15, size=(stages,3))

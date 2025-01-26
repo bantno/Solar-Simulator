@@ -73,8 +73,8 @@ class ExpectedValueTable:
             - The method uses helper functions to calculate probabilities for 
             sufficient solar energy and sufficient reward.
         """
-        alpha_k = self.expected_solar[stage,1]
-        beta_k  = self.expected_solar[stage,2]
+        alpha_k = self.expected_solar[stage,0]
+        beta_k  = self.expected_solar[stage,1]
         max_collected_energy_J = self.max_collected_power*self.dt*60
         current_energy_J = self.soc_to_joules(state[0])
         required_energy_J = self._calculate_required_energy(state,action=1)

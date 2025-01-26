@@ -4,11 +4,12 @@ import re
 import signal
 
 from datetime import datetime, timedelta, timezone
+from timezonefinder import TimezoneFinder
+from zoneinfo import ZoneInfo
 from multiprocessing import Pool
 
 from tqdm import tqdm
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from seaplane_base import Seaplane
 from simulation_base import Simulation
@@ -42,7 +43,8 @@ class SolarPlaneSimulation:
         self.save_dir = save_dir
 
         # Time settings
-        utc_offset = timezone(timedelta(hours=0))
+        
+        utc_offset = timezone(self._get_utc_offset(self.lat, self.lon))
         self.start_date = pd.to_datetime(datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=utc_offset))
         self.end_date = pd.to_datetime(datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=utc_offset))
 
@@ -57,6 +59,25 @@ class SolarPlaneSimulation:
         # Initialize the simulation
         self.simulation = Simulation(self.plane, self.lat, self.lon, self.tz, save_history=self.visualize,use_expected=use_expected)
         self.results = []  # To store processed results
+    
+    @staticmethod
+    def _get_utc_offset(lat, lon, date=None):
+        # Determine the timezone from latitude and longitude
+        tf = TimezoneFinder()
+        timezone_str = tf.timezone_at(lat=lat, lng=lon)
+        if timezone_str is None:
+            raise ValueError("Could not determine timezone for the given location.")
+        
+        # Use the date provided or the current time
+        date = date or datetime.now()
+
+        # Calculate the UTC offset
+        timezone = ZoneInfo(timezone_str)
+        utc_offset_seconds = date.astimezone(timezone).utcoffset().total_seconds()
+        utc_offset = timedelta(seconds=utc_offset_seconds)
+
+        return utc_offset
+
 
     def _save_data(self, data, filename):
         """
@@ -192,10 +213,10 @@ class SolarPlaneSimulation:
 if __name__ == "__main__":
     # Initialize the SolarPlaneSimulation with relevant parameters
     simulation = SolarPlaneSimulation(
-        lat=0, lon=-90, tz="Etc/GMT-0", # Location parameters
+        lat=30, lon=-90, tz="America/Chicago", # Location parameters
         start_date="2024-01-01",        # Simulation start date
-        end_date="2024-05-30",          # Simulation end date
-        dt=10,                          # Time step in minutes
+        end_date="2024-01-03",          # Simulation end date
+        dt=15,                          # Time step in minutes
         num_runs=1,                     # Number of simulation runs
         visualize=True,                 # Enable visualization
         save_dir=r".",                  # Directory to save results

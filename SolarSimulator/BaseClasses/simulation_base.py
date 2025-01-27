@@ -231,7 +231,7 @@ class Simulation:
     def get_whale_observation_probabilities(time_index: pd.DatetimeIndex):
         # Define the time intervals and probabilities
         time_intervals = [
-            ("0600", "0800", 0.082),
+            # ("0600", "0800", 0.082),
             ("0800", "1000", 0.098),
             ("1000", "1200", 0.095),
             ("1200", "1400", 0.217),

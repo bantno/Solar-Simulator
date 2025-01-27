@@ -11,22 +11,25 @@ class Autonomy:
         self.panel_efficiency = 0.10
 
     def simulate_simple_behavior(self,
-                                 initial_state,
-                                 true_success_prob,
-                                 simulate_failure = False,
-                                 save_history = False,
-                                 threshold = 0.1):
+                                initial_state,
+                                solar_data, wind_data, whale_data,
+                                true_success_prob,
+                                simulate_failure = False,
+                                save_history = False,
+                                threshold=None):
 
         reward = 0
-        max_stages = len(self.data)-1
-        # print(f"Threshold = {threshold}\n")
+        if len(whale_data) == len(wind_data) and len(wind_data) == len(solar_data):
+            max_stages = len(wind_data)
+        else:
+            raise ValueError(f"Data lengths are not equal. Wind: {len(wind_data)}, Solar: {len(solar_data)}, Whale: {len(whale_data)}.")
 
         self.stepwise_failure_prob = 1-true_success_prob
         
         night_hours = 12
-        nightly_idle_soc = np.ceil((self.mdp_model.plane.idle_power*night_hours*3600)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
-        single_flight_soc = np.ceil((self.mdp_model.plane.get_required_power(20,1.2)*self.dt*60+self.mdp_model.plane.required_takeoff_energy)/(self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600)*100)
-        battery_capacity_J = self.mdp_model.plane.capacity*self.mdp_model.plane.voltage*3600
+        nightly_idle_soc = np.ceil((self.plane.idle_power*night_hours*3600)/(self.plane.capacity*self.plane.voltage*3600)*100)
+        single_flight_soc = np.ceil((self.plane.get_required_power(20,1.2)*self.dt*60+self.plane.required_takeoff_energy)/(self.plane.capacity*self.plane.voltage*3600)*100)
+        battery_capacity_J = self.plane.capacity*self.plane.voltage*3600
         
         # Preallocate arrays with a fixed size
         state_history_list = np.empty(max_stages,dtype=tuple)  # Adjust dimensions based on the state size
@@ -37,8 +40,7 @@ class Autonomy:
         # Initialize the first elements
         state_history_list[0] = initial_state
         energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
-        shortwave_radiation = self.data["shortwave_radiation"].values
-        solar_power_list[0] = shortwave_radiation[0]
+        solar_power_list[0] = solar_data[0]
         whale_list[0] = 0.0
         flight_minutes = 0.0
         
@@ -46,21 +48,20 @@ class Autonomy:
         for k in range(max_stages-1):
             current_state = state_history_list[k]
             current_energy = energy_history_list[k]
-            solar_power_wpm2 = shortwave_radiation[k]
-            whale_prob = self.get_sighting_probability(self.whale_prob,k,self.dt,0)
+            solar_power_wpm2 = solar_data[k]
+            wind_speed = wind_data[k]
+            whale_prob = whale_data[k]
             is_reward_sufficient = whale_prob>threshold and solar_power_wpm2>0
             is_battery_sufficient = current_state[0] > nightly_idle_soc + single_flight_soc*2 # TODO: Create better way to determine this
 
             if is_reward_sufficient and is_battery_sufficient:
-                best_action = "fly"
+                best_action = 1
                 flight_minutes += self.dt
             else :
-                best_action = "float"
+                best_action = 0
 
             if simulate_failure:
-                _,failure_prob = self.calculate_maneuver_probabilities(current_state=current_state[1],
-                                                                                    action=best_action,
-                                                                                    stage=k)
+                failure_prob = 1-self.mdp_model._P_S_given_w(wind_speed, best_action, current_state, p_f=1-true_success_prob)
             else:
                 failure_prob = -1
 
@@ -68,16 +69,14 @@ class Autonomy:
             
             new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
             new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
-            reward+=self.R(current_state,best_action,k,whale_prob)
+            reward+=self.simulate_stochastic_reward(current_state,best_action,k,whale_prob)
             state_history_list[k+1]=new_state
             energy_history_list[k+1]=new_energy
             whale_list[k+1]=whale_prob
             solar_power_list[k+1] = solar_power_wpm2
             if not is_action_successful :
-                reward -= self.failure_penalty # TODO MAKE whale penalty a parameter
                 break
             if new_state[0] < 0 :
-                reward = reward-self.failure_penalty
                 break
         
         # print(reward)
@@ -206,8 +205,8 @@ class Autonomy:
                 value_list[idx] = self.mdp_model._alpha(k,current_state,action,solar_power_wpm2)
             
             reward_u_k_1 = whale_prob
-            d_alpha = value_list[1]-value_list[0]
-            if reward_u_k_1 > d_alpha:
+            d_alpha = value_list[0]-value_list[1]
+            if reward_u_k_1 >= d_alpha:
                 best_action = 1
                 flight_minutes += self.dt
             else:

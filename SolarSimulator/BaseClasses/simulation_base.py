@@ -91,7 +91,7 @@ class Simulation:
                                        soc_increment=1,
                                        timestep_min=dt)
 
-        auto = Autonomy(dt, mdp_model=mdp_model, data=None, whale_probabilities=self.whale_table)
+        auto = Autonomy(dt, mdp_model)
         mdp_model.show_progress = True
 
         data = {}
@@ -111,10 +111,12 @@ class Simulation:
         for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
             actual_data = self._load_weather_data(dt, directory=loc, i=i, lat=self.lat, lon=self.lon) if not self.use_expected else expected_data
             actual_data = actual_data.loc[start_date:end_date]
-            auto.data = actual_data
 
             result = simulate_method(
-                initial_state=(100, "moored"),
+                initial_state=(100, 0),
+                solar_data=actual_data["shortwave_radiation"].values,
+                wind_data=actual_data["wind_speed_10m"].values,
+                whale_data=whale_observation_data,
                 true_success_prob=true_success_prob,
                 simulate_failure=True,
                 save_history=self.save_history,

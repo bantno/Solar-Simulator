@@ -103,7 +103,7 @@ class StateHistoryPlotter:
             states = [state[1] for state in state_history]
             cumulative_hours = [0]
             for i in range(len(states)):
-                if states[i] == "flying":
+                if states[i] == 1:
                     cumulative_hours.append(cumulative_hours[-1] + self.dt / 60.0)
                 else:
                     cumulative_hours.append(cumulative_hours[-1])

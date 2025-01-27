@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 import time
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 from scipy.stats import beta as betaDist
 from scipy.stats import weibull_min
@@ -39,6 +40,8 @@ class ExpectedValueTable:
         for k in tqdm(range(self.ev_table.shape[1]-1,-1,-1)):
             for idx,state in enumerate(self.states[:-1]):
                 self.ev_table[idx,k] = self._ev_entry(k,state)
+
+        self.plot_surface(self.ev_table)
     
     def _calculate_case_probabilities(self,stage,state,reward_k):
         """
@@ -325,7 +328,6 @@ class ExpectedValueTable:
         solar_power = np.atleast_2d(solar_power).flatten()  # Ensure 1D array
 
         # Initialize constants
-        panel_efficiency = 0.10
         required_takeoff_energy = plane.required_takeoff_energy if state[1] == 0 and action == 1 else 0
 
         # Map actions to required power
@@ -333,7 +335,7 @@ class ExpectedValueTable:
 
         # Calculate net power balance
         avionics_power = plane.idle_power
-        solar_input = solar_power * panel_efficiency * plane.S
+        solar_input = solar_power
         net_power = solar_input - required_power - avionics_power
 
         # Convert power (W) to energy (Joules) and then to change in SoC (%)
@@ -368,13 +370,13 @@ class ExpectedValueTable:
             raise ValueError("Invalid state.")
         
         if u_k == 1 and x_2 == 0:  # Takeoff
-            return 1 - 1 / (1 + np.exp(6 - 0.35 * w))
+            return 1 - 1 / (1 + np.exp(15 - 0.35 * w))
         elif u_k == 0 and x_2 == 0:  # Floating
             return 1 - p_f
         elif u_k == 1 and x_2 == 1:  # Flying
             return 1 - p_f
         elif u_k == 0 and x_2 == 1:  # Landing
-            return 1 - 1 / (1 + np.exp(4 - 0.35 * w))
+            return 1 - 1 / (1 + np.exp(10 - 0.35 * w))
         else:
             raise ValueError("Invalid combination of u_k and x_2.")
 
@@ -408,7 +410,7 @@ class ExpectedValueTable:
         # Define the integrand
         def integrand(w):
             # return self._P_S_given_w(w, u_k, state_k) * self.f_W(w,c_k,scale_k)
-            return self._P_S_given_w(w, u_k, state_k) * self.f_W_vectorized(w,c_k,scale_k)
+            return self._P_S_given_w(w, u_k, state_k,p_f=0.0) * self.f_W_vectorized(w,c_k,scale_k)
         
         # Integrate over the domain of the Weibull distribution [0, ∞)
         # result, _ = quad(integrand, 0, 100)
@@ -421,11 +423,6 @@ class ExpectedValueTable:
         
 
     def _ev_entry(self,k,state):
-
-        # # Use this if decide to calculate alpha w/o using expected solar
-        # solar_power_w = self.expected_solar[k]
-        # alpha_u_0 = self._alpha(k,x_bar,0,solar_power_w)
-        # alpha_u_1 = self._alpha(k,x_bar,1,solar_power_w)
 
         reward_k = self.whale_probability_data[k]*1
         wind_shape_k = self.expected_wind[k,0]
@@ -519,6 +516,69 @@ class ExpectedValueTable:
             return results[0]
 
         return results.tolist()
+
+        # Separate data
+    
+    @staticmethod
+    def plot_surface(data, capacity=50):
+        """
+        Plots separate surface plots for the 'moored,' 'flying,' and 'broken' states.
+
+        Parameters:
+            data (numpy.ndarray): A 2D array where:
+                - Rows 0-100 represent battery percentages for the 'moored' state.
+                - Rows 101-201 represent battery percentages for the 'flying' state.
+                - Row 202 represents the 'broken' state.
+            capacity (int): Battery capacity in Ah (used for the plot titles).
+        """
+        # Extract data for each state
+        moored_data = data[:101, :]
+        flying_data = data[101:202, :]
+        broken_data = data[202:, :]
+
+        # Generate grids
+        time_steps = np.arange(data.shape[1])  # Time steps (x-axis)
+        battery_percentages = np.linspace(0, 100, 101)  # Battery percentages (y-axis)
+
+        # Plot for 'moored' state
+        fig = plt.figure(figsize=(12, 8))
+        ax = plt.subplot(projection='3d')
+        X, Y = np.meshgrid(time_steps, battery_percentages)
+        surf = ax.plot_surface(X, Y, moored_data, cmap="viridis", edgecolor='none')
+        cbar = plt.colorbar(surf, ax=ax, shrink=0.5, aspect=10)
+        cbar.set_label("Expected Value")
+        ax.set_title(f"Surface Plot for State: Moored\nBattery Capacity: {capacity} Ah")
+        ax.set_xlabel("Stages")
+        ax.set_ylabel("State of Charge (%)")
+        ax.set_zlabel("Expected Value")
+        plt.tight_layout()
+        plt.show()
+
+        # Plot for 'flying' state
+        fig = plt.figure(figsize=(12, 8))
+        ax = plt.subplot(projection='3d')
+        surf = ax.plot_surface(X, Y, flying_data, cmap="plasma", edgecolor='none')
+        cbar = plt.colorbar(surf, ax=ax, shrink=0.5, aspect=10)
+        cbar.set_label("Expected Value")
+        ax.set_title(f"Surface Plot for State: Flying\nBattery Capacity: {capacity} Ah")
+        ax.set_xlabel("Stages")
+        ax.set_ylabel("State of Charge (%)")
+        ax.set_zlabel("Expected Value")
+        plt.tight_layout()
+        plt.show()
+
+        # Plot for 'broken' state (single row, flatten data)
+        fig = plt.figure(figsize=(12, 8))
+        ax = plt.subplot(projection='3d')
+        ax.plot(np.arange(data.shape[1]), [0] * data.shape[1], broken_data.flatten(), label="Broken State", color="red")
+        ax.set_title(f"Surface Plot for State: Broken\nBattery Capacity: {capacity} Ah")
+        ax.set_xlabel("Stages")
+        ax.set_ylabel("State of Charge (%)")
+        ax.set_zlabel("Expected Value")
+        ax.legend()
+        plt.tight_layout()
+        plt.show()
+
 
     
 if __name__ == "__main__":

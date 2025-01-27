@@ -161,4 +161,6 @@ if __name__ == "__main__":
     processor.fit_distributions(resampled_df, expected_data_filename)
     
     synthetic_data_directory = r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\SYNTHETIC_DATA"
-    generate_yearly_weather_data(resampled_df,1,lat,lon,1,synthetic_data_directory)
+
+    N=1000
+    generate_yearly_weather_data(resampled_df,N,lat,lon,1,synthetic_data_directory)

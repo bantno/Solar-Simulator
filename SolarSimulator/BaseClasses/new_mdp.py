@@ -154,7 +154,7 @@ class ExpectedValueTable:
         ev_0 = np.array(self._alpha(stage, state, 0, samples))
         ev_1 = np.array(self._alpha(stage, state, 1, samples))
 
-        d_alpha = ev_1-ev_0
+        d_alpha = ev_0-ev_1
         p_sufficient_reward = np.mean(reward_k >= d_alpha)
 
         return p_sufficient_reward,np.mean(ev_0),np.mean(ev_1)
@@ -372,9 +372,9 @@ class ExpectedValueTable:
         if u_k == 1 and x_2 == 0:  # Takeoff
             return 1 - 1 / (1 + np.exp(15 - 0.35 * w))
         elif u_k == 0 and x_2 == 0:  # Floating
-            return 1 - p_f
+            return 1 - np.full_like(w,p_f)
         elif u_k == 1 and x_2 == 1:  # Flying
-            return 1 - p_f
+            return 1 - np.full_like(w,p_f)
         elif u_k == 0 and x_2 == 1:  # Landing
             return 1 - 1 / (1 + np.exp(10 - 0.35 * w))
         else:
@@ -390,11 +390,7 @@ class ExpectedValueTable:
         Returns:
         - float: Probability density f_W(w).
         """
-        if w >= 0:  # Weibull is defined for w >= 0
-            return (c_k / scale_k) * (w / scale_k)**(c_k - 1) * np.exp(-(w / scale_k)**c_k)
-            # return weibull_min.pdf(w, c_k, scale=scale_k)
-        else:
-            return 0
+        return (c_k / scale_k) * (w / scale_k)**(c_k - 1) * np.exp(-(w / scale_k)**c_k)
         
     def _compute_success_probability(self, u_k, state_k,c_k,scale_k):
         """
@@ -409,14 +405,11 @@ class ExpectedValueTable:
         """
         # Define the integrand
         def integrand(w):
-            # return self._P_S_given_w(w, u_k, state_k) * self.f_W(w,c_k,scale_k)
             return self._P_S_given_w(w, u_k, state_k,p_f=0.0) * self.f_W_vectorized(w,c_k,scale_k)
         
         # Integrate over the domain of the Weibull distribution [0, ∞)
-        # result, _ = quad(integrand, 0, 100)
-        # return result
 
-        x = np.linspace(0, 45, 501) 
+        x = np.linspace(0.001, 45, 501) 
         y = integrand(x)
         result = simpson(x=x,y=y)
         return result

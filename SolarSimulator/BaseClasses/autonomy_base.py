@@ -52,7 +52,7 @@ class Autonomy:
             wind_speed = wind_data[k]
             whale_prob = whale_data[k]
             is_reward_sufficient = whale_prob>threshold and solar_power_wpm2>0
-            is_battery_sufficient = current_state[0] > nightly_idle_soc + single_flight_soc*2 # TODO: Create better way to determine this
+            is_battery_sufficient = current_state[0] > nightly_idle_soc + single_flight_soc
 
             if is_reward_sufficient and is_battery_sufficient:
                 best_action = 1
@@ -236,8 +236,6 @@ class Autonomy:
         else:
             return reward,k, flight_minutes
 
-    
-
     def simulate_stochastic_reward(self,state,action,stage,whale_prob):
         """
         Calculates the reward for performing the given action in the current state at the current stage.
@@ -319,18 +317,6 @@ class Autonomy:
 
         # Round to the nearest SoC increment and return
         return self.soc_increment * round(soc_change / self.soc_increment)
-
-    def current_reward(self,stage,action)->float:
-        """        
-        Parameters:
-
-        Returns:
-        - float: Expected reward E[R(X, H)].
-        """
-
-        reward = action*self.whale_data[stage]
-
-        return reward
     
     def calculate_energy_update(self, plane, state, action, dt, solar_power):
         """

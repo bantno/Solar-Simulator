@@ -41,7 +41,7 @@ class ExpectedValueTable:
             for idx,state in enumerate(self.states[:-1]):
                 self.ev_table[idx,k] = self._ev_entry(k,state)
 
-        self.plot_surface(self.ev_table)
+        # self.plot_surface(self.ev_table)
     
     def _calculate_case_probabilities(self,stage,state,reward_k):
         """

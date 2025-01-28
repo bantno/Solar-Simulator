@@ -142,11 +142,18 @@ def generate_yearly_weather_data(historical_data,N,latitude,longitude,seed=None,
     timestep = int((historical_data.index[1] - historical_data.index[0]).total_seconds())
     points_per_week = int((7 * 24 * 3600) / timestep)
     years = historical_data.index.year.unique()
+    
+    try:
+        with Pool() as pool:
+            return pool.starmap(generate_single_synthetic_year, [
+                (i, historical_data, years, timestep, points_per_week, save_path,latitude,longitude,seed) for i in range(N)
+            ])
+    except KeyboardInterrupt:
+        print("Process interrupted by user. Cleaning up...")
+        pool.terminate()  # Immediately terminate workers
+        pool.join()       # Ensure all worker processes are cleaned up
+        raise  # Re-raise the exception for visibility
 
-    with Pool() as pool:
-        return pool.starmap(generate_single_synthetic_year, [
-            (i, historical_data, years, timestep, points_per_week, save_path,latitude,longitude,seed) for i in range(N)
-        ])
 
 # Example usage
 if __name__ == "__main__":
@@ -160,7 +167,33 @@ if __name__ == "__main__":
     expected_data_filename = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
     processor.fit_distributions(resampled_df, expected_data_filename)
     
-    synthetic_data_directory = r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\SYNTHETIC_DATA"
+    synthetic_data_directory = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\SYNTHETIC_DATA\lat{lat}"
 
-    N=1000
+    N=5000
+    generate_yearly_weather_data(resampled_df,N,lat,lon,1,synthetic_data_directory)
+
+    lat, lon = 0, -90
+    timestep_min = 15
+    processor.fetch_weather_data(lat, lon, "1950-01-01", "2022-12-31", ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
+    hourly_df = processor.process_hourly_data()
+    resampled_df = processor.resample_data(timestep_min)
+
+    expected_data_filename = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
+    processor.fit_distributions(resampled_df, expected_data_filename)
+    
+    synthetic_data_directory = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\SYNTHETIC_DATA\lat{lat}"
+
+    generate_yearly_weather_data(resampled_df,N,lat,lon,1,synthetic_data_directory)
+
+    lat, lon = -30, -90
+    timestep_min = 15
+    processor.fetch_weather_data(lat, lon, "1950-01-01", "2022-12-31", ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
+    hourly_df = processor.process_hourly_data()
+    resampled_df = processor.resample_data(timestep_min)
+
+    expected_data_filename = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
+    processor.fit_distributions(resampled_df, expected_data_filename)
+    
+    synthetic_data_directory = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\SYNTHETIC_DATA\lat{lat}"
+
     generate_yearly_weather_data(resampled_df,N,lat,lon,1,synthetic_data_directory)

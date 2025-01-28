@@ -172,11 +172,9 @@ class Simulation:
             ((df['month'] == end_month) & (df['day'] < end_day)) |
             ((df['month'] == end_month) & (df['day'] == end_day) & (df['hour'] < end_hour)) |
             ((df['month'] == end_month) & (df['day'] == end_day) & (df['hour'] == end_hour) & (df['minute'] <= end_minute))
-            ) #&
-            # ~((df['month'] == 2) & (df['day'] == 29))  # Exclude leap day
+            ) & ~((df['month'] == 2) & (df['day'] == 29))  # Exclude leap day
+            
         ]
-        # if len(actual_data) != len(expected_data):
-            # raise ValueError(f"Actual data and expected data have different lengths. Actual: {len(actual_data)}, Expected: {len(expected_data)}")
         
         return expected_data
 

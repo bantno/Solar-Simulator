@@ -164,36 +164,11 @@ if __name__ == "__main__":
     hourly_df = processor.process_hourly_data()
     resampled_df = processor.resample_data(timestep_min)
 
-    expected_data_filename = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
+    expected_data_filename = rf"C:\Users\bepstein8\OneDrive - Georgia Institute of Technology\Documents\Research\Solar-Simulator\Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
     processor.fit_distributions(resampled_df, expected_data_filename)
     
-    synthetic_data_directory = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\SYNTHETIC_DATA\lat{lat}"
+    synthetic_data_directory = rf"C:\Users\bepstein8\OneDrive - Georgia Institute of Technology\Documents\Research\Solar-Simulator\Data\SYNTHETIC_DATA\lat{lat}"
 
-    N=5000
+    N=100
     generate_yearly_weather_data(resampled_df,N,lat,lon,1,synthetic_data_directory)
 
-    lat, lon = 0, -90
-    timestep_min = 15
-    processor.fetch_weather_data(lat, lon, "1950-01-01", "2022-12-31", ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
-    hourly_df = processor.process_hourly_data()
-    resampled_df = processor.resample_data(timestep_min)
-
-    expected_data_filename = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
-    processor.fit_distributions(resampled_df, expected_data_filename)
-    
-    synthetic_data_directory = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\SYNTHETIC_DATA\lat{lat}"
-
-    generate_yearly_weather_data(resampled_df,N,lat,lon,1,synthetic_data_directory)
-
-    lat, lon = -30, -90
-    timestep_min = 15
-    processor.fetch_weather_data(lat, lon, "1950-01-01", "2022-12-31", ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
-    hourly_df = processor.process_hourly_data()
-    resampled_df = processor.resample_data(timestep_min)
-
-    expected_data_filename = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
-    processor.fit_distributions(resampled_df, expected_data_filename)
-    
-    synthetic_data_directory = rf"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\Data\SYNTHETIC_DATA\lat{lat}"
-
-    generate_yearly_weather_data(resampled_df,N,lat,lon,1,synthetic_data_directory)

@@ -10,7 +10,7 @@ sys.path.append(r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale 
 from seaplane_base import Seaplane
 
 class ExpectedValueTable:
-    def __init__(self,plane: Seaplane,expected_solar_data,expected_wind_data, whale_observation_data, soc_increment:int,timestep_min: int):
+    def __init__(self,plane: Seaplane,expected_solar_data,expected_wind_data, whale_observation_data, soc_increment:int,timestep_min: int,floating_failure_prob):
         solar_panel_efficiency = 0.1
         self.plane = plane
         self.battery_capacity_wh = self.plane.capacity*self.plane.voltage
@@ -19,6 +19,7 @@ class ExpectedValueTable:
         self.soc_increment = soc_increment
         self.expected_solar = expected_solar_data
         self.expected_wind = expected_wind_data
+        self.floating_failure_prob = floating_failure_prob
         self.states = self._create_states(soc_increment,[0,1])
 
         if 100 % soc_increment != 0:
@@ -209,7 +210,7 @@ class ExpectedValueTable:
         Args:
             state (tuple): The current state of the system.
             action (int): The action to evaluate.
-            solar_power_w (float): The solar power available (in Watts).
+            solar_power_w (float): The solar power collected by the plane's solar array (in Watts).
 
         Returns:
             float: The expected value for the specified action and state.
@@ -261,7 +262,7 @@ class ExpectedValueTable:
                 - `state[0]` represents the SOC as a percentage (0 to 100).
                 - `state[1]` represents the vehicle's current state (1, 0, or 2).
             action (str): The action to perform ("fly" or "float").
-            solar_power_w (float): The available solar power (in Watts).
+            solar_power_w (float): The solar power collected by the plane's solar array (in Watts).
 
         Returns:
             tuple: The next state of the system as:
@@ -317,7 +318,7 @@ class ExpectedValueTable:
             state (tuple): The current state of the system, where `state[1]` indicates 
                 whether the plane is 0 or in another state.
             action (np.ndarray): Array of actions (0 for "float", 1 for "fly") of shape (n,).
-            solar_power (np.ndarray): Available solar power values (in Watts) of shape (n, 1).
+            solar_power (np.ndarray): Collected solar power values (in Watts) of shape (n, 1).
             dt (float): The duration of the time step (in minutes).
 
         Returns:
@@ -405,7 +406,7 @@ class ExpectedValueTable:
         """
         # Define the integrand
         def integrand(w):
-            return self._P_S_given_w(w, u_k, state_k,p_f=0.0) * self.f_W_vectorized(w,c_k,scale_k)
+            return self._P_S_given_w(w, u_k, state_k,p_f=self.floating_failure_prob) * self.f_W_vectorized(w,c_k,scale_k)
         
         # Integrate over the domain of the Weibull distribution [0, ∞)
 

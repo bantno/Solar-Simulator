@@ -413,6 +413,7 @@ class DataProcessor:
         os.makedirs(save_dir, exist_ok=True)
 
         df = self.get_results_df()
+        df.to_csv("results.csv")
         print(df)
 
         # Get unique mission durations (StartDate-EndDate)

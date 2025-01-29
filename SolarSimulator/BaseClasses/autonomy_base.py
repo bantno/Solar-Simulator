@@ -9,6 +9,7 @@ class Autonomy:
         self.plane = mdp_model.plane
         self.soc_increment = 1
         self.panel_efficiency = 0.10
+        self.max_capacity_J = self.plane.capacity*self.plane.voltage*3600
 
     def simulate_simple_behavior(self,
                                 initial_state,
@@ -67,7 +68,7 @@ class Autonomy:
 
             is_action_successful = np.random.uniform(0,1) > failure_prob
             
-            new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
+            new_energy = min(current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2),self.max_capacity_J)
             new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
             reward+=self.simulate_stochastic_reward(current_state,best_action,k,whale_prob)
             state_history_list[k+1]=new_state
@@ -197,12 +198,10 @@ class Autonomy:
             solar_power_wpm2 = solar_data[k]
             wind_speed = wind_data[k]
             whale_prob = whale_data[k]
-
-            # best_action = self.mdp_model.policy_table.loc[current_state,k]
-            # collected_energy = self.plane.S*solar_power_wpm2*self.dt*60*self.panel_efficiency
+            collected_solar_power = self.plane.S*solar_power_wpm2*self.panel_efficiency
             
             for idx,action in enumerate(action_list):
-                value_list[idx] = self.mdp_model._alpha(k,current_state,action,solar_power_wpm2)
+                value_list[idx] = self.mdp_model._alpha(k,current_state,action,collected_solar_power) # I'm pretty sure this is overestimating collected solar power by a factor of 10 but maybe no?
             
             reward_u_k_1 = whale_prob
             d_alpha = value_list[0]-value_list[1]
@@ -220,7 +219,7 @@ class Autonomy:
             is_action_successful = np.random.uniform(0,1) > failure_prob
             
             # Update state history
-            new_energy = current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2)
+            new_energy = min(current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2),self.max_capacity_J)
             new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
             reward+=self.simulate_stochastic_reward(current_state,best_action,k,whale_prob)
             state_history_list[k+1]=new_state
@@ -337,6 +336,7 @@ class Autonomy:
         
 
         avionics_power = plane.idle_power
-        net_power = solar_power*self.panel_efficiency*plane.S - required_cruise_power - avionics_power
+        collected_power = solar_power*self.panel_efficiency*plane.S
+        net_power = collected_power - required_cruise_power - avionics_power
         energy_change = net_power * dt * 60  - required_takeoff_energy # Convert power (W) to energy (Joules)
         return energy_change

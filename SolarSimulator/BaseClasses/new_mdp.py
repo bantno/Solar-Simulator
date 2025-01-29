@@ -10,7 +10,7 @@ sys.path.append(r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale 
 from seaplane_base import Seaplane
 
 class ExpectedValueTable:
-    def __init__(self,plane: Seaplane,expected_solar_data,expected_wind_data, whale_observation_data, soc_increment:int,timestep_min: int):
+    def __init__(self,plane: Seaplane,expected_solar_data,expected_wind_data, whale_observation_data, soc_increment:int,timestep_min: int,floating_failure_prob):
         solar_panel_efficiency = 0.1
         self.plane = plane
         self.battery_capacity_wh = self.plane.capacity*self.plane.voltage
@@ -19,6 +19,7 @@ class ExpectedValueTable:
         self.soc_increment = soc_increment
         self.expected_solar = expected_solar_data
         self.expected_wind = expected_wind_data
+        self.floating_failure_prob = floating_failure_prob
         self.states = self._create_states(soc_increment,[0,1])
 
         if 100 % soc_increment != 0:
@@ -405,7 +406,7 @@ class ExpectedValueTable:
         """
         # Define the integrand
         def integrand(w):
-            return self._P_S_given_w(w, u_k, state_k,p_f=0.0) * self.f_W_vectorized(w,c_k,scale_k)
+            return self._P_S_given_w(w, u_k, state_k,p_f=self.floating_failure_prob) * self.f_W_vectorized(w,c_k,scale_k)
         
         # Integrate over the domain of the Weibull distribution [0, ∞)
 

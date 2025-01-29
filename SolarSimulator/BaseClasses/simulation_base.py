@@ -89,7 +89,8 @@ class Simulation:
                                        expected_wind_data,
                                        whale_observation_data,
                                        soc_increment=1,
-                                       timestep_min=dt)
+                                       timestep_min=dt,
+                                       floating_failure_prob=1-true_success_prob)
 
         auto = Autonomy(dt, mdp_model)
         mdp_model.show_progress = True

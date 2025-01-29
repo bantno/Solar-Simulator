@@ -209,7 +209,7 @@ class ExpectedValueTable:
         Args:
             state (tuple): The current state of the system.
             action (int): The action to evaluate.
-            solar_power_w (float): The solar power available (in Watts).
+            solar_power_w (float): The solar power collected by the plane's solar array (in Watts).
 
         Returns:
             float: The expected value for the specified action and state.
@@ -261,7 +261,7 @@ class ExpectedValueTable:
                 - `state[0]` represents the SOC as a percentage (0 to 100).
                 - `state[1]` represents the vehicle's current state (1, 0, or 2).
             action (str): The action to perform ("fly" or "float").
-            solar_power_w (float): The available solar power (in Watts).
+            solar_power_w (float): The solar power collected by the plane's solar array (in Watts).
 
         Returns:
             tuple: The next state of the system as:
@@ -317,7 +317,7 @@ class ExpectedValueTable:
             state (tuple): The current state of the system, where `state[1]` indicates 
                 whether the plane is 0 or in another state.
             action (np.ndarray): Array of actions (0 for "float", 1 for "fly") of shape (n,).
-            solar_power (np.ndarray): Available solar power values (in Watts) of shape (n, 1).
+            solar_power (np.ndarray): Collected solar power values (in Watts) of shape (n, 1).
             dt (float): The duration of the time step (in minutes).
 
         Returns:

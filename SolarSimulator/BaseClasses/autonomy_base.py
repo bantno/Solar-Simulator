@@ -11,147 +11,141 @@ class Autonomy:
         self.panel_efficiency = 0.10
         self.max_capacity_J = self.plane.capacity*self.plane.voltage*3600
 
-    def simulate_simple_behavior(self,
-                                initial_state,
-                                solar_data, wind_data, whale_data,
-                                true_success_prob,
-                                simulate_failure = False,
-                                save_history = False,
-                                threshold=None):
+    def simulate_simple_behavior(
+            self, initial_state, solar_data, wind_data, whale_data,
+            true_success_prob, simulate_failure=False, save_history=False, threshold=None):
 
-        reward = 0
-        if len(whale_data) == len(wind_data) and len(wind_data) == len(solar_data):
-            max_stages = len(wind_data)
-        else:
-            raise ValueError(f"Data lengths are not equal. Wind: {len(wind_data)}, Solar: {len(solar_data)}, Whale: {len(whale_data)}.")
-
-        self.stepwise_failure_prob = 1-true_success_prob
+        # Ensure all data lists have the same length
+        max_stages = self._validate_data_lengths(solar_data, wind_data, whale_data)
         
+        self.stepwise_failure_prob = 1 - true_success_prob
+        battery_capacity_J, nightly_idle_soc, single_flight_soc = self._compute_energy_parameters()
+
+        # Initialize history arrays
+        state_history_list, energy_history_list = self._initialize_state_history(initial_state, max_stages, battery_capacity_J)
+        flight_minutes, reward = 0.0, 0
+
+        # Simulation loop
+        for k in range(max_stages - 1):
+            current_state, current_energy, solar_power_wpm2, wind_speed, whale_prob = self._extract_step_data(
+                k, state_history_list, energy_history_list, solar_data, wind_data, whale_data)
+
+            best_action = self._determine_best_action(whale_prob, solar_power_wpm2, current_state, nightly_idle_soc, single_flight_soc, threshold)
+            if best_action == 1:
+                flight_minutes += self.dt
+
+            failure_prob = self._compute_failure_prob(simulate_failure, wind_speed, best_action, current_state, true_success_prob)
+            is_action_successful = np.random.uniform(0, 1) > failure_prob
+
+            new_energy, new_state = self._update_energy_and_state(current_state,current_energy, best_action, solar_power_wpm2, battery_capacity_J)
+            reward += self.simulate_stochastic_reward(current_state, best_action, k, whale_prob)
+
+            state_history_list[k + 1], energy_history_list[k + 1] = new_state, new_energy
+
+            if not is_action_successful or new_state[0] < 0:
+                state_history_list[k:] = [(-1, 2)] * (len(state_history_list) - k)
+                break
+
+        return self._finalize_simulation(save_history, reward, k, state_history_list, solar_data, wind_data, whale_data, flight_minutes)
+
+
+    def simulate_mdp_behavior(
+            self, initial_state, solar_data, wind_data, whale_data,
+            true_success_prob, simulate_failure=False, save_history=False, threshold=None):
+
+        # Ensure all data lists have the same length
+        max_stages = self._validate_data_lengths(solar_data, wind_data, whale_data)
+
+        battery_capacity_J = self.plane.capacity * self.mdp_model.plane.voltage * 3600
+        state_history_list, energy_history_list = self._initialize_state_history(initial_state, max_stages, battery_capacity_J)
+        flight_minutes, reward = 0.0, 0
+        action_list = [0, 1]
+        value_list = [-1000, -1000]
+
+        # Simulation loop
+        for k in range(max_stages - 1):
+            current_state, current_energy, solar_power_wpm2, wind_speed, whale_prob = self._extract_step_data(
+                k, state_history_list, energy_history_list, solar_data, wind_data, whale_data)
+
+            collected_solar_power = self.plane.S * solar_power_wpm2 * self.panel_efficiency
+            best_action = self._determine_mdp_best_action(k, current_state, action_list, value_list, collected_solar_power, whale_prob)
+
+            failure_prob = self._compute_failure_prob(simulate_failure, wind_speed, best_action, current_state, true_success_prob)
+            is_action_successful = np.random.uniform(0, 1) > failure_prob
+
+            new_energy, new_state = self._update_energy_and_state(current_state,current_energy, best_action, solar_power_wpm2, battery_capacity_J)
+            reward += self.simulate_stochastic_reward(current_state, best_action, k, whale_prob)
+
+            state_history_list[k + 1], energy_history_list[k + 1] = new_state, new_energy
+
+            if not is_action_successful or new_state[0] < 0:
+                state_history_list[k:] = [(-1, 2)] * (len(state_history_list) - k)
+                break
+
+        return self._finalize_simulation(save_history, reward, k, state_history_list, solar_data, wind_data, whale_data, flight_minutes)
+
+
+    ### Helper Functions ###
+
+    def _validate_data_lengths(self, solar_data, wind_data, whale_data):
+        """Ensure all input data lists have the same length."""
+        if len(whale_data) == len(wind_data) == len(solar_data):
+            return len(wind_data)
+        raise ValueError(f"Data lengths are not equal. Wind: {len(wind_data)}, Solar: {len(solar_data)}, Whale: {len(whale_data)}.")
+
+    def _compute_energy_parameters(self):
+        """Compute battery capacity and energy thresholds."""
         night_hours = 12
-        nightly_idle_soc = np.ceil((self.plane.idle_power*night_hours*3600)/(self.plane.capacity*self.plane.voltage*3600)*100)
-        single_flight_soc = np.ceil((self.plane.get_required_power(20,1.2)*self.dt*60+self.plane.required_takeoff_energy)/(self.plane.capacity*self.plane.voltage*3600)*100)
-        battery_capacity_J = self.plane.capacity*self.plane.voltage*3600
-        
-        # Preallocate arrays with a fixed size
-        state_history_list = np.empty(max_stages,dtype=tuple)  # Adjust dimensions based on the state size
-        energy_history_list = np.empty(max_stages)
+        battery_capacity_J = self.plane.capacity * self.plane.voltage * 3600
+        nightly_idle_soc = np.ceil((self.plane.idle_power * night_hours * 3600) / battery_capacity_J * 100)
+        single_flight_soc = np.ceil((self.plane.get_required_power(20, 1.2) * self.dt * 60 + self.plane.required_takeoff_energy) / battery_capacity_J * 100)
+        return battery_capacity_J, nightly_idle_soc, single_flight_soc
 
-        # Initialize the first elements
+    def _initialize_state_history(self, initial_state, max_stages, battery_capacity_J):
+        """Initialize state and energy history arrays."""
+        state_history_list = np.empty(max_stages, dtype=tuple)
+        energy_history_list = np.empty(max_stages)
         state_history_list[0] = initial_state
         energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
-        flight_minutes = 0.0
-        
+        return state_history_list, energy_history_list
 
-        for k in range(max_stages-1):
-            current_state = state_history_list[k]
-            current_energy = energy_history_list[k]
-            solar_power_wpm2 = solar_data[k]
-            wind_speed = wind_data[k]
-            whale_prob = whale_data[k]
-            is_reward_sufficient = whale_prob>threshold and solar_power_wpm2>0
-            is_battery_sufficient = current_state[0] > nightly_idle_soc + single_flight_soc
+    def _extract_step_data(self, k, state_history_list, energy_history_list, solar_data, wind_data, whale_data):
+        """Extract data for the current simulation step."""
+        return state_history_list[k], energy_history_list[k], solar_data[k], wind_data[k], whale_data[k]
 
-            if is_reward_sufficient and is_battery_sufficient:
-                best_action = 1
-                flight_minutes += self.dt
-            else :
-                best_action = 0
+    def _determine_best_action(self, whale_prob, solar_power_wpm2, current_state, nightly_idle_soc, single_flight_soc, threshold):
+        """Determine the best action based on energy and reward conditions."""
+        is_reward_sufficient = whale_prob > threshold and solar_power_wpm2 > 0
+        is_battery_sufficient = current_state[0] > (nightly_idle_soc + single_flight_soc)
+        return 1 if is_reward_sufficient and is_battery_sufficient else 0
 
-            if simulate_failure:
-                failure_prob = 1-self.mdp_model._P_S_given_w(wind_speed, best_action, current_state, p_f=1-true_success_prob)
-            else:
-                failure_prob = -1
+    def _determine_mdp_best_action(self, k, current_state, action_list, value_list, collected_solar_power, whale_prob):
+        """Determine the best action using the MDP model."""
+        for idx, action in enumerate(action_list):
+            value_list[idx] = self.mdp_model._alpha(k, current_state, action, collected_solar_power)
+        return 1 if whale_prob > (value_list[0] - value_list[1]) else 0
 
-            is_action_successful = np.random.uniform(0,1) > failure_prob
-            
-            new_energy = min(current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2),self.max_capacity_J)
-            new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
-            reward+=self.simulate_stochastic_reward(current_state,best_action,k,whale_prob)
-            state_history_list[k+1]=new_state
-            energy_history_list[k+1]=new_energy
-            if not is_action_successful or new_state[0] < 0:
-                state_history_list[k:] = (-1,2)
-                break
+    def _compute_failure_prob(self, simulate_failure, wind_speed, best_action, current_state, true_success_prob):
+        """Compute the probability of failure given the wind conditions and action."""
+        if simulate_failure:
+            return 1 - self.mdp_model._P_S_given_w(wind_speed, best_action, current_state, p_f=1 - true_success_prob)
+        return -1
 
-        
-        # print(reward)
-        if save_history:
-            return reward, k, state_history_list[1:k], solar_data[:k], wind_data[:k], whale_data[:k], flight_minutes
-        else:
-            return reward,k,flight_minutes
-          
-    def simulate_mdp_behavior(self,
-                              initial_state,
-                              solar_data, wind_data, whale_data,
-                              true_success_prob,
-                              simulate_failure = False,
-                              save_history = False,
-                              threshold=None):
+    def _update_energy_and_state(self,current_state, current_energy, best_action, solar_power_wpm2, battery_capacity_J):
+        """Compute new energy and state after applying the action."""
+        new_energy = min(
+            current_energy + self.calculate_energy_update(self.mdp_model.plane, state=current_state, action=best_action, dt=self.dt, solar_power_wpm2=solar_power_wpm2),
+            self.max_capacity_J
+        )
+        return new_energy, self.calculate_new_state(best_action, new_energy, battery_capacity_J)
 
-        battery_capacity_J = self.plane.capacity*self.mdp_model.plane.voltage*3600
-        # required_cruise_energy = self.plane.required_cruise_power*self.dt*60
-        # required_takeoff_energy = self.plane.required_takeoff_energy
-        reward = 0
-
-        if len(whale_data) == len(wind_data) and len(wind_data) == len(solar_data):
-            max_stages = len(wind_data)
-        else:
-            raise ValueError(f"Data lengths are not equal. Wind: {len(wind_data)}, Solar: {len(solar_data)}, Whale: {len(whale_data)}.")
-
-        # Preallocate arrays with a fixed size
-        state_history_list = np.empty(max_stages,dtype=tuple)  # Adjust dimensions based on the state size
-        energy_history_list = np.empty(max_stages)
-
-        # Initialize the first elements
-        state_history_list[0] = initial_state
-        energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
-        flight_minutes = 0.0
-        action_list = [0,1]
-        value_list = [-1000,-1000]
-        
-        for k in range(max_stages-1):
-            current_state = state_history_list[k]
-            current_energy = energy_history_list[k]
-            solar_power_wpm2 = solar_data[k]
-            wind_speed = wind_data[k]
-            whale_prob = whale_data[k]
-            collected_solar_power = self.plane.S*solar_power_wpm2*self.panel_efficiency
-            
-            for idx,action in enumerate(action_list):
-                value_list[idx] = self.mdp_model._alpha(k,current_state,action,collected_solar_power)
-            
-            reward_u_k_1 = whale_prob
-            d_alpha = value_list[0]-value_list[1]
-            if reward_u_k_1 > d_alpha:
-                best_action = 1
-                flight_minutes += self.dt
-            else:
-                best_action = 0
-            
-            if simulate_failure:
-                failure_prob = 1-self.mdp_model._P_S_given_w(wind_speed, best_action, current_state, p_f=1-true_success_prob)
-            else:
-                failure_prob = -1
-
-            is_action_successful = np.random.uniform(0,1) > failure_prob
-            
-            # Update state history
-            new_energy = min(current_energy + self.calculate_energy_update(self.mdp_model.plane,current_state,best_action,self.dt,solar_power_wpm2),self.max_capacity_J)
-            new_state = self.calculate_new_state(best_action,new_energy,battery_capacity_J)
-            reward+=self.simulate_stochastic_reward(current_state,best_action,k,whale_prob)
-            state_history_list[k+1]=new_state
-            energy_history_list[k+1]=new_energy
-
-            if not is_action_successful or new_state[0] < 0:
-                state_history_list[k:] = (-1,2)
-                break
-        
+    def _finalize_simulation(self, save_history, reward, k, state_history_list, solar_data, wind_data, whale_data, flight_minutes):
+        """Finalize the simulation results."""
         if save_history:
             return reward, k, state_history_list, solar_data, wind_data, whale_data, flight_minutes
-        else:
-            return reward,k, flight_minutes
+        return reward, k, flight_minutes
 
-     def simulate_fullcharge_behavior(self,
+    def simulate_fullcharge_behavior(self,
                                 initial_state,
                                 true_success_prob,
                                 simulate_failure = False,
@@ -307,7 +301,7 @@ class Autonomy:
         # Round to the nearest SoC increment and return
         return self.soc_increment * round(soc_change / self.soc_increment)
     
-    def calculate_energy_update(self, plane, state, action, dt, solar_power):
+    def calculate_energy_update(self, plane, state, action, dt, solar_power_wpm2):
         """
         Calculates the change in SoC after performing the given action.
         """
@@ -326,7 +320,7 @@ class Autonomy:
         
 
         avionics_power = plane.idle_power
-        collected_power = solar_power*self.panel_efficiency*plane.S
+        collected_power = solar_power_wpm2*self.panel_efficiency*plane.S
         net_power = collected_power - required_cruise_power - avionics_power
         energy_change = net_power * dt * 60  - required_takeoff_energy # Convert power (W) to energy (Joules)
         return energy_change

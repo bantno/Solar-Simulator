@@ -110,13 +110,20 @@ class Simulation:
             mdp_model.generate_ev_table()
 
         for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
-            actual_data = self._load_weather_data(dt, directory=loc, i=i, lat=self.lat, lon=self.lon) if not self.use_expected else expected_data
-            actual_data = actual_data.loc[start_date:end_date]
+            if not self.use_expected:
+                actual_data = self._load_weather_data(dt, directory=loc, i=i, lat=self.lat, lon=self.lon) 
+                actual_data = actual_data.loc[start_date:end_date]
+                sim_solar_data = actual_data["shortwave_radiation"].values
+                sim_wind_data = actual_data["wind_speed_10m"].values
 
+            else:
+                sim_solar_data = expected_data["expected_solar_rad"].values
+                sim_wind_data = expected_data["expected_wind_speed"].values
+            
             result = simulate_method(
                 initial_state=(100, 0),
-                solar_data=actual_data["shortwave_radiation"].values,
-                wind_data=actual_data["wind_speed_10m"].values,
+                solar_data=sim_solar_data,
+                wind_data=sim_wind_data,
                 whale_data=whale_observation_data,
                 true_success_prob=true_success_prob,
                 simulate_failure=True,
@@ -130,14 +137,17 @@ class Simulation:
     
     def _format_simulation_result(self, result, expected_data):
         if self.save_history:
-            reward, last_step, state_history, solar_list, whale_list = result
+            reward, last_step, state_history, solar_list, wind_history, whale_list, flight_minutes = result
             return {
                 "Reward": reward,
                 "LastStep": last_step,
                 "StateHistory": state_history,
                 "SolarHistory": solar_list,
                 "ExpectedSolarHistory": expected_data["expected_solar_rad"].values,
-                "WhaleHistory": whale_list
+                "WindHistory": wind_history,
+                "ExpectedWindHistory": expected_data["expected_wind_speed"].values,
+                "WhaleHistory": whale_list,
+                "FlightHours": flight_minutes / 60
             }
         else:
             reward, last_step, flight_minutes = result

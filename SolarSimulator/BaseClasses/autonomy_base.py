@@ -3,13 +3,14 @@ import numpy as np
 class Autonomy:
     """Represents the autonomy module for a solar-powered seaplane."""
 
-    def __init__(self,dt,mdp_model):
+    def __init__(self,dt,mdp_model,use_expected_reward:bool=False):
         self.dt = dt
         self.mdp_model = mdp_model
         self.plane = mdp_model.plane
         self.soc_increment = 1
         self.panel_efficiency = 0.10
         self.max_capacity_J = self.plane.capacity*self.plane.voltage*3600
+        self.use_expected_reward = use_expected_reward
 
     def simulate_simple_behavior(
             self, initial_state, solar_data, wind_data, whale_data,
@@ -38,7 +39,7 @@ class Autonomy:
             is_action_successful = np.random.uniform(0, 1) > failure_prob
 
             new_energy, new_state = self._update_energy_and_state(current_state,current_energy, best_action, solar_power_wpm2, battery_capacity_J)
-            reward += self.simulate_stochastic_reward(current_state, best_action, k, whale_prob)
+            reward += self.simulate_stochastic_reward(current_state, best_action, k, whale_prob, use_expected_value=self.use_expected_reward)
 
             state_history_list[k + 1], energy_history_list[k + 1] = new_state, new_energy
 
@@ -219,7 +220,7 @@ class Autonomy:
             return reward,k,flight_minutes
       
 
-    def simulate_stochastic_reward(self,state,action,stage,whale_prob):
+    def simulate_stochastic_reward(self,state,action,stage,whale_prob,use_expected_value=False):
         """
         Calculates the reward for performing the given action in the current state at the current stage.
         Includes stochastic rewards based on the probability of finding whales (time-dependent) and wind speed.
@@ -238,10 +239,13 @@ class Autonomy:
         if action == 0:
             whale_reward = 0
         elif action == 1:
-            if np.random.uniform(0,1) < whale_prob:
-                whale_reward = 1
+            if use_expected_value:
+                whale_reward = whale_prob
             else:
-                whale_reward = 0
+                if np.random.uniform(0,1) < whale_prob:
+                    whale_reward = 1
+                else:
+                    whale_reward = 0
         return whale_reward
     
     def calculate_new_state(self,best_action,energy,max_capacity):

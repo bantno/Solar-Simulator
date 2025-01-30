@@ -20,7 +20,8 @@ def run_simulation(params):
         visualize=params["save_states"],
         save_dir=params["save_dir"],
         show=False,
-        use_expected=params["use_expected"]
+        use_expected=params["use_expected"],
+        simulate_failure=params["simulate_failure"]
     )
     print("Running simulation with parameters:")
     print(params)
@@ -34,7 +35,7 @@ def run_simulation(params):
     )
 
 def main():
-    config_file = r"Results\Analysis\simulation_params.yaml"  # Update path as needed
+    config_file = r"Results\oof\simulation_params.yaml"  # Update path as needed
     simulations = load_simulations_config(config_file)
     print(f"Number of simulations: {len(simulations)}")
 

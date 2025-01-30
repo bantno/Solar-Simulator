@@ -42,7 +42,8 @@ class ExpectedValueTable:
             for idx,state in enumerate(self.states[:-1]):
                 self.ev_table[idx,k] = self._ev_entry(k,state)
 
-        # self.plot_surface(self.ev_table)
+        np.savetxt("output.csv", self.ev_table, delimiter=",", fmt="%.8f")
+        self.plot_surface(self.ev_table,self.plane.capacity)
     
     def _calculate_case_probabilities(self,stage,state,reward_k):
         """
@@ -369,14 +370,25 @@ class ExpectedValueTable:
         else:
             raise ValueError("Invalid state.")
         
+        # if u_k == 1 and x_2 == 0:  # Takeoff
+        #     return 1 - 1 / (1 + np.exp(11 - 0.35 * w))
+        # elif u_k == 0 and x_2 == 0:  # Floating
+        #     return 1 - np.full_like(w,p_f)
+        # elif u_k == 1 and x_2 == 1:  # Flying
+        #     return 1 - np.full_like(w,p_f)
+        # elif u_k == 0 and x_2 == 1:  # Landing
+        #     return 1 - 1 / (1 + np.exp(10 - 0.35 * w))
+        # else:
+        #     raise ValueError("Invalid combination of u_k and x_2.")
+        
         if u_k == 1 and x_2 == 0:  # Takeoff
-            return 1 - 1 / (1 + np.exp(11 - 0.35 * w))
+            return 1-((1-0.9995)*2)
         elif u_k == 0 and x_2 == 0:  # Floating
-            return 1 - np.full_like(w,p_f)
+            return 1.0
         elif u_k == 1 and x_2 == 1:  # Flying
-            return 1 - np.full_like(w,p_f)
+            return 0.9995
         elif u_k == 0 and x_2 == 1:  # Landing
-            return 1 - 1 / (1 + np.exp(10 - 0.35 * w))
+            return 1-((1-0.9995)*2)
         else:
             raise ValueError("Invalid combination of u_k and x_2.")
         
@@ -531,7 +543,7 @@ class ExpectedValueTable:
         ax.set_ylabel("State of Charge (%)")
         ax.set_zlabel("Expected Value")
         plt.tight_layout()
-        plt.show()
+        plt.savefig("ev_table_moored.png")
 
         # Plot for 'flying' state
         fig = plt.figure(figsize=(12, 8))
@@ -544,7 +556,7 @@ class ExpectedValueTable:
         ax.set_ylabel("State of Charge (%)")
         ax.set_zlabel("Expected Value")
         plt.tight_layout()
-        plt.show()
+        plt.savefig("ev_table_flying.png")
 
         # Plot for 'broken' state (single row, flatten data)
         fig = plt.figure(figsize=(12, 8))
@@ -556,7 +568,7 @@ class ExpectedValueTable:
         ax.set_zlabel("Expected Value")
         ax.legend()
         plt.tight_layout()
-        plt.show()
+        plt.savefig("ev_table_broken.png")
 
 
     

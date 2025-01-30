@@ -19,7 +19,7 @@ class SolarPlaneSimulation:
                  capacity_ah=50.0, voltage=22.2, Cdtot=0.0, Cd0=0.02584, S=0.653,
                  af_mass=8.8, cruise_speed=20.0, rho=1.19, N_PROP=0.82, N_ESC=0.9,
                  start_date="2019-07-01", end_date="2019-08-02", dt=30,
-                 num_runs=10000, visualize=False, save_dir=".", show=False, use_expected=False):
+                 num_runs=10000, visualize=False, save_dir=".", show=False, use_expected=False,simulate_failure=True):
         
         # Define plane parameters
         self.lat = lat
@@ -57,7 +57,7 @@ class SolarPlaneSimulation:
         )
 
         # Initialize the simulation
-        self.simulation = Simulation(self.plane, self.lat, self.lon, self.tz, save_history=self.visualize,use_expected=use_expected)
+        self.simulation = Simulation(self.plane, self.lat, self.lon, self.tz, save_history=self.visualize,use_expected=use_expected,simulate_failure=simulate_failure)
         self.results = []  # To store processed results
     
     @staticmethod
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     simulation = SolarPlaneSimulation(
         lat=30, lon=-90, tz="America/Chicago", # Location parameters
         start_date="2025-01-01",        # Simulation start date
-        end_date="2025-01-03",          # Simulation end date
+        end_date="2025-06-03",          # Simulation end date
         dt=15,                          # Time step in minutes
         num_runs=1,                     # Number of simulation runs
         visualize=True,                 # Enable visualization

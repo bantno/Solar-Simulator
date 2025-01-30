@@ -48,131 +48,113 @@ class StateHistoryPlotter:
         else:
             return "Unknown"
 
-    def plot_data(self,save_dir):
-        """Plot the state of charge, solar history, and cumulative hours flown for the first entry in each file in the directory."""
+    def plot_data(self, save_dir):
+        """Plot the state of charge, solar history, cumulative hours flown, whale history, and wind history for the first entry in each file in the directory and save the plot."""
+        
+        plt.figure(figsize=(15, 12))
+        files = self.get_data_files()
+        battery_capacity = self.get_battery_capacity(files[0])
+        plt.suptitle(f'Battery Capacity: {battery_capacity} Ah', fontsize=16)
 
-        plt.figure(figsize=(15, 10))
-
-        # Extract battery capacity from the first file in the directory
+        self.plot_state_of_charge(files)
+        self.plot_cumulative_hours_flight(files)
+        self.plot_solar_history(files)
+        self.plot_whale_history(files)
+        self.plot_wind_history(files)
+        
+        plt.tight_layout()
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, "plot.png")
+        plt.savefig(save_path)
+        plt.close()
+        
+    def get_data_files(self):
+        """Retrieve the list of .pkl files in the directory."""
         files = [file for file in os.listdir(self.directory) if file.endswith(".pkl")]
         if not files:
             raise ValueError("No data files found in the directory.")
-        
-        first_file = files[0]
-        battery_capacity = self.extract_parameter_from_filename(first_file, r"c(\d+)", "Unknown Capacity") + " Ah"
-
-        # Main Title with Battery Capacity
-        plt.suptitle(f'Battery Capacity: {battery_capacity}', fontsize=16)
-
-        # Plot State of Charge
-        plt.subplot(4, 1, 1)
+        return files
+    
+    def get_battery_capacity(self, filename):
+        """Extract battery capacity from the filename."""
+        return self.extract_parameter_from_filename(filename, r"c(\d+)", "Unknown Capacity")
+    
+    def plot_state_of_charge(self, files):
+        plt.subplot(5, 1, 1)
         for file in files:
-            file_path = os.path.join(self.directory, file)
-            df = self.load_first_entry(file_path)
-
-            # Extract parameters from filename
-            algorithm, label = self.parse_filename(file)
-
-            # Extract state history and charge levels
-            state_history = df['StateHistory'].values[0]
-            state_charge_levels = [state[0] for state in state_history]
-
-            # Generate datetime index
+            df = self.load_first_entry(os.path.join(self.directory, file))
+            _, label = self.parse_filename(file)
+            state_charge_levels = [state[0] for state in df['StateHistory'].values[0]]
             time_index = pd.date_range(start=self.start_date, periods=len(state_charge_levels), freq=self.time_step)
-
-            # Plot State of Charge
-            plt.plot(time_index, state_charge_levels, label=f"{label}")
-
+            plt.plot(time_index, state_charge_levels, label=label)
         plt.title('State of Charge Over Time')
         plt.xlabel('Datetime')
         plt.ylabel('Charge Level (%)')
         plt.legend()
         plt.grid(True)
-
-        # Plot Cumulative Hours Flown
-        plt.subplot(4, 1, 2)
+    
+    def plot_cumulative_hours_flight(self, files):
+        plt.subplot(5, 1, 2)
         for file in files:
-            file_path = os.path.join(self.directory, file)
-            df = self.load_first_entry(file_path)
-
-            # Extract parameters from filename
-            algorithm, label = self.parse_filename(file)
-
-            # Extract cumulative hours from state history
+            df = self.load_first_entry(os.path.join(self.directory, file))
+            _, label = self.parse_filename(file)
             state_history = df['StateHistory'].values[0]
-            states = [state[1] for state in state_history]
-            cumulative_hours = [0]
-            for i in range(len(states)):
-                if states[i] == 1:
-                    cumulative_hours.append(cumulative_hours[-1] + self.dt / 60.0)
-                else:
-                    cumulative_hours.append(cumulative_hours[-1])
-
-            # Generate datetime index
+            cumulative_hours = self.calculate_cumulative_hours(state_history)
             time_index = pd.date_range(start=self.start_date, periods=len(cumulative_hours), freq=self.time_step)
-
-            # Plot Cumulative Hours Flown
-            plt.plot(time_index, cumulative_hours, label=f"{label}")
-
+            plt.plot(time_index, cumulative_hours, label=label)
         plt.title('Cumulative Hours Flown Over Time')
         plt.xlabel('Datetime')
         plt.ylabel('Cumulative Hours Flown')
         plt.legend()
         plt.grid(True)
-
-        # Plot Solar History
-        plt.subplot(4, 1, 3)
-        for file in files:
-            file_path = os.path.join(self.directory, file)
-            df = self.load_first_entry(file_path)
-
-            # Extract parameters from filename
-            algorithm, label = self.parse_filename(file)
-
-            # Extract solar history
-            solar_history = df['SolarHistory'].values[0]
-            expected_solar_history = df['ExpectedSolarHistory'].values[0]
-
-            # Generate datetime index
-            time_index = pd.date_range(start=self.start_date, periods=len(solar_history), freq=self.time_step)
-
-            # Plot Solar History
-            plt.plot(time_index, solar_history, label="Actual")
-            plt.plot(time_index, expected_solar_history[:len(time_index)], label="Expected")
-            break
-
+    
+    def calculate_cumulative_hours(self, state_history):
+        """Calculate cumulative hours flown based on state history."""
+        cumulative_hours = [0]
+        for state in state_history:
+            cumulative_hours.append(cumulative_hours[-1] + (self.dt / 60.0) if state[1] == 1 else cumulative_hours[-1])
+        return cumulative_hours
+    
+    def plot_solar_history(self, files):
+        plt.subplot(5, 1, 3)
+        df = self.load_first_entry(os.path.join(self.directory, files[0]))
+        solar_history = df['SolarHistory'].values[0]
+        expected_solar_history = df['ExpectedSolarHistory'].values[0]
+        time_index = pd.date_range(start=self.start_date, periods=len(solar_history), freq=self.time_step)
+        plt.plot(time_index, solar_history, label="Actual")
+        plt.plot(time_index, expected_solar_history[:len(time_index)], label="Expected")
         plt.title('Solar History Over Time')
         plt.xlabel('Datetime')
         plt.ylabel('Solar Power (W/$m^2$)')
         plt.legend()
         plt.grid(True)
-
-        # Plot Whale History
-        plt.subplot(4, 1, 4)
-        for file in files:
-            file_path = os.path.join(self.directory, file)
-            df = self.load_first_entry(file_path)
-
-            # Extract parameters from filename
-            algorithm, label = self.parse_filename(file)
-
-            # Extract whale history
-            whale_history = df['WhaleHistory'].values[0]
-
-            # Generate datetime index
-            time_index = pd.date_range(start=self.start_date, periods=len(whale_history), freq=self.time_step)
-
-            # Plot Whale History
-            plt.plot(time_index, whale_history, label=label)
-            break
-
-        plt.title('Whale Surface Probability Over Time')
+    
+    def plot_whale_history(self, files):
+        plt.subplot(5, 1, 4)
+        df = self.load_first_entry(os.path.join(self.directory, files[0]))
+        whale_history = df['WhaleHistory'].values[0]
+        time_index = pd.date_range(start=self.start_date, periods=len(whale_history), freq=self.time_step)
+        plt.plot(time_index, whale_history, label=self.parse_filename(files[0])[1])
+        plt.title('Whale History Over Time')
         plt.xlabel('Datetime')
-        plt.ylabel('Probability')
+        plt.ylabel('Whale Sightings')
+        plt.legend()
+        plt.grid(True)
+    
+    def plot_wind_history(self, files):
+        plt.subplot(5, 1, 5)
+        df = self.load_first_entry(os.path.join(self.directory, files[0]))
+        wind_history = df['WindHistory'].values[0]
+        expected_wind_history = df['ExpectedWindHistory'].values[0]
+        time_index = pd.date_range(start=self.start_date, periods=len(wind_history), freq=self.time_step)
+        plt.plot(time_index, wind_history, label="Actual Wind")
+        plt.plot(time_index, expected_wind_history[:len(time_index)], label="Expected Wind")
+        plt.title('Wind History Over Time')
+        plt.xlabel('Datetime')
+        plt.ylabel('Wind Speed (m/s)')
+        plt.legend()
         plt.grid(True)
 
-        plt.tight_layout(rect=[0, 0, 1, 0.96])  # Adjust layout to fit title
-        plt.savefig(save_dir + rf"\state_plot_{self.start_date.day_of_year}_{self.dt}.png")
 
     # Helper method for regex extraction
     def extract_parameter_from_filename(self, filename, pattern, default_value):

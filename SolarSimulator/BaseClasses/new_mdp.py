@@ -155,7 +155,7 @@ class ExpectedValueTable:
         ev_0 = np.array(self._alpha(stage, state, 0, samples))
         ev_1 = np.array(self._alpha(stage, state, 1, samples))
 
-        d_alpha = ev_0-ev_1
+        d_alpha = ev_0-ev_1 # Do I need to account for the possibility that i dont make it to these states
         p_sufficient_reward = np.mean(reward_k >= d_alpha)
 
         return p_sufficient_reward,np.mean(ev_0),np.mean(ev_1)
@@ -224,7 +224,6 @@ class ExpectedValueTable:
 
         next_state = self.calculate_next_state(state,action,solar_power_w)
         ev = self.lookup_expected_value(self.ev_table,stage+1,next_state)
-        # print(state_time-start_time,time.time()-state_time)
         return ev
     
    
@@ -371,7 +370,7 @@ class ExpectedValueTable:
             raise ValueError("Invalid state.")
         
         if u_k == 1 and x_2 == 0:  # Takeoff
-            return 1 - 1 / (1 + np.exp(15 - 0.35 * w))
+            return 1 - 1 / (1 + np.exp(11 - 0.35 * w))
         elif u_k == 0 and x_2 == 0:  # Floating
             return 1 - np.full_like(w,p_f)
         elif u_k == 1 and x_2 == 1:  # Flying
@@ -380,18 +379,6 @@ class ExpectedValueTable:
             return 1 - 1 / (1 + np.exp(10 - 0.35 * w))
         else:
             raise ValueError("Invalid combination of u_k and x_2.")
-
-    def f_W(self, w, c_k, scale_k):
-        """
-        Compute the Weibull distribution PDF for a given wind speed.
-        
-        Parameters:
-        - w (float): Wind speed.
-        
-        Returns:
-        - float: Probability density f_W(w).
-        """
-        return (c_k / scale_k) * (w / scale_k)**(c_k - 1) * np.exp(-(w / scale_k)**c_k)
         
     def _compute_success_probability(self, u_k, state_k,c_k,scale_k):
         """
@@ -406,11 +393,11 @@ class ExpectedValueTable:
         """
         # Define the integrand
         def integrand(w):
-            return self._P_S_given_w(w, u_k, state_k,p_f=self.floating_failure_prob) * self.f_W_vectorized(w,c_k,scale_k)
+            return self._P_S_given_w(w, u_k, state_k,p_f=self.floating_failure_prob) * self.f_W_vectorized(w,c_k,scale_k) # Is this wrong because we still multiply by f_w
         
         # Integrate over the domain of the Weibull distribution [0, ∞)
 
-        x = np.linspace(0.001, 45, 501) 
+        x = np.linspace(0.001, 60, 501) 
         y = integrand(x)
         result = simpson(x=x,y=y)
         return result
@@ -445,9 +432,7 @@ class ExpectedValueTable:
         - np.ndarray: Array of PDF values corresponding to the input wind speeds.
         """
         w = np.asarray(w)  # Ensure w is a numpy array
-        pdf = np.zeros_like(w)  # Initialize result with zeros
-        valid = w >= 0  # Boolean mask for valid wind speeds (w >= 0)
-        pdf[valid] = (c_k / scale_k) * (w[valid] / scale_k)**(c_k - 1) * np.exp(-(w[valid] / scale_k)**c_k)
+        pdf = (c_k / scale_k) * (w / scale_k)**(c_k - 1) * np.exp(-(w / scale_k)**c_k)
         return pdf
 
     @staticmethod

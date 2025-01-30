@@ -36,12 +36,13 @@ class Simulation:
     simulates the vehicle's deployment.
     """
 
-    def __init__(self, plane: Seaplane, lat: float, lon: float, tz: str, save_history:bool=False, use_expected:bool=False) -> None:
+    def __init__(self, plane: Seaplane, lat: float, lon: float, tz: str, save_history:bool=False, use_expected:bool=False, simulate_failure: bool=True) -> None:
         self.plane = plane
         self.lat = lat
         self.lon = lon
         self.tz = tz
         self.whale_table = WhaleSighting().probability_map
+        self.simulate_failure = simulate_failure
         self.save_history = save_history
         self.use_expected = use_expected
 
@@ -92,7 +93,7 @@ class Simulation:
                                        timestep_min=dt,
                                        floating_failure_prob=1-true_success_prob)
 
-        auto = Autonomy(dt, mdp_model)
+        auto = Autonomy(dt, mdp_model,use_expected_reward=self.use_expected)
         mdp_model.show_progress = True
 
         data = {}
@@ -126,7 +127,7 @@ class Simulation:
                 wind_data=sim_wind_data,
                 whale_data=whale_observation_data,
                 true_success_prob=true_success_prob,
-                simulate_failure=True,
+                simulate_failure=self.simulate_failure,
                 save_history=self.save_history,
                 threshold=threshold if algo == "Threshold" else None
             )

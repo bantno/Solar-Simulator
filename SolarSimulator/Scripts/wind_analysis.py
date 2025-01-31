@@ -3,7 +3,7 @@ import plotly.express as px
 
 # Example DataFrame (replace this with your actual DataFrame)
 # df = pd.read_pickle(r"Data\HISTORICAL_DATA\data_60min_lat_30.pkl")
-df = pd.read_pickle(r"Data\HISTORICAL_DATA\data_60min.pkl")
+df = pd.read_pickle(r"Data\HISTORICAL_DATA\data_60min_lat_30.pkl")
 
 # Filter data for daylight hours (shortwave_radiation > 0)
 daylight_df = df[df['shortwave_radiation'] > 0]

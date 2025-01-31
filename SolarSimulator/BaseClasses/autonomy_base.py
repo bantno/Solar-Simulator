@@ -23,7 +23,7 @@ class Autonomy:
         battery_capacity_J, nightly_idle_soc, single_flight_soc = self._compute_energy_parameters()
 
         # Initialize history arrays
-        state_history_list, energy_history_list, u_k_list = self._initialize_state_history(initial_state, max_stages, battery_capacity_J)
+        state_history_list, energy_history_list, u_k_list, failure_prob_list = self._initialize_state_history(initial_state, max_stages, battery_capacity_J)
         flight_minutes, reward = 0.0, 0
 
         # Simulation loop
@@ -41,13 +41,13 @@ class Autonomy:
             new_energy, new_state = self._update_energy_and_state(current_state,current_energy, best_action, solar_power_wpm2, battery_capacity_J)
             reward += self.simulate_stochastic_reward(current_state, best_action, k, whale_prob, use_expected_value=self.use_expected_reward)
 
-            state_history_list[k + 1], energy_history_list[k + 1],u_k_list[k + 1] = new_state, new_energy, best_action
+            state_history_list[k+1], energy_history_list[k+1], u_k_list[k+1], failure_prob_list[k+1] = new_state, new_energy, best_action, failure_prob
 
             if not is_action_successful or new_state[0] < 0:
                 state_history_list[k:] = [(-1, 2)] * (len(state_history_list) - k)
                 break
 
-        return self._finalize_simulation(save_history, reward, k, state_history_list, u_k_list, solar_data, wind_data, whale_data, flight_minutes)
+        return self._finalize_simulation(save_history, reward, k, state_history_list, u_k_list, failure_prob_list, solar_data, wind_data, whale_data, flight_minutes)
 
 
     def simulate_mdp_behavior(
@@ -58,7 +58,7 @@ class Autonomy:
         max_stages = self._validate_data_lengths(solar_data, wind_data, whale_data)
 
         battery_capacity_J = self.plane.capacity * self.mdp_model.plane.voltage * 3600
-        state_history_list, energy_history_list, u_k_list = self._initialize_state_history(initial_state, max_stages, battery_capacity_J)
+        state_history_list, energy_history_list, u_k_list, failure_prob_list = self._initialize_state_history(initial_state, max_stages, battery_capacity_J)
         flight_minutes, reward = 0.0, 0
         action_list = [0, 1]
         value_list = [-1000, -1000]
@@ -77,13 +77,13 @@ class Autonomy:
             new_energy, new_state = self._update_energy_and_state(current_state,current_energy, best_action, solar_power_wpm2, battery_capacity_J)
             reward += self.simulate_stochastic_reward(current_state, best_action, k, whale_prob)
 
-            state_history_list[k + 1], energy_history_list[k + 1],u_k_list[k + 1] = new_state, new_energy, best_action
+            state_history_list[k+1], energy_history_list[k+1], u_k_list[k+1], failure_prob_list[k+1] = new_state, new_energy, best_action, failure_prob
 
             if not is_action_successful or new_state[0] < 0:
                 state_history_list[k:] = [(-1, 2)] * (len(state_history_list) - k)
                 break
 
-        return self._finalize_simulation(save_history, reward, k, state_history_list, u_k_list, solar_data, wind_data, whale_data, flight_minutes)
+        return self._finalize_simulation(save_history, reward, k, state_history_list, u_k_list, failure_prob_list, solar_data, wind_data, whale_data, flight_minutes)
 
 
     ### Helper Functions ###
@@ -120,9 +120,10 @@ class Autonomy:
         state_history_list = np.empty(max_stages, dtype=tuple)
         energy_history_list = np.empty(max_stages)
         u_k_list = np.empty(max_stages)
+        failure_prob_list = np.empty(max_stages)
         state_history_list[0] = initial_state
         energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
-        return state_history_list, energy_history_list, u_k_list
+        return state_history_list, energy_history_list, u_k_list, failure_prob_list
 
     def _extract_step_data(self, k, state_history_list, energy_history_list, solar_data, wind_data, whale_data):
         """Extract data for the current simulation step."""
@@ -154,10 +155,10 @@ class Autonomy:
         )
         return new_energy, self.calculate_new_state(best_action, new_energy, battery_capacity_J)
 
-    def _finalize_simulation(self, save_history, reward, k, state_history_list, action_list, solar_data, wind_data, whale_data, flight_minutes):
+    def _finalize_simulation(self, save_history, reward, k, state_history_list, action_list, failure_prob_list, solar_data, wind_data, whale_data, flight_minutes):
         """Finalize the simulation results."""
         if save_history:
-            return reward, k, state_history_list, action_list, solar_data, wind_data, whale_data, flight_minutes
+            return reward, k, state_history_list, action_list, failure_prob_list, solar_data, wind_data, whale_data, flight_minutes
         return reward, k, flight_minutes
 
     def simulate_fullcharge_behavior(self,
@@ -249,17 +250,13 @@ class Autonomy:
         Returns:
         - Reward value considering both deterministic and stochastic factors.
         """
-        
-        if action == 0:
-            whale_reward = 0
-        elif action == 1:
+        whale_reward = 0
+        if action == 1:
             if use_expected_value:
                 whale_reward = whale_prob
             else:
                 if np.random.uniform(0,1) < whale_prob:
                     whale_reward = 1
-                else:
-                    whale_reward = 0
         return whale_reward
     
     def calculate_new_state(self,best_action,energy,max_capacity):

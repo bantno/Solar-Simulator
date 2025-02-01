@@ -35,16 +35,22 @@ class Autonomy:
             if best_action == 1:
                 flight_minutes += self.dt
 
-            failure_prob = self._compute_failure_prob(simulate_failure, wind_speed, best_action, current_state, true_success_prob)
-            is_action_successful = np.random.uniform(0, 1) > failure_prob
+            failure_prob = self._compute_failure_prob(wind_speed, best_action, current_state, true_success_prob)
+            if simulate_failure:
+                is_action_successful = np.random.uniform(0, 1) > failure_prob
+            else:
+                is_action_successful = True
 
             new_energy, new_state = self._update_energy_and_state(current_state,current_energy, best_action, solar_power_wpm2, battery_capacity_J)
             reward += self.simulate_stochastic_reward(current_state, best_action, k, whale_prob, use_expected_value=self.use_expected_reward)
 
             state_history_list[k+1], energy_history_list[k+1], u_k_list[k+1], failure_prob_list[k+1] = new_state, new_energy, best_action, failure_prob
 
-            if not is_action_successful or new_state[0] < 0:
-                state_history_list[k:] = [(-1, 2)] * (len(state_history_list) - k)
+            if not is_action_successful:
+                state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
+                break
+            elif new_state[0] < 0:
+                state_history_list[k:] = [(-15, 2)] * (len(state_history_list) - k)
                 break
 
         return self._finalize_simulation(save_history, reward, k, state_history_list, u_k_list, failure_prob_list, solar_data, wind_data, whale_data, flight_minutes)
@@ -71,16 +77,22 @@ class Autonomy:
             collected_solar_power = self.plane.S * solar_power_wpm2 * self.panel_efficiency
             best_action = self._determine_mdp_best_action(k, current_state, action_list, value_list, collected_solar_power, whale_prob)
 
-            failure_prob = self._compute_failure_prob(simulate_failure, wind_speed, best_action, current_state, true_success_prob)
-            is_action_successful = np.random.uniform(0, 1) > failure_prob
+            failure_prob = self._compute_failure_prob(wind_speed, best_action, current_state, true_success_prob)
+            if simulate_failure:
+                is_action_successful = np.random.uniform(0, 1) > failure_prob
+            else:
+                is_action_successful = True
 
             new_energy, new_state = self._update_energy_and_state(current_state,current_energy, best_action, solar_power_wpm2, battery_capacity_J)
             reward += self.simulate_stochastic_reward(current_state, best_action, k, whale_prob)
 
             state_history_list[k+1], energy_history_list[k+1], u_k_list[k+1], failure_prob_list[k+1] = new_state, new_energy, best_action, failure_prob
 
-            if not is_action_successful or new_state[0] < 0:
-                state_history_list[k:] = [(-1, 2)] * (len(state_history_list) - k)
+            if not is_action_successful:
+                state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
+                break
+            elif new_state[0] < 0:
+                state_history_list[k:] = [(-15, 2)] * (len(state_history_list) - k)
                 break
 
         return self._finalize_simulation(save_history, reward, k, state_history_list, u_k_list, failure_prob_list, solar_data, wind_data, whale_data, flight_minutes)
@@ -118,9 +130,9 @@ class Autonomy:
             - u_k_list (np.ndarray): An array to store control inputs.
         """
         state_history_list = np.empty(max_stages, dtype=tuple)
-        energy_history_list = np.empty(max_stages)
-        u_k_list = np.empty(max_stages)
-        failure_prob_list = np.empty(max_stages)
+        energy_history_list = np.zeros(max_stages)
+        u_k_list = np.zeros(max_stages)
+        failure_prob_list = np.zeros(max_stages)
         state_history_list[0] = initial_state
         energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
         return state_history_list, energy_history_list, u_k_list, failure_prob_list
@@ -141,11 +153,10 @@ class Autonomy:
             value_list[idx] = self.mdp_model._alpha(k, current_state, action, collected_solar_power)
         return 1 if whale_prob >= (value_list[0] - value_list[1]) else 0
 
-    def _compute_failure_prob(self, simulate_failure, wind_speed, best_action, current_state, true_success_prob):
+    def _compute_failure_prob(self, wind_speed, best_action, current_state, true_success_prob):
         """Compute the probability of failure given the wind conditions and action."""
-        if simulate_failure:
-            return 1 - self.mdp_model._P_S_given_w(wind_speed, best_action, current_state, p_f=1 - true_success_prob)
-        return -1
+        return 1 - self.mdp_model._P_S_given_w(wind_speed, best_action, current_state, p_f=1 - true_success_prob)
+        
 
     def _update_energy_and_state(self,current_state, current_energy, best_action, solar_power_wpm2, battery_capacity_J):
         """Compute new energy and state after applying the action."""

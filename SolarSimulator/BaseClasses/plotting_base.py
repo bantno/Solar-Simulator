@@ -47,27 +47,29 @@ class StateHistoryPlotter:
             return algo
         else:
             return "Unknown"
-
-    def plot_data(self, save_dir):
-        """Plot the state of charge, solar history, cumulative hours flown, whale history, and wind history for the first entry in each file in the directory and save the plot."""
         
-        plt.figure(figsize=(15, 12))
+    def plot_data(self, save_dir):
+        """Plot various data histories for the first entry in each file in the directory and save the plot."""
+        
+        plt.figure(figsize=(15, 16))
         files = self.get_data_files()
         battery_capacity = self.get_battery_capacity(files[0])
         plt.suptitle(f'Battery Capacity: {battery_capacity} Ah', fontsize=16)
 
         self.plot_state_of_charge(files)
+        self.plot_action_history(files)
         self.plot_cumulative_hours_flight(files)
         self.plot_solar_history(files)
         self.plot_whale_history(files)
         self.plot_wind_history(files)
+        self.plot_failure_prob_history(files)
         
         plt.tight_layout()
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, "plot.png")
         plt.savefig(save_path)
         plt.close()
-        
+    
     def get_data_files(self):
         """Retrieve the list of .pkl files in the directory."""
         files = [file for file in os.listdir(self.directory) if file.endswith(".pkl")]
@@ -80,7 +82,7 @@ class StateHistoryPlotter:
         return self.extract_parameter_from_filename(filename, r"c(\d+)", "Unknown Capacity")
     
     def plot_state_of_charge(self, files):
-        plt.subplot(5, 1, 1)
+        plt.subplot(7, 1, 1)
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             _, label = self.parse_filename(file)
@@ -93,8 +95,22 @@ class StateHistoryPlotter:
         plt.legend()
         plt.grid(True)
     
+    def plot_action_history(self, files):
+        plt.subplot(7, 1, 2)
+        for file in files:
+            df = self.load_first_entry(os.path.join(self.directory, file))
+            _, label = self.parse_filename(file)
+            action_history = df['ActionHistory'].values[0]
+            time_index = pd.date_range(start=self.start_date, periods=len(action_history), freq=self.time_step)
+            plt.plot(time_index, action_history, label=label)
+        plt.title('Action History Over Time')
+        plt.xlabel('Datetime')
+        plt.ylabel('Action Taken')
+        plt.legend()
+        plt.grid(True)
+    
     def plot_cumulative_hours_flight(self, files):
-        plt.subplot(5, 1, 2)
+        plt.subplot(7, 1, 3)
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             _, label = self.parse_filename(file)
@@ -116,7 +132,7 @@ class StateHistoryPlotter:
         return cumulative_hours
     
     def plot_solar_history(self, files):
-        plt.subplot(5, 1, 3)
+        plt.subplot(7, 1, 4)
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
         solar_history = df['SolarHistory'].values[0]
         expected_solar_history = df['ExpectedSolarHistory'].values[0]
@@ -130,7 +146,7 @@ class StateHistoryPlotter:
         plt.grid(True)
     
     def plot_whale_history(self, files):
-        plt.subplot(5, 1, 4)
+        plt.subplot(7, 1, 5)
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
         whale_history = df['WhaleHistory'].values[0]
         time_index = pd.date_range(start=self.start_date, periods=len(whale_history), freq=self.time_step)
@@ -142,18 +158,33 @@ class StateHistoryPlotter:
         plt.grid(True)
     
     def plot_wind_history(self, files):
-        plt.subplot(5, 1, 5)
+        plt.subplot(7, 1, 6)
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
         wind_history = df['WindHistory'].values[0]
         expected_wind_history = df['ExpectedWindHistory'].values[0]
         time_index = pd.date_range(start=self.start_date, periods=len(wind_history), freq=self.time_step)
-        plt.plot(time_index, wind_history, label="Actual Wind")
+        plt.plot(time_index, wind_history, label="Wind History")
         plt.plot(time_index, expected_wind_history[:len(time_index)], label="Expected Wind")
         plt.title('Wind History Over Time')
         plt.xlabel('Datetime')
         plt.ylabel('Wind Speed (m/s)')
         plt.legend()
         plt.grid(True)
+    
+    def plot_failure_prob_history(self, files):
+        plt.subplot(7, 1, 7)
+        for file in files:
+            df = self.load_first_entry(os.path.join(self.directory, file))
+            _, label = self.parse_filename(file)
+            failure_prob_history = df['FailureProbHistory'].values[0]
+            time_index = pd.date_range(start=self.start_date, periods=len(failure_prob_history), freq=self.time_step)
+            plt.plot(time_index, failure_prob_history, label=label)  # Ensure unique label for each file
+        plt.title('Failure Probability Over Time')
+        plt.xlabel('Datetime')
+        plt.ylabel('Failure Probability')
+        plt.legend()
+        plt.grid(True)
+
 
 
     # Helper method for regex extraction

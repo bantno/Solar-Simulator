@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import time
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 from tqdm import tqdm
 from scipy.stats import beta as betaDist
 from scipy.stats import weibull_min
@@ -26,6 +27,7 @@ class ExpectedValueTable:
             raise ValueError("Specified state of charge increment does not divide evenly into 100%.")
         else:
             self.ev_table = np.zeros((int(2*(100/soc_increment+1)+1),expected_solar_data.shape[0]))
+            self.ev_table[-1,:] = -25.0
         self.whale_probability_data = whale_observation_data
 
     
@@ -42,8 +44,7 @@ class ExpectedValueTable:
             for idx,state in enumerate(self.states[:-1]):
                 self.ev_table[idx,k] = self._ev_entry(k,state)
 
-        np.savetxt("output.csv", self.ev_table, delimiter=",", fmt="%.8f")
-        self.plot_surface(self.ev_table,self.plane.capacity)
+        self.plot_surface_plotly(self.ev_table,self.plane.capacity)
     
     def _calculate_case_probabilities(self,stage,state,reward_k):
         """
@@ -369,28 +370,30 @@ class ExpectedValueTable:
             return 0
         else:
             raise ValueError("Invalid state.")
+
+        return 1
         
         # if u_k == 1 and x_2 == 0:  # Takeoff
-        #     return 1 - 1 / (1 + np.exp(11 - 0.35 * w))
+        #     return 1 - 1 / (1 + np.exp(5 - 0.35 * w))
         # elif u_k == 0 and x_2 == 0:  # Floating
         #     return 1 - np.full_like(w,p_f)
         # elif u_k == 1 and x_2 == 1:  # Flying
         #     return 1 - np.full_like(w,p_f)
         # elif u_k == 0 and x_2 == 1:  # Landing
-        #     return 1 - 1 / (1 + np.exp(10 - 0.35 * w))
+        #     return 1 - 1 / (1 + np.exp(5 - 0.35 * w))
         # else:
         #     raise ValueError("Invalid combination of u_k and x_2.")
         
-        if u_k == 1 and x_2 == 0:  # Takeoff
-            return 1-((1-0.9995)*2)
-        elif u_k == 0 and x_2 == 0:  # Floating
-            return 1.0
-        elif u_k == 1 and x_2 == 1:  # Flying
-            return 0.9995
-        elif u_k == 0 and x_2 == 1:  # Landing
-            return 1-((1-0.9995)*2)
-        else:
-            raise ValueError("Invalid combination of u_k and x_2.")
+        # if u_k == 1 and x_2 == 0:  # Takeoff
+        #     # return 1-((1-0.9995)*2)
+        # elif u_k == 0 and x_2 == 0:  # Floating
+        #     return 1.0
+        # elif u_k == 1 and x_2 == 1:  # Flying
+        #     return 0.9995
+        # elif u_k == 0 and x_2 == 1:  # Landing
+        #     return 1-((1-0.9995)*2)
+        # else:
+        #     raise ValueError("Invalid combination of u_k and x_2.")
         
     def _compute_success_probability(self, u_k, state_k,c_k,scale_k):
         """
@@ -409,14 +412,16 @@ class ExpectedValueTable:
         
         # Integrate over the domain of the Weibull distribution [0, ∞)
 
-        x = np.linspace(0.001, 60, 501) 
+        x = np.linspace(0.00000001, 60, 501) 
         y = integrand(x)
         result = simpson(x=x,y=y)
         return result
         
 
     def _ev_entry(self,k,state):
-
+        if state[1] == 2 or state[0] <= 2:
+            return 0
+        
         reward_k = self.whale_probability_data[k]*1
         wind_shape_k = self.expected_wind[k,0]
         wind_scale_k = self.expected_wind[k,1]
@@ -569,6 +574,71 @@ class ExpectedValueTable:
         ax.legend()
         plt.tight_layout()
         plt.savefig("ev_table_broken.png")
+
+    @staticmethod
+    def plot_surface_plotly(data, capacity=50):
+        """
+        Plots interactive 3D surface plots for the 'moored,' 'flying,' and 'broken' states using Plotly.
+
+        Parameters:
+            data (numpy.ndarray): A 2D array where:
+                - Rows 0-100 represent battery percentages for the 'moored' state.
+                - Rows 101-201 represent battery percentages for the 'flying' state.
+                - Row 202 represents the 'broken' state.
+            capacity (int): Battery capacity in Ah (used for the plot titles).
+        """
+        # Extract data for each state
+        moored_data = data[:101, :]
+        flying_data = data[101:202, :]
+        broken_data = data[202:, :]
+        
+        # Generate grids
+        time_steps = np.arange(data.shape[1])  # Time steps (x-axis)
+        battery_percentages = np.linspace(0, 100, 101)  # Battery percentages (y-axis)
+        X, Y = np.meshgrid(time_steps, battery_percentages)
+        
+        # Moored State Plot
+        fig_moored = go.Figure()
+        fig_moored.add_trace(go.Surface(z=moored_data, x=X, y=Y, colorscale='Viridis'))
+        fig_moored.update_layout(
+            title=f"Surface Plot for State: Moored (Battery Capacity: {capacity} Ah)",
+            scene=dict(
+                xaxis_title='Stages',
+                yaxis_title='State of Charge (%)',
+                zaxis_title='Expected Value'
+            )
+        )
+        fig_moored.write_html("ev_table_moored.html")
+        
+        # Flying State Plot
+        fig_flying = go.Figure()
+        fig_flying.add_trace(go.Surface(z=flying_data, x=X, y=Y, colorscale='Plasma'))
+        fig_flying.update_layout(
+            title=f"Surface Plot for State: Flying (Battery Capacity: {capacity} Ah)",
+            scene=dict(
+                xaxis_title='Stages',
+                yaxis_title='State of Charge (%)',
+                zaxis_title='Expected Value'
+            )
+        )
+        fig_flying.write_html("ev_table_flying.html")
+        
+        # Broken State Plot
+        fig_broken = go.Figure()
+        fig_broken.add_trace(go.Scatter3d(
+            x=time_steps, y=[0] * len(time_steps), z=broken_data.flatten(),
+            mode='lines', line=dict(color='red'), name='Broken State'
+        ))
+        fig_broken.update_layout(
+            title=f"Surface Plot for State: Broken (Battery Capacity: {capacity} Ah)",
+            scene=dict(
+                xaxis_title='Stages',
+                yaxis_title='State of Charge (%)',
+                zaxis_title='Expected Value'
+            )
+        )
+        fig_broken.write_html("ev_table_broken.html")
+
 
 
     

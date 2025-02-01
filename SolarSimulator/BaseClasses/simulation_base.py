@@ -1,22 +1,19 @@
 import os
 import sys
 import re
-import warnings
+from suntime import Sun
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from datetime import datetime, timedelta
-from scipy.stats import weibull_min, beta as beta_dist
-from pvlib import location, tracking, temperature, pvsystem
-from pvlib.bifacial.pvfactors import pvfactors_timeseries
+from datetime import datetime
+import pytz
+from timezonefinder import TimezoneFinder
 
 # # Add the project root directory to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
-from BaseClasses.mdp import mdp
 from BaseClasses.new_mdp import ExpectedValueTable
-from BaseClasses.whale_sighting_base import WhaleSighting
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.autonomy_base import Autonomy
 
@@ -41,7 +38,6 @@ class Simulation:
         self.lat = lat
         self.lon = lon
         self.tz = tz
-        self.whale_table = WhaleSighting().probability_map
         self.simulate_failure = simulate_failure
         self.save_history = save_history
         self.use_expected = use_expected
@@ -138,10 +134,12 @@ class Simulation:
     
     def _format_simulation_result(self, result, expected_data):
         if self.save_history:
-            reward, last_step, state_history, solar_list, wind_history, whale_list, flight_minutes = result
+            reward, last_step, state_history, action_history, failure_prob_history, solar_list, wind_history, whale_list, flight_minutes = result
             return {
                 "Reward": reward,
                 "LastStep": last_step,
+                "ActionHistory": action_history,
+                "FailureProbHistory": failure_prob_history,
                 "StateHistory": state_history,
                 "SolarHistory": solar_list,
                 "ExpectedSolarHistory": expected_data["expected_solar_rad"].values,
@@ -237,24 +235,40 @@ class Simulation:
         else:
             raise FileNotFoundError(f"No expected weather file found in '{directory}' with timestep '{dt}' minutes, latitude '{lat}', and longitude '{lon}'.")
 
-    @staticmethod
-    def get_whale_observation_probabilities(time_index: pd.DatetimeIndex):
+    def get_whale_observation_probabilities(self,time_index: pd.DatetimeIndex):
         # Define the time intervals and probabilities
         time_intervals = [
-            # ("0600", "0800", 0.082),
+            ("0600", "0800", 0.082),
             ("0800", "1000", 0.098),
             ("1000", "1200", 0.095),
             ("1200", "1400", 0.217),
             ("1400", "1600", 0.215),
             ("1600", "2000", 0.278)
         ]
+        tz_finder = TimezoneFinder()
+        timezone_str = tz_finder.timezone_at(lng=self.lon, lat=self.lat)
+        tz = pytz.timezone(timezone_str)
+
+        def get_day_night_flag(dt, latitude, longitude):
+            # Create Sun object for the location
+            sun = Sun(latitude, longitude)
+            
+            # Get the sunrise and sunset times for the given day
+            sunrise = sun.get_sunrise_time(dt)
+            sunset = sun.get_sunset_time(dt)
+            
+            # Determine if current time is day or night
+            if sunrise <= dt <= sunset:
+                return 1
+            else:
+                return 0
         
         # Function to get the whale observation probability for a given time
         def get_probability_for_time(time):
             time_str = time.strftime("%H%M")
             for interval_start, interval_end, prob in time_intervals:
                 if interval_start <= time_str < interval_end:
-                    return prob
+                    return prob*get_day_night_flag(time, self.lat, self.lon)
             return 0.0  # Return 0.0 if the time doesn't fall into any interval
 
         # Apply the function to the DatetimeIndex and return the probabilities

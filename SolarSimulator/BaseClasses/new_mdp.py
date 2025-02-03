@@ -46,7 +46,7 @@ class ExpectedValueTable:
 
         self.plot_surface_plotly(self.ev_table,self.plane.capacity)
     
-    def _calculate_case_probabilities(self,stage,state,reward_k):
+    def _calculate_case_probabilities(self,stage,state,reward_k,pf_0,pf_1):
         """
         Calculate the probabilities of different energy and reward sufficiency cases.
 
@@ -85,7 +85,7 @@ class ExpectedValueTable:
         current_energy_J = self.soc_to_joules(state[0])
         required_energy_J = self._calculate_required_energy(state,action=1)
         p_sufficient_solar = self._calculate_sufficient_solar_probability(required_energy_J,current_energy_J,max_collected_energy_J,alpha_k,beta_k)
-        p_sufficient_reward,alpha_u_0,alpha_u_1 = self._calculate_sufficient_reward_probability(stage,state,reward_k,alpha_k,beta_k)
+        p_sufficient_reward,alpha_u_0,alpha_u_1 = self._calculate_sufficient_reward_probability(stage,state,reward_k,alpha_k,beta_k,pf_0,pf_1)
         
         p0 = (1-p_sufficient_solar)*(1-p_sufficient_reward)
         p1 = (1-p_sufficient_solar)*(p_sufficient_reward)
@@ -124,7 +124,7 @@ class ExpectedValueTable:
         F_S = betaDist.cdf(threshold, alpha, beta)
         return 1-F_S
     
-    def _calculate_sufficient_reward_probability(self,stage,state,reward_k,alpha_k,beta_k,n=1000):
+    def _calculate_sufficient_reward_probability(self,stage,state,reward_k,alpha_k,beta_k,pf_0,pf_1,n=1000):
         """
         Calculate the probability of obtaining sufficient reward for a given action.
 
@@ -157,7 +157,7 @@ class ExpectedValueTable:
         ev_0 = np.array(self._alpha(stage, state, 0, samples))
         ev_1 = np.array(self._alpha(stage, state, 1, samples))
 
-        d_alpha = ev_0-ev_1 # Do I need to account for the possibility that i dont make it to these states
+        d_alpha = ev_0*pf_0-ev_1*pf_1 # Do I need to account for the possibility that i dont make it to these states
         p_sufficient_reward = np.mean(reward_k >= d_alpha)
 
         return p_sufficient_reward,np.mean(ev_0),np.mean(ev_1)
@@ -370,22 +370,20 @@ class ExpectedValueTable:
             return 0
         else:
             raise ValueError("Invalid state.")
-
-        return 1
+        
+        if u_k == 1 and x_2 == 0:  # Takeoff
+            return 1 - 1 / (1 + np.exp(11 - 0.35 * w))
+        elif u_k == 0 and x_2 == 0:  # Floating
+            return 1 - np.full_like(w,p_f)
+        elif u_k == 1 and x_2 == 1:  # Flying
+            return 1 - np.full_like(w,p_f)
+        elif u_k == 0 and x_2 == 1:  # Landing
+            return 1 - 1 / (1 + np.exp(10 - 0.35 * w))
+        else:
+            raise ValueError("Invalid combination of u_k and x_2.")
         
         # if u_k == 1 and x_2 == 0:  # Takeoff
-        #     return 1 - 1 / (1 + np.exp(5 - 0.35 * w))
-        # elif u_k == 0 and x_2 == 0:  # Floating
-        #     return 1 - np.full_like(w,p_f)
-        # elif u_k == 1 and x_2 == 1:  # Flying
-        #     return 1 - np.full_like(w,p_f)
-        # elif u_k == 0 and x_2 == 1:  # Landing
-        #     return 1 - 1 / (1 + np.exp(5 - 0.35 * w))
-        # else:
-        #     raise ValueError("Invalid combination of u_k and x_2.")
-        
-        # if u_k == 1 and x_2 == 0:  # Takeoff
-        #     # return 1-((1-0.9995)*2)
+        #     return 1-((1-0.9995)*2)
         # elif u_k == 0 and x_2 == 0:  # Floating
         #     return 1.0
         # elif u_k == 1 and x_2 == 1:  # Flying
@@ -419,19 +417,20 @@ class ExpectedValueTable:
         
 
     def _ev_entry(self,k,state):
-        if state[1] == 2 or state[0] <= 2:
+
+        if state[0] < 2:
             return 0
-        
+
         reward_k = self.whale_probability_data[k]*1
+
         wind_shape_k = self.expected_wind[k,0]
         wind_scale_k = self.expected_wind[k,1]
-
-        probabilities,alpha_u_0,alpha_u_1 = self._calculate_case_probabilities(k,state,reward_k)
-        
-        p_4 = probabilities[3]
-        
         p_success_u_0 = self._compute_success_probability(0,state,wind_shape_k,wind_scale_k)
         p_success_u_1 = self._compute_success_probability(1,state,wind_shape_k,wind_scale_k)
+
+        probabilities,alpha_u_0,alpha_u_1 = self._calculate_case_probabilities(k,state,reward_k,p_success_u_0,p_success_u_1)
+        
+        p_4 = probabilities[3]
         
         E_J_k = (1-p_4)*(p_success_u_0)*(alpha_u_0) + p_4*(reward_k + p_success_u_1*alpha_u_1)
         return E_J_k

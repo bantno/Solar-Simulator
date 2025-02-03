@@ -245,6 +245,7 @@ class StateHistoryPlotter:
                     # Assuming the data has 'reward' as a key (adjust this if the structure is different)
                     thresholds.append(threshold_value)
                     rewards.append(data['Reward'].mean())
+                    rewards.append(data['Reward'].median())
                 else:
                     algo_match = re.search(r'([\w])_Data+', file_name)  # Capture the value after 't'
                     with open(file_path, 'rb') as f:
@@ -252,6 +253,7 @@ class StateHistoryPlotter:
 
                     # Assuming the data has 'reward' as a key (adjust this if the structure is different)
                     optimal_reward = data['Reward'].mean()
+                    rewards.append(data['Reward'].median())
                     print(optimal_reward)
                     
 
@@ -304,7 +306,7 @@ class DataProcessor:
                     num_timesteps = ((end_day - start_day + 1) * 24 * 60) // dt
 
                     # Calculate mean reward and failure step
-                    mean_reward, mean_failure_step = self.calculate_mean_rewards_and_failures(
+                    mean_reward,median_reward,mean_failure_step,median_failure_step = self.calculate_mean_rewards_and_failures(
                         os.path.join(self.directory, filename)
                     )
 
@@ -321,7 +323,9 @@ class DataProcessor:
                         "NumTimesteps": num_timesteps,
                         "NumRuns": runs,
                         "MeanFailureStep": mean_failure_step,
-                        "MeanReward": mean_reward
+                        "MedianFailureStep": median_failure_step,
+                        "MeanReward": mean_reward,
+                        "MedianReward": median_reward
                     })
                 else:
                     print(f"Filename {filename} does not match expected pattern.")
@@ -372,9 +376,11 @@ class DataProcessor:
 
         if 'Reward' in df.columns and 'LastStep' in df.columns:
             mean_reward = df['Reward'].mean()
+            median_reward = df['Reward'].median()
             mean_failure_step = round(df['LastStep'].mean())
+            median_failure_step = df['LastStep'].median()
             print(f"Number of runs in dataset {filepath}: {len(df)}")
-            return mean_reward, mean_failure_step
+            return mean_reward, median_reward, mean_failure_step, median_failure_step
         else:
             print(f"Missing columns in {filepath}")
             return None, None
@@ -462,6 +468,9 @@ class DataProcessor:
                         marker='X', color='black', s=100,
                         label="Optimal Algorithm"
                     )
+                    plt.plot(
+                         optimal_df['Capacity'], optimal_df['MedianReward'], linestyle='--', marker='o', markersize=5, label="Median: Optimal Algorithm"
+                    )
 
                 # Plot the Charge Threshold algorithm
                 if not charge_threshold_df.empty:
@@ -473,9 +482,13 @@ class DataProcessor:
 
                 # Plot the Threshold algorithm grouped by Threshold value
                 for threshold_value, subset in threshold_df.groupby('Threshold'):
+                    label=f"Threshold, t={threshold_value}"
                     plt.scatter(
                         subset['Capacity'], subset['MeanReward'],
-                        label=f"Threshold, t={threshold_value}"
+                        label=label
+                    )
+                    plt.plot(
+                         subset['Capacity'], subset['MedianReward'], linestyle='--', marker='o', markersize=5, label=f" Median: Threshold, t={threshold_value}"
                     )
 
                 # Plot customization

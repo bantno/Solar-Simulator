@@ -35,7 +35,7 @@ def run_simulation(params):
     )
 
 def main():
-    config_file = r"Results\oof\simulation_params.yaml"  # Update path as needed
+    config_file = r"Results\Analysis\simulation_params.yaml"  # Update path as needed
     simulations = load_simulations_config(config_file)
     print(f"Number of simulations: {len(simulations)}")
 

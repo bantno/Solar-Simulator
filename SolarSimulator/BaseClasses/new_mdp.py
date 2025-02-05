@@ -390,7 +390,7 @@ class ExpectedValueTable:
         # print(time.time()-start_time)
         return rounded_soc_change
 
-    def _P_S_given_w(self, w, u_k, state, p_f=1.0, a1=15, b1=0.35, a2=10, b2=0.35):
+    def _P_S_given_w(self, w, u_k, state, p_f=1.0, a1=17, b1=0.5, a2=16, b2=0.5):
         """
         Compute the conditional probability P(S|w_k) based on the state and wind speed.
 
@@ -611,7 +611,7 @@ class ExpectedValueTable:
         # Plot for 'flying' state
         fig = plt.figure(figsize=(12, 8))
         ax = plt.subplot(projection="3d")
-        surf = ax.plot_surface(X, Y, flying_data, cmap="plasma", edgecolor="none")
+        surf = ax.plot_surface(x, y, flying_data, cmap="plasma", edgecolor="none")
         cbar = plt.colorbar(surf, ax=ax, shrink=0.5, aspect=10)
         cbar.set_label("Expected Value")
         ax.set_title(f"Surface Plot for State: Flying\nBattery Capacity: {capacity} Ah")
@@ -659,20 +659,20 @@ class ExpectedValueTable:
         # Generate grids
         time_steps = np.arange(data.shape[1])  # Time steps (x-axis)
         battery_percentages = np.linspace(0, 100, 101)  # Battery percentages (y-axis)
-        X, Y = np.meshgrid(time_steps, battery_percentages)
+        x, y = np.meshgrid(time_steps, battery_percentages)
 
         # Create figure
         fig = go.Figure()
 
         # Add Moored State surface
         fig.add_trace(
-            go.Surface(z=moored_data, x=X, y=Y, colorscale="Viridis", name="Moored")
+            go.Surface(z=moored_data, x=x, y=y, colorscale="Viridis", name="Moored")
         )
 
         # Add Flying State surface
         fig.add_trace(
             go.Surface(
-                z=flying_data, x=X, y=Y, colorscale="Plasma", opacity=0.7, name="Flying"
+                z=flying_data, x=x, y=y, colorscale="Plasma", opacity=0.7, name="Flying"
             )
         )
 

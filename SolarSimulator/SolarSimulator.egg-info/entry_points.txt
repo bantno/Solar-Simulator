@@ -1,0 +1,2 @@
+[console_scripts]
+solar-sim = SolarSimulator.Scripts.run:main

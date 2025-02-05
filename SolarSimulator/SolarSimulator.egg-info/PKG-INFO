@@ -1,0 +1,37 @@
+Metadata-Version: 2.1
+Name: SolarSimulator
+Version: 0.1.0
+Summary: Solar-powered seaplane simulation for whale observation missions
+Home-page: https://github.com/bantno/Solar-Simulator
+Author: Brian Epstein
+Author-email: bepstein8@gatech.edu
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Physics
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.26.4
+Requires-Dist: pandas>=2.2.2
+Requires-Dist: scipy>=1.13.1
+Requires-Dist: matplotlib>=3.9.0
+Requires-Dist: pvlib>=0.10.5
+Requires-Dist: ephem>=4.1.5
+Requires-Dist: suntime>=1.2.5
+Requires-Dist: timezonefinder>=6.2.0
+Requires-Dist: pytz>=2024.1
+Requires-Dist: tqdm>=4.66.4
+Requires-Dist: trimesh>=4.4.0
+Requires-Dist: statsmodels>=0.14.2
+Requires-Dist: shapely>=1.8.5
+Requires-Dist: openmeteo-requests>=1.1.0
+Requires-Dist: requests-cache>=1.1.0
+Requires-Dist: retry-requests>=2.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=6.0; extra == "dev"
+Requires-Dist: pytest-cov>=2.0; extra == "dev"
+Requires-Dist: black>=22.0; extra == "dev"
+Requires-Dist: flake8>=4.0; extra == "dev"

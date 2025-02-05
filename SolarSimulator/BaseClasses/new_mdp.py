@@ -62,7 +62,7 @@ class ExpectedValueTable:
             for idx, state in enumerate(self.states[:-1]):
                 self.ev_table[idx, k] = self._ev_entry(k, state)
 
-        self.plot_surface_plotly(self.ev_table, self.plane.capacity)
+        # self.plot_surface_plotly(self.ev_table, self.plane.capacity)
 
     def _calculate_case_probabilities(self, stage, state, reward_k, pf_0, pf_1):
         """

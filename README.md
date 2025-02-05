@@ -1,4 +1,7 @@
-# Solar-Powered Seaplane Simulation  
+
+
+# AHABS: Autonomous Hydrofauna Aerial Biome Surveyor | A Solar-Powered Seaplane Simulation  
+
 
 ## Overview  
 This repository contains the simulation framework for modeling the operation of a solar-powered seaplane designed for long-term oceanic monitoring. The simulation incorporates environmental factors such as solar radiation, wind conditions, and whale sighting probabilities to evaluate decision-making strategies for energy management and mission planning.  

@@ -124,9 +124,9 @@ class Simulation:
 
         data = {}
         simulation_methods = {
-            "Threshold": auto.simulate_simple_behavior,
-            "Optimal": auto.simulate_mdp_behavior,
-            "Charge Threshold": auto.simulate_fullcharge_behavior,
+            "Threshold": auto.simulate_observation_threshold_mission,
+            "Optimal": auto.simulate_optimal_mission,
+            "Charge Threshold": auto.simulate_charge_threshold_mission,
         }
 
         if algo not in simulation_methods:

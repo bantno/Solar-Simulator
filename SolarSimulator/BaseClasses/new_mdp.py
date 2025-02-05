@@ -22,6 +22,7 @@ class ExpectedValueTable:
         self.expected_wind = expected_wind_data
         self.floating_failure_prob = floating_failure_prob
         self.states = self._create_states(soc_increment,[0,1])
+        self.gamma = 1.0
 
         if 100 % soc_increment != 0:
             raise ValueError("Specified state of charge increment does not divide evenly into 100%.")
@@ -162,6 +163,7 @@ class ExpectedValueTable:
 
         return p_sufficient_reward,np.mean(ev_0),np.mean(ev_1)
 
+
     def _calculate_required_energy(self,state,action):
         """
         Calculate the energy required for a given action.
@@ -227,8 +229,7 @@ class ExpectedValueTable:
         next_state = self.calculate_next_state(state,action,solar_power_w)
         ev = self.lookup_expected_value(self.ev_table,stage+1,next_state)
         return ev
-    
-   
+     
     def soc_to_joules(self,soc):
         """
         Convert state of charge (SOC) to energy in Joules.
@@ -372,11 +373,11 @@ class ExpectedValueTable:
             raise ValueError("Invalid state.")
         
         if u_k == 1 and x_2 == 0:  # Takeoff
-            return 1 - 1 / (1 + np.exp(11 - 0.35 * w))
+            return 1 - 1 / (1 + np.exp(15 - 0.35 * w))
         elif u_k == 0 and x_2 == 0:  # Floating
-            return 1 - np.full_like(w,p_f)
+            return 1 # - np.full_like(w,p_f)
         elif u_k == 1 and x_2 == 1:  # Flying
-            return 1 - np.full_like(w,p_f)
+            return 1 #- np.full_like(w,p_f)
         elif u_k == 0 and x_2 == 1:  # Landing
             return 1 - 1 / (1 + np.exp(10 - 0.35 * w))
         else:
@@ -432,7 +433,7 @@ class ExpectedValueTable:
         
         p_4 = probabilities[3]
         
-        E_J_k = (1-p_4)*(p_success_u_0)*(alpha_u_0) + p_4*(reward_k + p_success_u_1*alpha_u_1)
+        E_J_k = (1-p_4)*(p_success_u_0)*(alpha_u_0)*self.gamma + p_4*(reward_k + self.gamma*p_success_u_1*alpha_u_1)
         return E_J_k
     
     def f_W_vectorized(self, w, c_k, scale_k):
@@ -577,67 +578,52 @@ class ExpectedValueTable:
     @staticmethod
     def plot_surface_plotly(data, capacity=50):
         """
-        Plots interactive 3D surface plots for the 'moored,' 'flying,' and 'broken' states using Plotly.
+        Plots an interactive 3D surface plot for the 'moored,' 'flying,' and 'broken' states using Plotly.
 
         Parameters:
             data (numpy.ndarray): A 2D array where:
                 - Rows 0-100 represent battery percentages for the 'moored' state.
                 - Rows 101-201 represent battery percentages for the 'flying' state.
                 - Row 202 represents the 'broken' state.
-            capacity (int): Battery capacity in Ah (used for the plot titles).
+            capacity (int): Battery capacity in Ah (used for the plot title).
         """
         # Extract data for each state
         moored_data = data[:101, :]
         flying_data = data[101:202, :]
-        broken_data = data[202:, :]
+        broken_data = data[202, :]  # Single row for broken state
         
         # Generate grids
         time_steps = np.arange(data.shape[1])  # Time steps (x-axis)
         battery_percentages = np.linspace(0, 100, 101)  # Battery percentages (y-axis)
         X, Y = np.meshgrid(time_steps, battery_percentages)
-        
-        # Moored State Plot
-        fig_moored = go.Figure()
-        fig_moored.add_trace(go.Surface(z=moored_data, x=X, y=Y, colorscale='Viridis'))
-        fig_moored.update_layout(
-            title=f"Surface Plot for State: Moored (Battery Capacity: {capacity} Ah)",
-            scene=dict(
-                xaxis_title='Stages',
-                yaxis_title='State of Charge (%)',
-                zaxis_title='Expected Value'
-            )
-        )
-        fig_moored.write_html("ev_table_moored.html")
-        
-        # Flying State Plot
-        fig_flying = go.Figure()
-        fig_flying.add_trace(go.Surface(z=flying_data, x=X, y=Y, colorscale='Plasma'))
-        fig_flying.update_layout(
-            title=f"Surface Plot for State: Flying (Battery Capacity: {capacity} Ah)",
-            scene=dict(
-                xaxis_title='Stages',
-                yaxis_title='State of Charge (%)',
-                zaxis_title='Expected Value'
-            )
-        )
-        fig_flying.write_html("ev_table_flying.html")
-        
-        # Broken State Plot
-        fig_broken = go.Figure()
-        fig_broken.add_trace(go.Scatter3d(
-            x=time_steps, y=[0] * len(time_steps), z=broken_data.flatten(),
-            mode='lines', line=dict(color='red'), name='Broken State'
-        ))
-        fig_broken.update_layout(
-            title=f"Surface Plot for State: Broken (Battery Capacity: {capacity} Ah)",
-            scene=dict(
-                xaxis_title='Stages',
-                yaxis_title='State of Charge (%)',
-                zaxis_title='Expected Value'
-            )
-        )
-        fig_broken.write_html("ev_table_broken.html")
 
+        # Create figure
+        fig = go.Figure()
+
+        # Add Moored State surface
+        fig.add_trace(go.Surface(z=moored_data, x=X, y=Y, colorscale='Viridis', name="Moored"))
+
+        # Add Flying State surface
+        fig.add_trace(go.Surface(z=flying_data, x=X, y=Y, colorscale='Plasma', opacity=0.7, name="Flying"))
+
+        # Add Broken State line
+        fig.add_trace(go.Scatter3d(
+            x=time_steps, y=[0] * len(time_steps), z=broken_data,
+            mode='lines', line=dict(color='red', width=4), name='Broken'
+        ))
+
+        # Update layout
+        fig.update_layout(
+            title=f"Surface Plot for Moored, Flying, and Broken States (Battery Capacity: {capacity} Ah)",
+            scene=dict(
+                xaxis_title='Stages',
+                yaxis_title='State of Charge (%)',
+                zaxis_title='Expected Value'
+            )
+        )
+
+        # Save plot
+        fig.write_html("ev_table_combined.html")
 
 
     

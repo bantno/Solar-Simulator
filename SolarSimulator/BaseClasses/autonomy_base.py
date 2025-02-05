@@ -75,7 +75,7 @@ class Autonomy:
                 k, state_history_list, energy_history_list, solar_data, wind_data, whale_data)
 
             collected_solar_power = self.plane.S * solar_power_wpm2 * self.panel_efficiency
-            best_action = self._determine_mdp_best_action(k, current_state, action_list, value_list, collected_solar_power, whale_prob)
+            best_action = self._determine_mdp_best_action(k, current_state, action_list, value_list, collected_solar_power, wind_speed, whale_prob,true_success_prob)
 
             failure_prob = self._compute_failure_prob(wind_speed, best_action, current_state, true_success_prob)
             if simulate_failure:
@@ -147,10 +147,10 @@ class Autonomy:
         is_battery_sufficient = current_state[0] > (nightly_idle_soc + single_flight_soc)
         return 1 if is_reward_sufficient and is_battery_sufficient else 0
 
-    def _determine_mdp_best_action(self, k, current_state, action_list, value_list, collected_solar_power, whale_prob):
+    def _determine_mdp_best_action(self, k, current_state, action_list, value_list, collected_solar_power, wind_speed, whale_prob, true_success_prob):
         """Determine the best action using the MDP model."""
         for idx, action in enumerate(action_list):
-            value_list[idx] = self.mdp_model._alpha(k, current_state, action, collected_solar_power)
+            value_list[idx] = self.mdp_model._alpha(k, current_state, action, collected_solar_power)*self.mdp_model._P_S_given_w(wind_speed, action, current_state, p_f=1-true_success_prob)
         return 1 if whale_prob >= (value_list[0] - value_list[1]) else 0
 
     def _compute_failure_prob(self, wind_speed, best_action, current_state, true_success_prob):

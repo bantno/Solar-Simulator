@@ -10,8 +10,8 @@ import pytz
 from timezonefinder import TimezoneFinder
 
 # # Add the project root directory to the Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, project_root)
+# project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+# sys.path.insert(0, project_root)
 
 from BaseClasses.new_mdp import ExpectedValueTable
 from BaseClasses.seaplane_base import Seaplane
@@ -254,8 +254,8 @@ class Simulation:
             sun = Sun(latitude, longitude)
             
             # Get the sunrise and sunset times for the given day
-            sunrise = sun.get_sunrise_time(dt)
-            sunset = sun.get_sunset_time(dt)
+            sunrise = sun.get_sunrise_time(dt).astimezone(tz)
+            sunset = sun.get_sunset_time(dt).astimezone(tz)
             
             # Determine if current time is day or night
             if sunrise <= dt <= sunset:
@@ -274,3 +274,76 @@ class Simulation:
         # Apply the function to the DatetimeIndex and return the probabilities
         probabilities = np.array(time_index.map(get_probability_for_time))
         return probabilities
+    
+class SingleCaseSimulation(Simulation):
+    """
+    A class that runs a single case of the seaplane simulation, allowing specification of
+    the expected and actual weather data files.
+    """
+    
+    def __init__(self, plane: Seaplane, lat: float, lon: float, tz: str, 
+                 expected_file: str, actual_file: str, 
+                 save_history: bool = False, use_expected: bool = False, 
+                 simulate_failure: bool = True) -> None:
+        super().__init__(plane, lat, lon, tz, save_history, use_expected, simulate_failure)
+        self.expected_file = expected_file
+        self.actual_file = actual_file
+    
+    def run_single_case(self, start_date: datetime, end_date: datetime, dt: int, algo: str,
+                        mdp_success_prob: float, true_success_prob: float, threshold: float = None):
+        """Runs a single case of the simulation."""
+        self.plane.update_plane()
+        threshold = threshold if isinstance(threshold, float) else 0.1
+        
+        times = pd.date_range(start=start_date, end=end_date, freq=pd.Timedelta(minutes=dt))
+        expected_data = pd.read_pickle(self.expected_file)
+        actual_data = pd.read_pickle(self.actual_file).loc[start_date:end_date]
+        
+        solar_columns = ['beta_alpha', 'beta_beta', 'expected_solar_rad']
+        expected_solar_data = expected_data[solar_columns].to_numpy()
+        
+        wind_columns = ['weibull_k', 'weibull_scale', 'expected_wind_speed']
+        expected_wind_data = expected_data[wind_columns].to_numpy()
+        
+        # whale_observation_data = self.get_whale_observation_probabilities(times)
+        whale_observation_data = np.zeros(len(times))
+        whale_observation_data[len(times)//2:] = 0.5
+        whale_observation_data[len(times)//4:len(times)//2] = 0.05
+        
+        mdp_model = ExpectedValueTable(self.plane, expected_solar_data, expected_wind_data,
+                                       whale_observation_data, soc_increment=1, timestep_min=dt,
+                                       floating_failure_prob=1 - true_success_prob)
+        
+        auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected)
+        mdp_model.show_progress = True
+        
+        simulation_methods = {
+            "Threshold": auto.simulate_simple_behavior,
+            "Optimal": auto.simulate_mdp_behavior,
+            "Charge Threshold": auto.simulate_fullcharge_behavior
+        }
+        
+        if algo not in simulation_methods:
+            raise ValueError(f"Unknown algorithm: {algo}. Use 'Threshold', 'Optimal', or 'Charge Threshold'.")
+        
+        if algo == "Optimal":
+            mdp_model.generate_ev_table()
+        
+        sim_solar_data = expected_data["expected_solar_rad"].values
+        sim_wind_data = expected_data["expected_wind_speed"].values
+        
+        simulate_method = simulation_methods[algo]
+        
+        result = simulate_method(
+            initial_state=(100, 0),
+            solar_data=sim_solar_data,
+            wind_data=sim_wind_data,
+            whale_data=whale_observation_data,
+            true_success_prob=true_success_prob,
+            simulate_failure=self.simulate_failure,
+            save_history=True,
+            threshold=threshold if algo == "Threshold" else None
+        )
+        data={}
+        data[0] = self._format_simulation_result(result, expected_data)
+        return pd.DataFrame.from_dict(data, orient='index')

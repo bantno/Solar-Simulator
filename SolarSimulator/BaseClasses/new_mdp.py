@@ -1,14 +1,10 @@
-import sys
 import numpy as np
-import time
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from tqdm import tqdm
 from scipy.stats import beta as betaDist
-from scipy.stats import weibull_min
-from scipy.integrate import quad, simpson
-sys.path.append(r"C:\Users\brian\OneDrive\Documents\Georgia Tech\Research\Whale Plane\SolarSim\SolarSimulator\BaseClasses")
-from seaplane_base import Seaplane
+from scipy.integrate import simpson
+from BaseClasses.seaplane_base import Seaplane
 
 class ExpectedValueTable:
     def __init__(self,plane: Seaplane,expected_solar_data,expected_wind_data, whale_observation_data, soc_increment:int,timestep_min: int,floating_failure_prob):
@@ -162,7 +158,6 @@ class ExpectedValueTable:
         p_sufficient_reward = np.mean(reward_k >= d_alpha)
 
         return p_sufficient_reward,np.mean(ev_0),np.mean(ev_1)
-
 
     def _calculate_required_energy(self,state,action):
         """
@@ -350,7 +345,7 @@ class ExpectedValueTable:
         # print(time.time()-start_time)
         return rounded_soc_change
     
-    def _P_S_given_w(self, w, u_k, state, p_f=1.0):
+    def _P_S_given_w(self, w, u_k, state, p_f=1.0,a1=15,b1=0.35,a2=10,b2=0.35):
         """
         Compute the conditional probability P(S|w_k) based on the state and wind speed.
         
@@ -373,27 +368,16 @@ class ExpectedValueTable:
             raise ValueError("Invalid state.")
         
         if u_k == 1 and x_2 == 0:  # Takeoff
-            return 1 - 1 / (1 + np.exp(15 - 0.35 * w))
+            return 1 - 1 / (1 + np.exp(a1 - b1 * w))
         elif u_k == 0 and x_2 == 0:  # Floating
             return 1 # - np.full_like(w,p_f)
         elif u_k == 1 and x_2 == 1:  # Flying
             return 1 #- np.full_like(w,p_f)
         elif u_k == 0 and x_2 == 1:  # Landing
-            return 1 - 1 / (1 + np.exp(10 - 0.35 * w))
+            return 1 - 1 / (1 + np.exp(a2 - b2 * w))
         else:
             raise ValueError("Invalid combination of u_k and x_2.")
-        
-        # if u_k == 1 and x_2 == 0:  # Takeoff
-        #     return 1-((1-0.9995)*2)
-        # elif u_k == 0 and x_2 == 0:  # Floating
-        #     return 1.0
-        # elif u_k == 1 and x_2 == 1:  # Flying
-        #     return 0.9995
-        # elif u_k == 0 and x_2 == 1:  # Landing
-        #     return 1-((1-0.9995)*2)
-        # else:
-        #     raise ValueError("Invalid combination of u_k and x_2.")
-        
+              
     def _compute_success_probability(self, u_k, state_k,c_k,scale_k):
         """
         Compute the overall probability P(S) by integrating P(S|w_k) * f_W(w).
@@ -416,7 +400,6 @@ class ExpectedValueTable:
         result = simpson(x=x,y=y)
         return result
         
-
     def _ev_entry(self,k,state):
 
         if state[0] < 2:
@@ -625,8 +608,6 @@ class ExpectedValueTable:
         # Save plot
         fig.write_html("ev_table_combined.html")
 
-
-    
 if __name__ == "__main__":
     class SeaplaneMock(Seaplane):
         def __init__(self):

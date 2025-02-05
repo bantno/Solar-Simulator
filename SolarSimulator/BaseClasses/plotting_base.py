@@ -469,7 +469,8 @@ class DataProcessor:
                         label="Optimal Algorithm"
                     )
                     plt.plot(
-                         optimal_df['Capacity'], optimal_df['MedianReward'], linestyle='--', marker='o', markersize=5, label="Median: Optimal Algorithm"
+                        optimal_df['Capacity'], optimal_df['MedianReward'],
+                        linestyle='--', marker='o', color='black', markersize=5, label="Median: Optimal Algorithm"
                     )
 
                 # Plot the Charge Threshold algorithm

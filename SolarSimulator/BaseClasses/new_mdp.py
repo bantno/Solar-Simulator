@@ -62,7 +62,8 @@ class ExpectedValueTable:
             for idx, state in enumerate(self.states[:-1]):
                 self.ev_table[idx, k] = self._ev_entry(k, state)
 
-        # self.plot_surface_plotly(self.ev_table, self.plane.capacity)
+        self.plot_surface_plotly(self.ev_table, self.plane.capacity)
+        np.savetxt("ev_table.csv", self.ev_table, delimiter=",") 
 
     def _calculate_case_probabilities(self, stage, state, reward_k, pf_0, pf_1):
         """
@@ -666,13 +667,13 @@ class ExpectedValueTable:
 
         # Add Moored State surface
         fig.add_trace(
-            go.Surface(z=moored_data, x=X, y=Y, colorscale="Viridis", name="Moored")
+            go.Surface(z=moored_data, x=X, y=Y, colorscale="Blues", opacity=0.95, name="Moored")
         )
 
         # Add Flying State surface
         fig.add_trace(
             go.Surface(
-                z=flying_data, x=X, y=Y, colorscale="Plasma", opacity=0.7, name="Flying"
+                z=flying_data, x=X, y=Y, colorscale="Magma", opacity=0.8, name="Flying"
             )
         )
 

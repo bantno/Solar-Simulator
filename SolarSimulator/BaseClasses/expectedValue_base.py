@@ -34,6 +34,7 @@ class ExpectedValueTable:
         self.states = self._create_states(soc_increment, [0, 1])
         self.gamma = 1.0
         self.transition_model = transition_model
+        self.failure_penalty = 25.0
 
         if 100 % soc_increment != 0:
             raise ValueError(
@@ -43,7 +44,7 @@ class ExpectedValueTable:
             self.ev_table = np.zeros(
                 (int(2 * (100 / soc_increment + 1) + 1), expected_solar_data.shape[0])
             )
-            self.ev_table[-1, :] = -25.0
+            self.ev_table[-1, :] = -self.failure_penalty
         self.whale_probability_data = whale_observation_data
 
     def _create_states(self, soc_increment: int, vehicle_states: list) -> list:
@@ -429,8 +430,8 @@ class ExpectedValueTable:
 
     def _ev_entry(self, k, state):
 
-        if state[0] < 2:
-            return 0
+        if state[0] == 0:
+            return -self.failure_penalty
 
         reward_k = self.whale_probability_data[k] * 1
 

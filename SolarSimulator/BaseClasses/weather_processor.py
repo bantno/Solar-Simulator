@@ -1,4 +1,5 @@
 import openmeteo_requests
+from datetime import timezone, timedelta
 import requests_cache
 import pandas as pd
 import numpy as np
@@ -9,15 +10,17 @@ from retry_requests import retry
 from tqdm import tqdm
 from multiprocessing import Pool
 
-class WeatherDataProcessor:
-    def __init__(self, cache_file='.cache', retries=5, backoff_factor=0.2):
-        # Setup Open-Meteo API client with caching and retry
-        cache_session = requests_cache.CachedSession(cache_file, expire_after=-1)
-        retry_session = retry(cache_session, retries=retries, backoff_factor=backoff_factor)
-        self.client = openmeteo_requests.Client(session=retry_session)
 
-    def fetch_weather_data(self, latitude, longitude, start_date, end_date, hourly_vars, timezone="auto"):
-        url = "https://archive-api.open-meteo.com/v1/archive"
+class WeatherDataProcessor:
+    def __init__(self, cache_file=".cache", retries=5, backoff_factor=0.2):
+        session = requests_cache.CachedSession(cache_file, expire_after=-1)
+        self.client = openmeteo_requests.Client(
+            session=retry(session, retries=retries, backoff_factor=backoff_factor)
+        )
+
+    def fetch_weather_data(
+        self, latitude, longitude, start_date, end_date, hourly_vars, timezone="auto"
+    ):
         params = {
             "latitude": latitude,
             "longitude": longitude,
@@ -25,31 +28,39 @@ class WeatherDataProcessor:
             "end_date": end_date,
             "hourly": hourly_vars,
             "timezone": timezone,
-            "cell_selection": "sea"
+            "cell_selection": "sea",
         }
-        self.response = self.client.weather_api(url, params=params)[0]
+        self.response = self.client.weather_api(
+            "https://archive-api.open-meteo.com/v1/archive", params=params
+        )[0]
         print(f"Coordinates {self.response.Latitude()}°N {self.response.Longitude()}°E")
         print(f"Elevation {self.response.Elevation()} m asl")
-        print(f"Timezone {self.response.Timezone()} {self.response.TimezoneAbbreviation()}")
-        print(f"Timezone difference to GMT+0 {self.response.UtcOffsetSeconds()} s")
-    
+        print(
+            f"Timezone {self.response.Timezone()} {self.response.TimezoneAbbreviation()}"
+        )
+        print(f"UTC Offset {self.response.UtcOffsetSeconds()} s")
+
     def process_hourly_data(self):
-        # Extract variables from the response
         hourly = self.response.Hourly()
+        offset = timezone(timedelta(seconds=self.response.UtcOffsetSeconds()))
         data = {
             "date": pd.date_range(
-                start=pd.to_datetime(hourly.Time(), unit="s", utc=True),
-                end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True),
+                start=pd.to_datetime(hourly.Time(), unit="s", utc=True).tz_convert(
+                    offset
+                ),
+                end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True).tz_convert(
+                    offset
+                ),
                 freq=pd.Timedelta(seconds=hourly.Interval()),
-                inclusive="left"
+                inclusive="left",
             ),
             "wind_speed_10m": hourly.Variables(0).ValuesAsNumpy(),
             "wind_direction_10m": hourly.Variables(1).ValuesAsNumpy(),
-            "shortwave_radiation": hourly.Variables(2).ValuesAsNumpy()
+            "shortwave_radiation": hourly.Variables(2).ValuesAsNumpy(),
         }
-        self.hourly_dataframe = pd.DataFrame(data=data)
-        self.hourly_dataframe.set_index('date', inplace=True)
-        print("Hourly data processed.")
+        df = pd.DataFrame(data).set_index("date")
+        self.hourly_dataframe = df[~((df.index.month == 2) & (df.index.day == 29))]
+        print("Hourly data processed, leap days removed.")
         return self.hourly_dataframe
 
     def save_hourly_data(self, filename="data_hourly.pkl"):
@@ -57,270 +68,179 @@ class WeatherDataProcessor:
         print(f"Hourly data saved to {filename}.")
 
     def resample_data(self, interval_minutes=15, filename=None):
-        # Set date as index for resampling
-        df = self.hourly_dataframe.copy()
-
-        # Resampling and interpolation
-        df_resampled = df.resample(f"{interval_minutes}min").interpolate(method='linear')
-        
-        # Save resampled data if filename is provided
+        df_resampled = self.hourly_dataframe.resample(
+            f"{interval_minutes}min"
+        ).interpolate(method="linear")
         if filename:
             df_resampled.to_pickle(filename)
             print(f"Resampled data saved to {filename}.")
-        
         return df_resampled
-    
-    def filter_data_by_time_step(self, data, month, day, hour=None, minute=None):
-        """
-        Filters and returns data from the provided DataFrame that matches a specific date and optionally time each year.
-        
-        Parameters:
-            data (pd.DataFrame): DataFrame with a DatetimeIndex to filter.
-            month (int): Month of the year to filter (1-12).
-            day (int): Day of the month to filter (1-31).
-            hour (int, optional): Hour of the day to filter (0-23). Defaults to None (matches all hours).
-            minute (int, optional): Minute of the hour to filter (0-59). Defaults to None (matches all minutes).
-        
-        Returns:
-            pd.DataFrame: Filtered DataFrame containing only the matching date/time entries.
-        """
-        # Ensure index is datetime if not already
-        if not isinstance(data.index, pd.DatetimeIndex):
-            data.index = pd.to_datetime(data.index)
 
-        # Filter by month and day
+    @staticmethod
+    def filter_data_by_time_step(data, month, day, hour=None, minute=None):
+        data.index = pd.to_datetime(data.index)
         mask = (data.index.month == month) & (data.index.day == day)
-        
-        # Optionally filter by hour and minute
         if hour is not None:
-            mask &= (data.index.hour == hour)
+            mask &= data.index.hour == hour
         if minute is not None:
-            mask &= (data.index.minute == minute)
-        
-        # Return the filtered data
-        filtered_data = data[mask]
-        return filtered_data
-    
+            mask &= data.index.minute == minute
+        return data[mask]
+
     def fit_distributions(self, data, filename="data_expected.pkl"):
-        """
-        Fits solar radiation data to a beta distribution and wind speed data to a Weibull distribution
-        for each unique time step in the year.
-        
-        Parameters:
-            data (pd.DataFrame): DataFrame with a DatetimeIndex and columns for 'shortwave_radiation' and 'wind_speed_10m'.
-        
-        Returns:
-            pd.DataFrame: A DataFrame with fitted distribution parameters and expected values for each time step.
-        """
         results = []
+        grouped = data.groupby(
+            [data.index.month, data.index.day, data.index.hour, data.index.minute]
+        )
 
-        # Ensure index is datetime if not already
-        if not isinstance(data.index, pd.DatetimeIndex):
-            data.index = pd.to_datetime(data.index)
-        
-        # Group by each unique time step (month, day, hour, minute)
-        grouped = data.groupby([data.index.month, data.index.day, data.index.hour, data.index.minute])
-
-        # Iterate over each time step in the year
         for (month, day, hour, minute), group in tqdm(grouped):
-            # Fit solar radiation data to a beta distribution
-            solar_data = group['shortwave_radiation'].dropna()
-            if len(solar_data) > 1:
-                if np.any(solar_data <= 5):
-                    beta_params = (0, 0, 0, 0)  # Not enough data to fit
-                    expected_beta = 0
-                else:
-                    # Normalize solar radiation data for beta fitting
-                    solar_data_normalized = solar_data / 1367
-                    beta_params = beta.fit(solar_data_normalized, floc=0, fscale=1)
-                    alpha, beta_param, _, _ = beta_params
-                    expected_beta = alpha / (alpha + beta_param) * 1367
-            else:
-                beta_params = (np.nan, np.nan, np.nan, np.nan)  # Not enough data to fit
-                expected_beta = np.nan
+            solar_data = group["shortwave_radiation"].dropna()
+            beta_params, expected_beta = self._fit_beta(solar_data)
 
-            # # Fit wind speed data to a Weibull distribution
-            # wind_data = group['wind_speed_10m'].dropna()
-            # if len(wind_data) > 1:
-            #     weibull_params = weibull_min.fit(wind_data, floc=0)
-            #     k, loc, scale = weibull_params
-            #     expected_weibull = scale * gamma(1 + 1 / k)
-            # else:
-            #     weibull_params = (np.nan, np.nan, np.nan)  # Not enough data to fit
-            #     expected_weibull = np.nan  # Not enough data to fit
+            wind_data = group["wind_speed_10m"].dropna()
+            weibull_params, expected_weibull = self._fit_weibull(wind_data)
 
-            # Store results in a list
-            results.append({
-                'month': month,
-                'day': day,
-                'hour': hour,
-                'minute': minute,
-                'beta_alpha': beta_params[0],
-                'beta_beta': beta_params[1],
-                'expected_solar_rad': expected_beta,
-                # 'weibull_k': weibull_params[0],
-                # 'weibull_loc': weibull_params[1],
-                # 'weibull_scale': weibull_params[2],
-                # 'expected_wind_speed': expected_weibull
-            })
+            results.append(
+                {
+                    "month": month,
+                    "day": day,
+                    "hour": hour,
+                    "minute": minute,
+                    "beta_alpha": beta_params[0],
+                    "beta_beta": beta_params[1],
+                    "expected_solar_rad": expected_beta,
+                    "weibull_k": weibull_params[0],
+                    "weibull_loc": weibull_params[1],
+                    "weibull_scale": weibull_params[2],
+                    "expected_wind_speed": expected_weibull,
+                }
+            )
 
         df = pd.DataFrame(results)
-        df["datetime"] = pd.to_datetime(dict(year=2024, month=df["month"], day=df["day"], hour=df["hour"], minute=df["minute"]))
+        df.to_pickle(filename)
+        return df
 
-        df["month"] = df["datetime"].dt.month
-        df["day"] = df["datetime"].dt.day
-        df["hour"] = df["datetime"].dt.hour
-        df["minute"] = df["datetime"].dt.minute
+    @staticmethod
+    def _fit_beta(data):
+        if len(data) > 1 and np.all(data > 5):
+            normalized = data / 1367
+            beta_params = beta.fit(normalized, floc=0, fscale=1)
+            alpha, beta_param, _, _ = beta_params
+            expected_beta = alpha / (alpha + beta_param) * 1367
+        else:
+            beta_params, expected_beta = (1.0, 1000.0, np.nan, np.nan), 0.0
+        return beta_params, expected_beta
 
-        results_df = df.drop(columns=["datetime"])
-        results_df.to_pickle(filename)
+    @staticmethod
+    def _fit_weibull(data):
+        if len(data) > 1:
+            params = weibull_min.fit(data, floc=0)
+            k, loc, scale = params
+            expected = scale * gamma(1 + 1 / k)
+        else:
+            params, expected = (np.nan, np.nan, np.nan), np.nan
+        return params, expected
 
-        return results_df
 
-def generate_yearly_weather_data(historical_data, N=1, seed=None, save_path="synthetic_data_"):
-    """
-    Generates multiple synthetic years of weather data by randomly selecting weeks
-    from the available historical data and saves each dataset to a file.
-
-    Parameters:
-        historical_data (pd.DataFrame): DataFrame containing historical weather data with a DatetimeIndex.
-        N (int): Number of synthetic datasets to generate.
-        seed (int, optional): Seed for random number generation to ensure reproducibility.
-        save_path (str): Path prefix to save the generated datasets (files will be named with indices like 'synthetic_data_0.pkl').
-        
-    Returns:
-        list: A list of file paths where the datasets are saved.
-    """
-    # Ensure the index is a DatetimeIndex
-    if not isinstance(historical_data.index, pd.DatetimeIndex):
-        raise ValueError("The historical_data DataFrame must have a DatetimeIndex.")
-
-    # Set the random seed for reproducibility
+def generate_single_synthetic_year(
+    dataset_number,
+    historical_data,
+    years,
+    timestep,
+    points_per_week,
+    save_path,
+    latitude,
+    longitude,
+    seed=None,
+):
     if seed is not None:
-        random.seed(seed)
-
-    # Extract unique years from the historical data
-    years = historical_data.index.year.unique()
-
-    # Initialize a list to store the paths of the saved files
-    saved_files = []
-
-    # Generate datasets
-    done= False
-    for i in tqdm(range(N)):
-        while not done:
-            # Select a random year
-            selected_year = random.choice(years)
-            
-            # Filter data for the selected year
-            year_data = historical_data[historical_data.index.year == selected_year]
-            
-            # Adjust the year to 2024
-            year_data.index = year_data.index.map(lambda dt: dt.replace(year=2024))
-            
-            # Check for leap day
-            if '02-29' not in year_data.index.strftime('%m-%d'):
-                # Add leap day data using February 28th's data
-                feb_28_data = year_data[year_data.index.strftime('%m-%d') == '02-28']
-                leap_day_data = feb_28_data.copy()
-                leap_day_data.index = leap_day_data.index + pd.Timedelta(days=1)  # Set index to February 29th
-                year_data = pd.concat([year_data, leap_day_data]).sort_index()
-            
-            if year_data.size == 26352:
-                done = True
-
-        # Save the synthetic dataset
-        file_path = f"{save_path}\\data_{int(timestep)}min_{i}.pkl"
-        year_data.to_pickle(file_path)
-        saved_files.append(file_path)
-        done = False
-
-    return saved_files
-
-
-
-
-def generate_single_synthetic_year(dataset_number, historical_data, years, timestep, points_per_week, save_path, seed=None):
-    """
-    Generates a single synthetic year's weather data by randomly selecting weeks from the available historical data.
-    
-    Parameters:
-        dataset_number (int): Index for the synthetic dataset.
-        historical_data (pd.DataFrame): DataFrame containing historical weather data.
-        years (np.ndarray): List of unique years available in the historical data.
-        timestep (int): Time step in seconds.
-        points_per_week (int): Number of data points in a week.
-        save_path (str): Path to save the generated dataset.
-        seed (int, optional): Seed for reproducibility.
-        
-    Returns:
-        str: Path where the synthetic dataset was saved.
-    """
-    if seed is not None:
-        random.seed(seed + dataset_number)  # Ensure different seeds for different processes
-
+        random.seed(seed + dataset_number)
     synthetic_year = []
-
-    # Generate data for 52 weeks
-    for week_number in range(52):
-        valid_week = False
-        
-        while not valid_week:
-            # Randomly select a year
-            selected_year = random.choice(years)
-
-            # Extract data for the selected year
-            year_data = historical_data[historical_data.index.year == selected_year]
-
-            # Calculate start and end indices for the selected week
-            week_start = week_number * points_per_week
-            week_end = (week_number + 1) * points_per_week
-
-            # Extract the data for the selected week
-            weekly_data = year_data.iloc[week_start:week_end]
-
-            # Check if the extracted data has the correct number of points
-            if len(weekly_data) == points_per_week:
-                valid_week = True
-                synthetic_year.append(weekly_data)
-
-    # Concatenate all the weekly data into a single DataFrame
-    synthetic_year_data = pd.concat(synthetic_year)
-
-    # Generate a new DatetimeIndex for the synthetic year
-    synthetic_year_data.index = pd.date_range(
-        start="2024-01-01",
-        periods=len(synthetic_year_data),
-        tz="UTC",
-        freq=pd.Timedelta(seconds=timestep)
+    original_timezone = (
+        historical_data.index.tz if historical_data.index.tz is not None else "UTC"
     )
 
-    # Define the file path to save the dataset
-    file_path = f"{save_path}\\data_{int(timestep)}min_{dataset_number}.pkl"
+    for week_number in range(52):
+        while True:
+            selected_year = random.choice(years)
+            weekly_data = historical_data[historical_data.index.year == selected_year]
+            start, end = (
+                week_number * points_per_week,
+                (week_number + 1) * points_per_week,
+            )
+            if len(weekly_data.iloc[start:end]) == points_per_week:
+                synthetic_year.append(weekly_data.iloc[start:end])
+                break
+            print("Trying again...")
 
-    # Save the synthetic year data to a file
+    synthetic_year_data = pd.concat(synthetic_year)
+    synthetic_year_data.index = pd.date_range(
+        start="2025-01-01",
+        periods=len(synthetic_year_data),
+        tz=original_timezone,
+        freq=pd.Timedelta(seconds=timestep),
+    )
+    file_path = f"{save_path}/data_lat{latitude}_lon{longitude}_{int(timestep / 60)}min_{dataset_number}.pkl"
     synthetic_year_data.to_pickle(file_path)
-
     return file_path
+
+
+def generate_yearly_weather_data(
+    historical_data, N, latitude, longitude, seed=None, save_path="."
+):
+    if not isinstance(historical_data.index, pd.DatetimeIndex):
+        raise ValueError("historical_data must have a DatetimeIndex.")
+
+    timestep = int(
+        (historical_data.index[1] - historical_data.index[0]).total_seconds()
+    )
+    points_per_week = int((7 * 24 * 3600) / timestep)
+    years = historical_data.index.year.unique()
+
+    try:
+        with Pool() as pool:
+            return pool.starmap(
+                generate_single_synthetic_year,
+                [
+                    (
+                        i,
+                        historical_data,
+                        years,
+                        timestep,
+                        points_per_week,
+                        save_path,
+                        latitude,
+                        longitude,
+                        seed,
+                    )
+                    for i in range(N)
+                ],
+            )
+    except KeyboardInterrupt:
+        print("Process interrupted by user. Cleaning up...")
+        pool.terminate()  # Immediately terminate workers
+        pool.join()  # Ensure all worker processes are cleaned up
+        raise  # Re-raise the exception for visibility
 
 
 # Example usage
 if __name__ == "__main__":
-    # Initialize the processor
     processor = WeatherDataProcessor()
-
-    # Fetch and process data
-    lat = 0
-    lon = -90
-    processor.fetch_weather_data(latitude=lat, longitude=lon, start_date="2000-01-01", end_date="2022-12-31", hourly_vars=["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"])
+    lat, lon = 30, -90
+    timestep_min = 15
+    processor.fetch_weather_data(
+        lat,
+        lon,
+        "1950-01-01",
+        "2022-12-31",
+        ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
+    )
     hourly_df = processor.process_hourly_data()
-    # fitted_distributions = processor.fit_distributions(hourly_df,"data_expected.pkl")
-    # hourly_df.to_pickle(r"Data\HISTORICAL_DATA")
-    # fitted_distributions.to_pickle(r"Data\EXPECTED_DATA\data_expected_60min")
-    
-    timestep = 60
-    resampled_df = processor.resample_data(interval_minutes=timestep, filename=f"Data\HISTORICAL_DATA\data_{timestep}min.pkl")
-    fitted_distributions = processor.fit_distributions(resampled_df,rf"Data\EXPECTED_DATA\lat{lat}\data_expected_{timestep}min_lat{lat}.pkl")
-    generate_yearly_weather_data(resampled_df,N=1000,save_path=rf"Data\SYNTHETIC_DATA\lat{lat}")
+    resampled_df = processor.resample_data(timestep_min)
 
+    expected_data_filename = rf"C:\Users\bepstein8\OneDrive - Georgia Institute of Technology\Documents\Research\Solar-Simulator\Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
+    processor.fit_distributions(resampled_df, expected_data_filename)
 
+    synthetic_data_directory = rf"C:\Users\bepstein8\OneDrive - Georgia Institute of Technology\Documents\Research\Solar-Simulator\Data\SYNTHETIC_DATA\lat{lat}"
+
+    N = 100
+    generate_yearly_weather_data(resampled_df, N, lat, lon, 1, synthetic_data_directory)

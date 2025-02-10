@@ -1,12 +1,7 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-
+from datetime import datetime
 import unittest
 from unittest.mock import Mock
 import pandas as pd
-import numpy as np
-from datetime import datetime
 from BaseClasses.mdp import mdp  # Adjust the import based on your file structure
 
 class TestMDP(unittest.TestCase):

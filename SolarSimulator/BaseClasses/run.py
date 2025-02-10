@@ -1,16 +1,20 @@
+"""Script to read simulation parameters and run batch of simulations."""
 import yaml
-from run_sim import SolarPlaneSimulation
+from BaseClasses.run_sim import SolarPlaneSimulation
 
 
 def load_simulations_config(file_path):
     """Load simulation parameters from a YAML file."""
-    with open(file_path, "r") as file:
+    with open(file_path, "r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
     return config["simulations"]
 
 
 def run_simulation(params):
-    """Initialize and run a SolarPlaneSimulation with the given parameters for a specific algorithm."""
+    """
+    Initialize and run a SolarPlaneSimulation with the given parameters for
+    a specific algorithm.
+    """
     simulation = SolarPlaneSimulation(
         lat=params["latitude"],
         lon=params["longitude"],
@@ -38,7 +42,8 @@ def run_simulation(params):
 
 
 def main():
-    config_file = r"Results\Analysis\simulation_params.yaml"  # Update path as needed
+    """Run batch of simulations."""
+    config_file = r"Results\6-month\simulation_params.yaml"  # Update path as needed
     simulations = load_simulations_config(config_file)
     print(f"Number of simulations: {len(simulations)}")
 

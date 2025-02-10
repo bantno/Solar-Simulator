@@ -58,6 +58,7 @@ class ExpectedValueTable:
         return states
 
     def generate_ev_table(self):
+        """Fill in expected value table."""
         for k in tqdm(range(self.ev_table.shape[1] - 1, -1, -1)):
             for idx, state in enumerate(self.states[:-1]):
                 self.ev_table[idx, k] = self._ev_entry(k, state)
@@ -100,11 +101,11 @@ class ExpectedValueTable:
         """
         alpha_k = self.expected_solar[stage, 0]
         beta_k = self.expected_solar[stage, 1]
-        max_collected_energy_J = self.max_collected_power * self.dt * 60
-        current_energy_J = self.soc_to_joules(state[0])
-        required_energy_J = self._calculate_required_energy(state, action=1)
+        max_collected_energy_j = self.max_collected_power * self.dt * 60
+        current_energy_j = self.soc_to_joules(state[0])
+        required_energy_j = self._calculate_required_energy(state, action=1)
         p_sufficient_solar = self._calculate_sufficient_solar_probability(
-            required_energy_J, current_energy_J, max_collected_energy_J, alpha_k, beta_k
+            required_energy_j, current_energy_j, max_collected_energy_j, alpha_k, beta_k
         )
         p_sufficient_reward, alpha_u_0, alpha_u_1 = (
             self._calculate_sufficient_reward_probability(
@@ -150,8 +151,8 @@ class ExpectedValueTable:
         threshold = (
             required_energy - current_energy
         ) / max_collected_energy  # Calculate the threshold for X <= 0 condition (S <= (P - C) / I)
-        F_S = betaDist.cdf(threshold, alpha, beta)
-        return 1 - F_S
+        insufficient_energy_probability = betaDist.cdf(threshold, alpha, beta)
+        return 1 - insufficient_energy_probability
 
     def _calculate_sufficient_reward_probability(
         self, stage, state, reward_k, alpha_k, beta_k, pf_0, pf_1, n=1000
@@ -221,18 +222,18 @@ class ExpectedValueTable:
             - For action 1, if the plane is "moored," additional energy for takeoff
             is added to the cruise power requirement.
         """
-        required_energy_J = 0
+        required_energy_j = 0
         timestep_s = self.dt * 60
         if action == 0:
-            required_energy_J += self.plane.idle_power * timestep_s
+            required_energy_j += self.plane.idle_power * timestep_s
         elif action == 1:
-            required_energy_J += self.plane.required_cruise_power * timestep_s
+            required_energy_j += self.plane.required_cruise_power * timestep_s
             if state[1] == 0:
-                required_energy_J += self.plane.required_takeoff_energy
+                required_energy_j += self.plane.required_takeoff_energy
         else:
             raise ValueError("Invlaid action specified.")
 
-        return required_energy_J
+        return required_energy_j
 
     def _alpha(self, stage: int, state: tuple, action: int, solar_power_w):
         """
@@ -347,7 +348,8 @@ class ExpectedValueTable:
 
     def _calculate_soc_update(self, plane, state, action, dt, solar_power):
         """
-        Vectorized version of _calculate_soc_update to compute SOC changes for multiple solar_power values.
+        Vectorized version of _calculate_soc_update to compute SOC changes for multiple
+        solar_power values.
 
         Args:
             plane (object): The plane object containing operational parameters such as
@@ -359,7 +361,8 @@ class ExpectedValueTable:
             dt (float): The duration of the time step (in minutes).
 
         Returns:
-            np.ndarray: Array of SOC changes as percentages, rounded to the nearest SOC increment, shape (n,).
+            np.ndarray: Array of SOC changes as percentages, rounded to the nearest SOC
+            increment, shape (n,).
         """
         # start_time = time.time()
         # Ensure solar_power is a numpy array with correct dimensions
@@ -391,7 +394,7 @@ class ExpectedValueTable:
         # print(time.time()-start_time)
         return rounded_soc_change
 
-    def _P_S_given_w(self, w, u_k, state, p_f=1.0, a1=15, b1=0.35, a2=10, b2=0.35):
+    def _P_S_given_w(self, w, u_k, state, p_f=1.0, a1=17, b1=0.5, a2=16, b2=0.5):
         """
         Compute the conditional probability P(S|w_k) based on the state and wind speed.
 
@@ -473,10 +476,10 @@ class ExpectedValueTable:
 
         p_4 = probabilities[3]
 
-        E_J_k = (1 - p_4) * (p_success_u_0) * (alpha_u_0) * self.gamma + p_4 * (
+        e_j_k = (1 - p_4) * (p_success_u_0) * (alpha_u_0) * self.gamma + p_4 * (
             reward_k + self.gamma * p_success_u_1 * alpha_u_1
         )
-        return E_J_k
+        return e_j_k
 
     def f_W_vectorized(self, w, c_k, scale_k):
         """
@@ -501,7 +504,8 @@ class ExpectedValueTable:
     @staticmethod
     def lookup_expected_value(array, stage, states, discretization=0.01):
         """
-        Look up values in a numpy array based on the stage, state of charge, and vehicle states for multiple states.
+        Look up values in a numpy array based on the stage, state of charge, and vehicle
+        states for multiple states.
 
         Parameters:
             array (np.ndarray): The 2*n*1 by k numpy array to look up values from.
@@ -509,7 +513,8 @@ class ExpectedValueTable:
             states (list): A list of tuples, each containing:
                 - state_of_charge (float): The state of charge percentage (0-100 range).
                 - vehicle_state (str): The state of the vehicle, either 0, 1, or 2.
-            discretization (float): The discretization step for the state of charge. Default is 0.01.
+            discretization (float): The discretization step for the state of charge.
+            Default is 0.01.
 
         Returns:
             list: A list of values from the array corresponding to each input state tuple.
@@ -612,7 +617,7 @@ class ExpectedValueTable:
         # Plot for 'flying' state
         fig = plt.figure(figsize=(12, 8))
         ax = plt.subplot(projection="3d")
-        surf = ax.plot_surface(X, Y, flying_data, cmap="plasma", edgecolor="none")
+        surf = ax.plot_surface(x, y, flying_data, cmap="plasma", edgecolor="none")
         cbar = plt.colorbar(surf, ax=ax, shrink=0.5, aspect=10)
         cbar.set_label("Expected Value")
         ax.set_title(f"Surface Plot for State: Flying\nBattery Capacity: {capacity} Ah")
@@ -643,7 +648,8 @@ class ExpectedValueTable:
     @staticmethod
     def plot_surface_plotly(data, capacity=50):
         """
-        Plots an interactive 3D surface plot for the 'moored,' 'flying,' and 'broken' states using Plotly.
+        Plots an interactive 3D surface plot for the 'moored,' 'flying,' and 'broken'
+        states using Plotly.
 
         Parameters:
             data (numpy.ndarray): A 2D array where:
@@ -660,7 +666,7 @@ class ExpectedValueTable:
         # Generate grids
         time_steps = np.arange(data.shape[1])  # Time steps (x-axis)
         battery_percentages = np.linspace(0, 100, 101)  # Battery percentages (y-axis)
-        X, Y = np.meshgrid(time_steps, battery_percentages)
+        x, y = np.meshgrid(time_steps, battery_percentages)
 
         # Create figure
         fig = go.Figure()
@@ -691,7 +697,10 @@ class ExpectedValueTable:
 
         # Update layout
         fig.update_layout(
-            title=f"Surface Plot for Moored, Flying, and Broken States (Battery Capacity: {capacity} Ah)",
+            title=(
+                "Surface Plot for Moored, Flying, and Broken States "
+                f"(Battery Capacity: {capacity} Ah)"
+                ),
             scene=dict(
                 xaxis_title="Stages",
                 yaxis_title="State of Charge (%)",

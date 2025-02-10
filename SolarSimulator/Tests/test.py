@@ -2,7 +2,7 @@ import os
 import sys
 import numpy as np
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from BaseClasses.new_mdp import ExpectedValueTable  
+from BaseClasses.expectedValue_base import ExpectedValueTable  
 from BaseClasses.seaplane_base import Seaplane
 
 lat=25

@@ -13,7 +13,7 @@ from timezonefinder import TimezoneFinder
 # project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # sys.path.insert(0, project_root)
 
-from BaseClasses.new_mdp import ExpectedValueTable
+from BaseClasses.expectedValue_base import ExpectedValueTable
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.autonomy_base import Autonomy
 

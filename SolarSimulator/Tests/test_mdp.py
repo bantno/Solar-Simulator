@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from BaseClasses.new_mdp import ExpectedValueTable  
+from BaseClasses.expectedValue_base import ExpectedValueTable  
 from BaseClasses.seaplane_base import Seaplane
 
 class TestExpectedValueTable(unittest.TestCase):

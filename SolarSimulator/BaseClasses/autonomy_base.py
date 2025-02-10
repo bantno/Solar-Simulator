@@ -33,8 +33,6 @@ class Autonomy:
 
         # Ensure all data lists have the same length
         max_stages = self._validate_data_lengths(solar_data, wind_data, whale_data)
-
-        self.stepwise_failure_prob = 1 - true_success_prob
         battery_capacity_J, nightly_idle_soc, single_flight_soc = (
             self._compute_energy_parameters()
         )

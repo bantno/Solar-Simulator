@@ -484,6 +484,7 @@ class Autonomy:
         flight_minutes,
     ):
         """Finalize the simulation results."""
+        k += 1
         if save_history:
             return (
                 reward,

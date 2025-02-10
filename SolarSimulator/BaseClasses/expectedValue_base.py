@@ -7,6 +7,7 @@ from tqdm import tqdm
 from scipy.stats import beta as betaDist
 from scipy.integrate import simpson
 from BaseClasses.seaplane_base import Seaplane
+from BaseClasses.transition_model_base import ActionSuccessProbabilityModel
 
 
 class ExpectedValueTable:
@@ -15,12 +16,12 @@ class ExpectedValueTable:
     def __init__(
         self,
         plane: Seaplane,
-        expected_solar_data,
-        expected_wind_data,
-        whale_observation_data,
+        expected_solar_data: np.ndarray,
+        expected_wind_data: np.ndarray,
+        whale_observation_data: np.ndarray,
         soc_increment: int,
         timestep_min: int,
-        floating_failure_prob,
+        transition_model: ActionSuccessProbabilityModel,
     ):
         solar_panel_efficiency = 0.1
         self.plane = plane
@@ -30,9 +31,9 @@ class ExpectedValueTable:
         self.soc_increment = soc_increment
         self.expected_solar = expected_solar_data
         self.expected_wind = expected_wind_data
-        self.floating_failure_prob = floating_failure_prob
         self.states = self._create_states(soc_increment, [0, 1])
         self.gamma = 1.0
+        self.transition_model = transition_model
 
         if 100 % soc_increment != 0:
             raise ValueError(
@@ -394,38 +395,19 @@ class ExpectedValueTable:
         # print(time.time()-start_time)
         return rounded_soc_change
 
-    def _P_S_given_w(self, w, u_k, state, p_f=1.0, a1=17, b1=0.5, a2=16, b2=0.5):
+    def compute_conditional_success_probability(self, w, u_k, state):
         """
-        Compute the conditional probability P(S|w_k) based on the state and wind speed.
+        Compute the conditional probability P(S|w_k) based on wind speed, action, and current state.
 
         Parameters:
         - w (float): Wind speed.
         - u_k (int): Control input (1 for active action, 0 for passive action).
         - state (tuple): State of vehicle at stage k.
-        - p_f (float): Failure probability (default: 0.1 for floating mode).
 
         Returns:
         - float: Probability of success P(S|w_k).
         """
-        if state[1] == 0:
-            x_2 = 0
-        elif state[1] == 1:
-            x_2 = 1
-        elif state[1] == 2:
-            return 0
-        else:
-            raise ValueError("Invalid state.")
-
-        if u_k == 1 and x_2 == 0:  # Takeoff
-            return 1 - 1 / (1 + np.exp(a1 - b1 * w))
-        elif u_k == 0 and x_2 == 0:  # Floating
-            return 1  # - np.full_like(w,p_f)
-        elif u_k == 1 and x_2 == 1:  # Flying
-            return 1  # - np.full_like(w,p_f)
-        elif u_k == 0 and x_2 == 1:  # Landing
-            return 1 - 1 / (1 + np.exp(a2 - b2 * w))
-        else:
-            raise ValueError("Invalid combination of u_k and x_2.")
+        return self.transition_model.compute_probability(w, u_k, state)
 
     def _compute_success_probability(self, u_k, state_k, c_k, scale_k):
         """
@@ -439,19 +421,10 @@ class ExpectedValueTable:
         - float: Overall probability of success.
         """
 
-        # Define the integrand
-        def integrand(w):
-            return self._P_S_given_w(
-                w, u_k, state_k, p_f=self.floating_failure_prob
-            ) * self.f_W_vectorized(
-                w, c_k, scale_k
-            )  # Is this wrong because we still multiply by f_w
-
-        # Integrate over the domain of the Weibull distribution [0, ∞)
-
-        x = np.linspace(0.00000001, 60, 501)
-        y = integrand(x)
-        result = simpson(x=x, y=y)
+        w = np.linspace(0.00000001, 60, 501)
+        conditional_success_prob = self.compute_conditional_success_probability(w, u_k, state_k)
+        wind_pdf = self.f_W_vectorized(w, c_k, scale_k)
+        result = simpson(x=w, y=conditional_success_prob * wind_pdf)
         return result
 
     def _ev_entry(self, k, state):
@@ -673,7 +646,9 @@ class ExpectedValueTable:
 
         # Add Moored State surface
         fig.add_trace(
-            go.Surface(z=moored_data, x=x, y=y, colorscale="Blues", opacity=0.95, name="Moored")
+            go.Surface(
+                z=moored_data, x=x, y=y, colorscale="Blues", opacity=0.95, name="Moored"
+            )
         )
 
         # Add Flying State surface
@@ -700,7 +675,7 @@ class ExpectedValueTable:
             title=(
                 "Surface Plot for Moored, Flying, and Broken States "
                 f"(Battery Capacity: {capacity} Ah)"
-                ),
+            ),
             scene=dict(
                 xaxis_title="Stages",
                 yaxis_title="State of Charge (%)",

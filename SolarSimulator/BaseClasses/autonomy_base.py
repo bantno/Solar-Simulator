@@ -14,6 +14,7 @@ class Autonomy:
         self.panel_efficiency = 0.10
         self.max_capacity_J = self.plane.capacity * self.plane.voltage * 3600
         self.use_expected_reward = use_expected_reward
+        self.transition_model = mdp_model.transition_model
 
     def simulate_observation_threshold_mission(
         self,
@@ -68,7 +69,7 @@ class Autonomy:
                 flight_minutes += self.dt
 
             failure_prob = self._compute_failure_prob(
-                wind_speed, best_action, current_state, true_success_prob
+                wind_speed, best_action, current_state
             )
             if simulate_failure:
                 is_action_successful = np.random.uniform(0, 1) > failure_prob
@@ -166,11 +167,10 @@ class Autonomy:
                 collected_solar_power,
                 wind_speed,
                 whale_prob,
-                true_success_prob,
             )
 
             failure_prob = self._compute_failure_prob(
-                wind_speed, best_action, current_state, true_success_prob
+                wind_speed, best_action, current_state
             )
             if simulate_failure:
                 is_action_successful = np.random.uniform(0, 1) > failure_prob
@@ -265,8 +265,8 @@ class Autonomy:
             if best_action == 1:
                 flight_minutes += self.dt
 
-            failure_prob = self._compute_failure_prob(
-                wind_speed, best_action, current_state, true_success_prob
+            failure_prob = self.transition_model.compute_probability(
+                wind_speed, best_action, current_state
             )
             if simulate_failure:
                 is_action_successful = np.random.uniform(0, 1) > failure_prob
@@ -421,23 +421,22 @@ class Autonomy:
         collected_solar_power,
         wind_speed,
         whale_prob,
-        true_success_prob,
     ):
         """Determine the best action using the MDP model."""
         for idx, action in enumerate(action_list):
             value_list[idx] = self.mdp_model._alpha(
                 k, current_state, action, collected_solar_power
-            ) * self.mdp_model._P_S_given_w(
-                wind_speed, action, current_state, p_f=1 - true_success_prob
+            ) * self.transition_model.compute_probability(
+                wind_speed, action, current_state
             )
         return 1 if whale_prob >= (value_list[0] - value_list[1]) else 0
 
     def _compute_failure_prob(
-        self, wind_speed, best_action, current_state, true_success_prob
+        self, wind_speed, best_action, current_state
     ):
         """Compute the probability of failure given the wind conditions and action."""
-        return 1 - self.mdp_model._P_S_given_w(
-            wind_speed, best_action, current_state, p_f=1 - true_success_prob
+        return 1 - self.transition_model.compute_probability(
+            wind_speed, best_action, current_state
         )
 
     def _update_energy_and_state(

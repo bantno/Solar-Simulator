@@ -401,9 +401,9 @@ class SingleCaseSimulation(Simulation):
         expected_wind_data = expected_data[wind_columns].to_numpy()
 
         # whale_observation_data = self.get_whale_observation_probabilities(times)
-        whale_observation_data = np.zeros(len(times))
-        whale_observation_data[len(times) // 2 :] = 0.5
-        whale_observation_data[len(times) // 4 : len(times) // 2] = 0.05
+        whale_observation_data = np.ones(len(times))*0.25
+        whale_observation_data[len(times) // 2 :] = 0.75
+        whale_observation_data[0: len(times) // 4] = 0.00
 
         mdp_model = ExpectedValueTable(
             self.plane,
@@ -419,9 +419,9 @@ class SingleCaseSimulation(Simulation):
         mdp_model.show_progress = True
 
         simulation_methods = {
-            "Threshold": auto.simulate_simple_behavior,
-            "Optimal": auto.simulate_mdp_behavior,
-            "Charge Threshold": auto.simulate_fullcharge_behavior,
+            "Threshold": auto.simulate_observation_threshold_mission,
+            "Optimal": auto.simulate_optimal_mission,
+            "Charge Threshold": auto.simulate_charge_threshold_mission,
         }
 
         if algo not in simulation_methods:

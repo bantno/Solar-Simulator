@@ -31,7 +31,6 @@ class SigmoidSuccessProbability(ActionSuccessProbabilityModel):
         - takeoff_params (tuple): (a1, b1) parameters for the takeoff logistic function.
         - landing_params (tuple): (a2, b2) parameters for the landing logistic function.
         """
-        self.failure_prob = failure_prob
         self.a1, self.b1 = takeoff_params
         self.a2, self.b2 = landing_params
 

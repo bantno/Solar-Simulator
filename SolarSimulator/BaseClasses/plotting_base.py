@@ -600,8 +600,7 @@ class DataProcessor:
         Parameters:
             save_dir (str): The directory where the plots will be saved.
         """
-        import os
-        import matplotlib.pyplot as plt
+
 
         # Ensure the save directory exists
         os.makedirs(save_dir, exist_ok=True)
@@ -816,7 +815,7 @@ class DataProcessor:
                 ax.set_title(title)
                 ax.set_xlabel("Whales Spotted")
                 ax.set_ylabel("Number of Cases")
-                ax.set_xlim((0, 100))
+                ax.set_xlim((-25, 30))
                 ax.tick_params(axis="x", which="both", labelbottom=True)
             else:
                 print(f"No 'Reward' column found in {filename}. Skipping this file.")

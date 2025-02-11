@@ -16,7 +16,6 @@ from timezonefinder import TimezoneFinder
 from BaseClasses.expectedValue_base import ExpectedValueTable
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.autonomy_base import Autonomy
-from BaseClasses.transition_model_base import ActionSuccessProbabilityModel
 
 
 # Add project root directory to Python path
@@ -41,7 +40,6 @@ class Simulation:
         save_history: bool = False,
         use_expected: bool = False,
         simulate_failure: bool = True,
-        transition_model: ActionSuccessProbabilityModel = None,
     ) -> None:
         self.plane = plane
         self.lat = lat
@@ -50,7 +48,6 @@ class Simulation:
         self.simulate_failure = simulate_failure
         self.save_history = save_history
         self.use_expected = use_expected
-        self.transition_model = transition_model
 
     def run_simulation(
         self,
@@ -62,7 +59,6 @@ class Simulation:
         true_success_prob=0,
         runs=1,
         threshold=None,
-        transition_model=None,
     ):
         """Simulates and plots the duty cycle for the given parameters."""
         self.plane.update_plane()
@@ -77,7 +73,6 @@ class Simulation:
             true_success_prob=true_success_prob,
             num_runs=runs,
             threshold=threshold,
-            transition_model=transition_model,
         )
 
         times = pd.date_range(start_date, end_date, freq=f"{dt}min")
@@ -93,7 +88,6 @@ class Simulation:
         true_success_prob,
         num_runs,
         threshold,
-        transition_model,
     ):
         self.plane.update_plane()
         times = pd.date_range(
@@ -122,7 +116,7 @@ class Simulation:
             whale_observation_data,
             soc_increment=1,
             timestep_min=dt,
-            transition_model=transition_model,
+            floating_failure_prob=1 - true_success_prob,
         )
 
         auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected)

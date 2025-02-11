@@ -1,23 +1,20 @@
 """This module contains the base class for the autonomy module of the solar-powered seaplane simulator."""
 
 import numpy as np
-from BaseClasses.expectedValue_base import ExpectedValueTable
 
 
 class Autonomy:
     """Represents the autonomy module for a solar-powered seaplane."""
 
-    def __init__(self, dt, mdp_model:ExpectedValueTable, use_expected_reward: bool = False):
+    def __init__(self, dt, mdp_model, use_expected_reward: bool = False):
         self.dt = dt
         self.mdp_model = mdp_model
-        self.failure_penalty = mdp_model.failure_penalty
         self.plane = mdp_model.plane
         self.soc_increment = 1
         self.panel_efficiency = 0.10
         self.max_capacity_J = self.plane.capacity * self.plane.voltage * 3600
         self.use_expected_reward = use_expected_reward
         self.transition_model = mdp_model.transition_model
-
 
     def simulate_observation_threshold_mission(
         self,
@@ -103,11 +100,9 @@ class Autonomy:
 
             if not is_action_successful:
                 state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
-                reward -= self.failure_penalty
                 break
             elif new_state[0] < 0:
                 state_history_list[k:] = [(-15, 2)] * (len(state_history_list) - k)
-                reward -= self.failure_penalty
                 break
 
         return self._finalize_simulation(
@@ -202,11 +197,9 @@ class Autonomy:
 
             if not is_action_successful:
                 state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
-                reward -= self.failure_penalty
                 break
             elif new_state[0] < 0:
                 state_history_list[k:] = [(-15, 2)] * (len(state_history_list) - k)
-                reward -= self.failure_penalty
                 break
 
         return self._finalize_simulation(
@@ -304,11 +297,9 @@ class Autonomy:
 
             if not is_action_successful:
                 state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
-                reward -= 25
                 break
             elif new_state[0] < 0:
                 state_history_list[k:] = [(-15, 2)] * (len(state_history_list) - k)
-                reward -= 25
                 break
 
         return self._finalize_simulation(

@@ -356,8 +356,9 @@ class DataProcessor:
                         median_reward,
                         mean_failure_step,
                         median_failure_step,
+                        num_failures
                     ) = self.calculate_mean_rewards_and_failures(
-                        os.path.join(self.directory, filename)
+                        os.path.join(self.directory, filename), num_timesteps
                     )
 
                     # Store results in a dictionary
@@ -373,10 +374,13 @@ class DataProcessor:
                             "EndDate": end_day,
                             "NumTimesteps": num_timesteps,
                             "NumRuns": runs,
+                            "NumFailures": num_failures,
+                            "FailurePercentage": num_failures / runs,
                             "MeanFailureStep": mean_failure_step,
                             "MedianFailureStep": median_failure_step,
                             "MeanReward": mean_reward,
                             "MedianReward": median_reward,
+                            
                         }
                     )
                 else:
@@ -428,7 +432,7 @@ class DataProcessor:
 
         plt.savefig(save_dir + rf"\optimal_battery_plot.png")
 
-    def calculate_mean_rewards_and_failures(self, filepath):
+    def calculate_mean_rewards_and_failures(self, filepath, num_timesteps):
         """Calculate the mean reward and failure step for a given pickle file."""
         df = pd.read_pickle(filepath)
 
@@ -437,11 +441,12 @@ class DataProcessor:
             median_reward = df["Reward"].median()
             mean_failure_step = round(df["LastStep"].mean())
             median_failure_step = df["LastStep"].median()
+            num_failures = len(df[df["LastStep"] < num_timesteps])
             print(f"Number of runs in dataset {filepath}: {len(df)}")
-            return mean_reward, median_reward, mean_failure_step, median_failure_step
+            return mean_reward, median_reward, mean_failure_step, median_failure_step, num_failures
         else:
             print(f"Missing columns in {filepath}")
-            return None, None
+            return None, None, None, None, None
 
     def get_results_df(self):
         """Convert the results list into a DataFrame."""

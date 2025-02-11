@@ -348,7 +348,7 @@ class DataProcessor:
                     start_day, end_day = map(int, date_range.split("-"))
 
                     # Calculate the number of timesteps
-                    num_timesteps = ((end_day - start_day + 1) * 24 * 60) // dt
+                    num_timesteps = ((end_day - start_day) * 24 * 60) // dt
 
                     # Calculate mean reward and failure step
                     (

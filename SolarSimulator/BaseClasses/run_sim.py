@@ -42,6 +42,7 @@ class SolarPlaneSimulation:
         use_expected=False,
         simulate_failure=True,
         transition_model=None,
+        use_multiprocessing=True,  # Add this parameter to the constructor
     ):
 
         # Define plane parameters
@@ -64,6 +65,7 @@ class SolarPlaneSimulation:
         self.num_runs = num_runs
         self.visualize = visualize
         self.save_dir = save_dir
+        self.use_multiprocessing = use_multiprocessing
 
         # Time settings
 
@@ -163,34 +165,38 @@ class SolarPlaneSimulation:
                     (cap, "Charge Threshold", None, charge_threshold, success_prob)
                 )
 
-        num_cores_to_use = max(1, os.cpu_count())
-        print(f"Running with {num_cores_to_use} cores.")
+        if self.use_multiprocessing:
+            num_cores_to_use = max(1, os.cpu_count())
+            print(f"Running with {num_cores_to_use} cores.")
 
-        try:
-            with Pool(processes=num_cores_to_use) as pool:
-                # Graceful termination on Ctrl+C
-                signal.signal(signal.SIGINT, lambda sig, frame: pool.terminate())
+            try:
+                with Pool(processes=num_cores_to_use) as pool:
+                    # Graceful termination on Ctrl+C
+                    signal.signal(signal.SIGINT, lambda sig, frame: pool.terminate())
 
-                # Run tasks with progress bar
-                for _ in tqdm(
-                    pool.imap_unordered(self._simulation_task, tasks),
-                    total=len(tasks),
-                    desc="Running simulations",
-                ):
-                    pass
+                    # Run tasks with progress bar
+                    for _ in tqdm(
+                        pool.imap_unordered(self._simulation_task, tasks),
+                        total=len(tasks),
+                        desc="Running simulations",
+                    ):
+                        pass
 
-        except KeyboardInterrupt:
-            print("\nSimulation interrupted by user. Cleaning up...")
-            pool.terminate()  # Kill remaining processes
-            pool.join()  # Ensure all processes exit cleanly
-            print("All processes terminated.")
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            pool.terminate()
-            pool.join()
-        finally:
-            pool.close()
-            pool.join()
+            except KeyboardInterrupt:
+                print("\nSimulation interrupted by user. Cleaning up...")
+                pool.terminate()  # Kill remaining processes
+                pool.join()  # Ensure all processes exit cleanly
+                print("All processes terminated.")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                pool.terminate()
+                pool.join()
+            finally:
+                pool.close()
+                pool.join()
+        else:
+            for task in tqdm(tasks, desc="Running simulations"):
+                self._simulation_task(task)
 
     def _simulation_task(self, args):
         """Helper function to execute a single simulation run."""

@@ -8,6 +8,7 @@ from tqdm import tqdm
 from datetime import datetime
 import pytz
 from timezonefinder import TimezoneFinder
+import cProfile
 
 # # Add the project root directory to the Python path
 # project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -95,6 +96,10 @@ class Simulation:
         threshold,
         transition_model,
     ):
+        
+        # profiler = cProfile.Profile()
+        # profiler.enable()
+        
         self.plane.update_plane()
         times = pd.date_range(
             start=start_date,
@@ -171,6 +176,9 @@ class Simulation:
             )
 
             data[i] = self._format_simulation_result(result, expected_data)
+
+        # profiler.disable()
+        # profiler.dump_stats("sim_profile_output.prof")
 
         return pd.DataFrame.from_dict(data, orient="index")
 

@@ -39,10 +39,10 @@ class Autonomy:
 
         # Initialize history arrays
         state_history_list, energy_history_list, u_k_list, failure_prob_list = (
-            self._initialize_state_history(
-                initial_state, max_stages, battery_capacity_J
-            )
-        )
+            self._initialize_state_history(initial_state, max_stages, battery_capacity_J))
+        
+        samples = self._generate_mcs_samples(max_stages)
+        
         flight_minutes, reward = 0.0, 0
 
         # Simulation loop
@@ -65,6 +65,7 @@ class Autonomy:
                 nightly_idle_soc,
                 single_flight_soc,
                 threshold,
+                wind_speed,
             )
             if best_action == 1:
                 flight_minutes += self.dt
@@ -72,10 +73,8 @@ class Autonomy:
             failure_prob = self._compute_failure_prob(
                 wind_speed, best_action, current_state
             )
-            if simulate_failure:
-                is_action_successful = np.random.uniform(0, 1) > failure_prob
-            else:
-                is_action_successful = True
+
+            is_action_successful = self._is_action_successful(samples[k], failure_prob, simulate_failure)
 
             new_energy, new_state = self._update_energy_and_state(
                 current_state,
@@ -142,6 +141,9 @@ class Autonomy:
                 initial_state, max_stages, battery_capacity_J
             )
         )
+
+        random_samples = self._generate_mcs_samples(max_stages)
+        
         flight_minutes, reward = 0.0, 0
         action_list = [0, 1]
         value_list = [-1000, -1000]
@@ -175,10 +177,7 @@ class Autonomy:
             failure_prob = self._compute_failure_prob(
                 wind_speed, best_action, current_state
             )
-            if simulate_failure:
-                is_action_successful = np.random.uniform(0, 1) > failure_prob
-            else:
-                is_action_successful = True
+            is_action_successful = self._is_action_successful(random_samples[k], failure_prob, simulate_failure)
 
             new_energy, new_state = self._update_energy_and_state(
                 current_state,
@@ -221,21 +220,19 @@ class Autonomy:
         )
 
     def simulate_charge_threshold_mission(
-                self,
-        initial_state,
-        solar_data,
-        wind_data,
-        whale_data,
-        true_success_prob,
-        simulate_failure=False,
-        save_history=False,
-        threshold=None,
-    ):
+            self,
+            initial_state,
+            solar_data,
+            wind_data,
+            whale_data,
+            true_success_prob,
+            simulate_failure=False,
+            save_history=False,
+            threshold=None,
+        ):
 
         # Ensure all data lists have the same length
         max_stages = self._validate_data_lengths(solar_data, wind_data, whale_data)
-
-        self.stepwise_failure_prob = 1 - true_success_prob
         battery_capacity_J, nightly_idle_soc, single_flight_soc = (
             self._compute_energy_parameters()
         )
@@ -262,15 +259,18 @@ class Autonomy:
             )
 
             best_action = self._determine_charge_threshold_action(
+                whale_prob,
+                solar_power_wpm2,
                 current_state,
                 nightly_idle_soc,
                 single_flight_soc,
                 threshold,
+                wind_speed,
             )
             if best_action == 1:
                 flight_minutes += self.dt
 
-            failure_prob = self.transition_model.compute_probability(
+            failure_prob = self._compute_failure_prob(
                 wind_speed, best_action, current_state
             )
             if simulate_failure:
@@ -302,11 +302,11 @@ class Autonomy:
 
             if not is_action_successful:
                 state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
-                reward -= 25
+                reward -= self.failure_penalty
                 break
             elif new_state[0] < 0:
                 state_history_list[k:] = [(-15, 2)] * (len(state_history_list) - k)
-                reward -= 25
+                reward -= self.failure_penalty
                 break
 
         return self._finalize_simulation(
@@ -332,6 +332,14 @@ class Autonomy:
             f"Data lengths are not equal. Wind: {len(wind_data)}, Solar: {len(solar_data)}, Whale: {len(whale_data)}."
         )
 
+    def _is_action_successful(self, random_sample, failure_prob, simulate_failure=True):
+        """Determine if the action was successful based on the failure probability."""
+        return random_sample > failure_prob if simulate_failure else True
+
+    def _generate_mcs_samples(self, max_stages , seed=None):
+        """Generate random samples for Monte Carlo simulation."""
+        return np.random.uniform(0, 1, max_stages)
+    
     def _compute_energy_parameters(self):
         """Compute battery capacity and energy thresholds."""
         night_hours = 12
@@ -398,13 +406,17 @@ class Autonomy:
         nightly_idle_soc,
         single_flight_soc,
         threshold,
+        wind_speed,
     ):
         """Determine the best action based on energy and reward conditions."""
         is_reward_sufficient = whale_prob > threshold and solar_power_wpm2 > 0
         is_battery_sufficient = current_state[0] > (
             nightly_idle_soc + single_flight_soc
         )
-        return 1 if is_reward_sufficient and is_battery_sufficient else 0
+        is_wind_low = wind_speed < 10
+        decide_flight = np.all([is_reward_sufficient, is_battery_sufficient, is_wind_low])
+
+        return decide_flight
 
     def _determine_charge_threshold_action(
         self,

@@ -65,8 +65,10 @@ class ExpectedValueTable:
             for idx, state in enumerate(self.states[:-1]):
                 self.ev_table[idx, k] = self._ev_entry(k, state)
 
-        self.plot_surface_plotly(self.ev_table, self.plane.capacity)
-        np.savetxt("ev_table.csv", self.ev_table, delimiter=",")
+
+        filename = f"evTable_{self.plane.capacity}_{self.plane.lat}"
+        self.plot_surface_plotly(self.ev_table, self.plane.capacity,filename)
+        np.savetxt("Results\\"+filename+".csv", self.ev_table, delimiter=",")
 
     def _calculate_case_probabilities(self, stage, state, reward_k, pf_0, pf_1):
         """
@@ -620,7 +622,7 @@ class ExpectedValueTable:
         plt.savefig("ev_table_broken.png")
 
     @staticmethod
-    def plot_surface_plotly(data, capacity=50):
+    def plot_surface_plotly(data, capacity=50, filename):
         """
         Plots an interactive 3D surface plot for the 'moored,' 'flying,' and 'broken'
         states using Plotly.
@@ -685,7 +687,7 @@ class ExpectedValueTable:
         )
 
         # Save plot
-        fig.write_html("ev_table_combined.html")
+        fig.write_html("Figures\\" + filename + ".html")
 
 
 if __name__ == "__main__":

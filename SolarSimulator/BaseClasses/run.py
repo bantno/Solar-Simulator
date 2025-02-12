@@ -32,6 +32,7 @@ def run_simulation(params):
         use_expected=params["use_expected"],
         simulate_failure=params["simulate_failure"],
         transition_model=transition_model,
+        use_multiprocessing=params.get("use_multiprocessing", True),
     )
     print("Running simulation with parameters:")
     print(params)

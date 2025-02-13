@@ -622,7 +622,7 @@ class ExpectedValueTable:
         plt.savefig("ev_table_broken.png")
 
     @staticmethod
-    def plot_surface_plotly(data, capacity=50, filename):
+    def plot_surface_plotly(data, capacity=50, filename=None):
         """
         Plots an interactive 3D surface plot for the 'moored,' 'flying,' and 'broken'
         states using Plotly.

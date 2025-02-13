@@ -544,7 +544,7 @@ class DataProcessor:
                     plt.plot(
                         optimal_df["Capacity"],
                         optimal_df["MedianReward"],
-                        linestyle="--",
+                        linestyle=":",
                         marker="o",
                         color="black",
                         markersize=5,
@@ -556,20 +556,20 @@ class DataProcessor:
                     plt.scatter(
                         charge_threshold_df["Capacity"],
                         charge_threshold_df["MeanReward"],
-                        marker="D",
+                        marker="X",
                         color="blue",
-                        s=60,
+                        s=100,
                         label="Charge Threshold",
                     )
 
                 # Plot the Threshold algorithm grouped by Threshold value
                 for threshold_value, subset in threshold_df.groupby("Threshold"):
                     label = f"Threshold, t={threshold_value}"
-                    plt.scatter(subset["Capacity"], subset["MeanReward"], label=label)
+                    plt.scatter(subset["Capacity"], subset["MeanReward"], label=label, marker="X",s=100)
                     plt.plot(
                         subset["Capacity"],
                         subset["MedianReward"],
-                        linestyle="--",
+                        linestyle=":",
                         marker="o",
                         markersize=5,
                         label=f" Median: Threshold, t={threshold_value}",

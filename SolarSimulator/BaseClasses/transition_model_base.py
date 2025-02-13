@@ -124,6 +124,39 @@ class OnlySuccessProbability(ActionSuccessProbabilityModel):
 class RealisticSuccessProbability(SigmoidSuccessProbability):
     """Sigmoid probability model using a logistic function for takeoff and landing failure probabilities."""
 
+    def __init__(self, floating_failure=0.0, flying_failure=0.0, takeoff_params=(5, 0.5), landing_params=(4, 0.5)):
+        self.a1, self.b1 = takeoff_params
+        self.a2, self.b2 = landing_params
+        self.floating_failure = floating_failure
+        self.flying_failure = flying_failure
+
+    def compute_probability(self, wind_speed, action, state):
+        vehicle_mode = state[1]  # Mode: 0 = Floating, 1 = Flying, 2 = Broken
+        
+        if vehicle_mode == 2:
+            return 0  # No success if the vehicle is broken.
+
+        if action == 1 and vehicle_mode == 0:  # Takeoff
+            failure_prob = self.sigmoid(wind_speed, self.a1, self.b1)
+            return 0.99-failure_prob
+        elif action == 0 and vehicle_mode == 0:  # Floating
+            failure_prob = self.floating_failure
+            return 1- failure_prob
+        elif action == 1 and vehicle_mode == 1:  # Flying
+            failure_prob = self.flying_failure
+            return 1- failure_prob
+        elif action == 0 and vehicle_mode == 1:  # Landing
+            failure_prob = self.sigmoid(wind_speed, self.a2, self.b2)
+            return 0.99-failure_prob
+        else:
+            raise ValueError("Invalid combination of action and vehicle mode.")
+        
+    def sigmoid(self, x, a, b):
+        return 1 / (1.1 + np.exp(a - b * x))
+    
+class OptimisticSuccessProbability(SigmoidSuccessProbability):
+    """Sigmoid probability model using a logistic function for takeoff and landing failure probabilities."""
+
     def __init__(self, floating_failure=0.0, flying_failure=0.0, takeoff_params=(17, 0.5), landing_params=(16, 0.5)):
         self.a1, self.b1 = takeoff_params
         self.a2, self.b2 = landing_params
@@ -156,10 +189,10 @@ class ProbabilityModelFactory:
     
     # Define a dictionary mapping model names to their corresponding classes
     models = {
-        'sigmoid': SigmoidSuccessProbability,
         'linear': LinearSuccessProbability,
         'nofail': OnlySuccessProbability,
         'realistic': RealisticSuccessProbability,
+        'optimistic': OptimisticSuccessProbability,
         # Add more models here as needed
         # 'new_model': NewModelClass,
     }

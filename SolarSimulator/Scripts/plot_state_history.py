@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from BaseClasses.plotting_base import StateHistoryPlotter
 
 # direct = r"Results\Analysis"
-direct = r"Results\Analysis"
+direct = r"Results\testing"
 utc_offset = timezone(timedelta(hours=-6))
 start_date = pd.to_datetime(datetime(2025, 6, 1).replace(tzinfo=utc_offset))
 solar = StateHistoryPlotter(direct, start_date, "15min")

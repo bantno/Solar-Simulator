@@ -1,6 +1,6 @@
 from BaseClasses.plotting_base import DataProcessor
 
-dire = r"Results\New-Trans\1000"
+dire = r"Results\monthtest"
 processor = DataProcessor(directory=dire)  # Use "." for the current directory
 processor.process_files()
 df = processor.get_results_df()

@@ -443,11 +443,12 @@ class Autonomy:
     ):
         """Determine the best action using the MDP model."""
         for idx, action in enumerate(action_list):
-            value_list[idx] = self.mdp_model._alpha(
-                k, current_state, action, collected_solar_power
-            ) * self.transition_model.compute_probability(
+            
+            alpha = self.mdp_model._alpha(k, current_state, action, collected_solar_power)
+            p_success = self.transition_model.compute_probability(
                 wind_speed, action, current_state
             )
+            value_list[idx] =  alpha*p_success - self.failure_penalty*(1-p_success) # need to apply possibility of failure to decision making
         return 1 if whale_prob >= (value_list[0] - value_list[1]) else 0
 
     def _compute_failure_prob(

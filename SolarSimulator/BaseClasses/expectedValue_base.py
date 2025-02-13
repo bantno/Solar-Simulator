@@ -34,7 +34,7 @@ class ExpectedValueTable:
         self.states = self._create_states(soc_increment, [0, 1])
         self.gamma = 1.0
         self.transition_model = transition_model
-        self.failure_penalty = 25.0
+        self.failure_penalty = 5.0
 
         if 100 % soc_increment != 0:
             raise ValueError(
@@ -45,6 +45,7 @@ class ExpectedValueTable:
                 (int(2 * (100 / soc_increment + 1) + 1), expected_solar_data.shape[0])
             )
             self.ev_table[-1, :] = -self.failure_penalty
+            
         self.whale_probability_data = whale_observation_data
 
     def _create_states(self, soc_increment: int, vehicle_states: list) -> list:
@@ -444,15 +445,18 @@ class ExpectedValueTable:
             1, state, wind_shape_k, wind_scale_k
         )
 
-        probabilities, alpha_u_0, alpha_u_1 = self._calculate_case_probabilities(
+        case_probs, alpha_u_0, alpha_u_1 = self._calculate_case_probabilities(
             k, state, reward_k, p_success_u_0, p_success_u_1
         )
 
-        p_4 = probabilities[3]
+        case_1_2_3 = (1-case_probs[3])*(
+            p_success_u_0*alpha_u_0 + (1-p_success_u_0)*(-1*self.failure_penalty))
+        
+        future_reward_4 = p_success_u_1*alpha_u_1+((1-p_success_u_1)*(-1*self.failure_penalty))
+        case_4 = case_probs[3]*(reward_k + future_reward_4)
 
-        e_j_k = (1 - p_4) * (p_success_u_0) * (alpha_u_0) * self.gamma + p_4 * (
-            reward_k + self.gamma * p_success_u_1 * alpha_u_1
-        )
+        # Need to include the negative effect of penalty
+        e_j_k =  case_1_2_3 + case_4
         return e_j_k
 
     def f_W_vectorized(self, w, c_k, scale_k):

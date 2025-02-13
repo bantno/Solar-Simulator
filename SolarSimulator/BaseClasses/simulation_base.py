@@ -180,7 +180,7 @@ class Simulation:
         # profiler.disable()
         # profiler.dump_stats("sim_profile_output.prof")
 
-        return pd.DataFrame.from_dict(data, orient="index")
+        return pd.DataFrame.from_dict(data)
 
     def _format_simulation_result(self, result, expected_data):
         if self.save_history:
@@ -198,14 +198,14 @@ class Simulation:
             return {
                 "Reward": reward,
                 "LastStep": last_step,
-                "ActionHistory": action_history,
-                "FailureProbHistory": failure_prob_history,
-                "StateHistory": state_history,
-                "SolarHistory": solar_list,
-                "ExpectedSolarHistory": expected_data["expected_solar_rad"].values,
-                "WindHistory": wind_history,
-                "ExpectedWindHistory": expected_data["expected_wind_speed"].values,
-                "WhaleHistory": whale_list,
+                "ActionHistory": list(action_history),  # Convert NumPy array to list
+                "FailureProbHistory": list(failure_prob_history),  
+                "StateHistory": list(state_history),  
+                "SolarHistory": list(solar_list),  
+                "ExpectedSolarHistory": list(expected_data["expected_solar_rad"].values),  
+                "WindHistory": list(wind_history),  
+                "ExpectedWindHistory": list(expected_data["expected_wind_speed"].values),
+                "WhaleHistory": list(whale_list),  
                 "FlightHours": flight_minutes / 60,
             }
         else:

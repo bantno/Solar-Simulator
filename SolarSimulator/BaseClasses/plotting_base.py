@@ -24,7 +24,7 @@ class StateHistoryPlotter:
     def load_first_entry(self, file_path):
         """Load the first row of a DataFrame from the specified pickle file path."""
         df = pd.read_pickle(file_path)
-        return df.head(1)
+        return df.head(10)
 
     def extract_parameters_from_filename(self, filename):
         """
@@ -86,12 +86,12 @@ class StateHistoryPlotter:
             filename, r"c(\d+)", "Unknown Capacity"
         )
 
-    def plot_state_of_charge(self, files):
+    def plot_state_of_charge(self, files,case_num=0):
         plt.subplot(7, 1, 1)
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             _, label = self.parse_filename(file)
-            state_charge_levels = [state[0] for state in df["StateHistory"].values[0]]
+            state_charge_levels = [state[0] for state in df.loc["StateHistory",case_num]]
             time_index = pd.date_range(
                 start=self.start_date,
                 periods=len(state_charge_levels),
@@ -104,12 +104,12 @@ class StateHistoryPlotter:
         plt.legend()
         plt.grid(True)
 
-    def plot_action_history(self, files):
+    def plot_action_history(self, files, case_num=0):
         plt.subplot(7, 1, 2)
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             _, label = self.parse_filename(file)
-            action_history = df["ActionHistory"].values[0]
+            action_history = df.loc["ActionHistory",case_num]
             time_index = pd.date_range(
                 start=self.start_date, periods=len(action_history), freq=self.time_step
             )
@@ -120,12 +120,12 @@ class StateHistoryPlotter:
         plt.legend()
         plt.grid(True)
 
-    def plot_cumulative_hours_flight(self, files):
+    def plot_cumulative_hours_flight(self, files, case_num=0):
         plt.subplot(7, 1, 3)
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             _, label = self.parse_filename(file)
-            state_history = df["StateHistory"].values[0]
+            state_history = df.at["StateHistory",case_num]
             cumulative_hours = self.calculate_cumulative_hours(state_history)
             time_index = pd.date_range(
                 start=self.start_date,
@@ -150,11 +150,11 @@ class StateHistoryPlotter:
             )
         return cumulative_hours
 
-    def plot_solar_history(self, files):
+    def plot_solar_history(self, files, case_num=0):
         plt.subplot(7, 1, 4)
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
-        solar_history = df["SolarHistory"].values[0]
-        expected_solar_history = df["ExpectedSolarHistory"].values[0]
+        solar_history = df.at["SolarHistory",case_num]
+        expected_solar_history = df.at["ExpectedSolarHistory", case_num]
         time_index = pd.date_range(
             start=self.start_date, periods=len(solar_history), freq=self.time_step
         )
@@ -168,10 +168,10 @@ class StateHistoryPlotter:
         plt.legend()
         plt.grid(True)
 
-    def plot_whale_history(self, files):
+    def plot_whale_history(self, files, case_num=0):
         plt.subplot(7, 1, 5)
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
-        whale_history = df["WhaleHistory"].values[0]
+        whale_history = df.at["WhaleHistory", case_num]
         time_index = pd.date_range(
             start=self.start_date, periods=len(whale_history), freq=self.time_step
         )
@@ -182,11 +182,11 @@ class StateHistoryPlotter:
         plt.legend()
         plt.grid(True)
 
-    def plot_wind_history(self, files):
+    def plot_wind_history(self, files, case_num=0):
         plt.subplot(7, 1, 6)
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
-        wind_history = df["WindHistory"].values[0]
-        expected_wind_history = df["ExpectedWindHistory"].values[0]
+        wind_history = df.at["WindHistory", case_num]
+        expected_wind_history = df.at["ExpectedWindHistory", case_num]
         time_index = pd.date_range(
             start=self.start_date, periods=len(wind_history), freq=self.time_step
         )
@@ -200,12 +200,12 @@ class StateHistoryPlotter:
         plt.legend()
         plt.grid(True)
 
-    def plot_failure_prob_history(self, files):
+    def plot_failure_prob_history(self, files, case_num=0):
         plt.subplot(7, 1, 7)
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             _, label = self.parse_filename(file)
-            failure_prob_history = df["FailureProbHistory"].values[0]
+            failure_prob_history = df.at["FailureProbHistory", case_num]
             time_index = pd.date_range(
                 start=self.start_date,
                 periods=len(failure_prob_history),
@@ -436,13 +436,13 @@ class DataProcessor:
         """Calculate the mean reward and failure step for a given pickle file."""
         df = pd.read_pickle(filepath)
 
-        if "Reward" in df.columns and "LastStep" in df.columns:
-            mean_reward = df["Reward"].mean()
-            median_reward = df["Reward"].median()
-            mean_failure_step = round(df["LastStep"].mean())
-            median_failure_step = df["LastStep"].median()
-            num_failures = len(df[df["LastStep"] < num_timesteps])
-            print(f"Number of runs in dataset {filepath}: {len(df)}")
+        if "Reward" in df.index and "LastStep" in df.index:
+            mean_reward = df.loc["Reward"].mean()
+            median_reward = df.loc["Reward"].median()
+            mean_failure_step = round(df.loc["LastStep"].mean())
+            median_failure_step = df.loc["LastStep"].median()
+            num_failures = sum(df.loc["LastStep"].values < num_timesteps)
+            print(f"Number of runs in dataset {filepath}: {len(df.columns)}")
             return mean_reward, median_reward, mean_failure_step, median_failure_step, num_failures
         else:
             print(f"Missing columns in {filepath}")

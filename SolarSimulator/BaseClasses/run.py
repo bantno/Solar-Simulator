@@ -51,7 +51,7 @@ def run_simulation(params):
 
 def main():
     """Run batch of simulations."""
-    config_file = r"Results\Analysis\simulation_params.yaml"  # Update path as needed
+    config_file = r"Results\monthtest\simulation_params.yaml"
     simulations = load_simulations_config(config_file)
     print(f"Number of simulations: {len(simulations)}")
 

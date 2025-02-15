@@ -10,8 +10,8 @@ from multiprocessing import Pool
 from tqdm import tqdm
 import pandas as pd
 
-from seaplane_base import Seaplane
-from simulation_base import Simulation
+from BaseClasses.seaplane_base import Seaplane
+from BaseClasses.simulation_base import Simulation
 
 
 class SolarPlaneSimulation:
@@ -42,7 +42,8 @@ class SolarPlaneSimulation:
         use_expected=False,
         simulate_failure=True,
         transition_model=None,
-        use_multiprocessing=True,  # Add this parameter to the constructor
+        use_multiprocessing=True,
+        failure_penalty=None,
     ):
 
         # Define plane parameters
@@ -66,6 +67,7 @@ class SolarPlaneSimulation:
         self.visualize = visualize
         self.save_dir = save_dir
         self.use_multiprocessing = use_multiprocessing
+        self.failure_penalty = failure_penalty
 
         # Time settings
 
@@ -104,6 +106,7 @@ class SolarPlaneSimulation:
             save_history=self.visualize,
             use_expected=use_expected,
             simulate_failure=simulate_failure,
+            failure_penalty=failure_penalty
         )
         self.results = []  # To store processed results
         self.transition_model = transition_model
@@ -212,6 +215,7 @@ class SolarPlaneSimulation:
                 runs=self.num_runs,
                 threshold=threshold,
                 transition_model=self.transition_model,
+                failure_penalty=self.failure_penalty
             )
             filename = f"{self.save_dir}/{algo}_Data_c{cap}_t{threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
         elif algo == "Optimal":
@@ -224,6 +228,7 @@ class SolarPlaneSimulation:
                 true_success_prob=success_prob,
                 runs=self.num_runs,
                 transition_model=self.transition_model,
+                failure_penalty=self.failure_penalty
             )
             filename = f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
         elif algo == "Charge Threshold":
@@ -236,6 +241,7 @@ class SolarPlaneSimulation:
                 true_success_prob=success_prob,
                 runs=self.num_runs,
                 transition_model=self.transition_model,
+                failure_penalty=self.failure_penalty,
             )
             filename = f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
         else:
@@ -244,38 +250,10 @@ class SolarPlaneSimulation:
         data.to_pickle(filename)
         del data
         gc.collect()
-
         return filename
 
 
 # Example usage
 if __name__ == "__main__":
-    # Initialize the SolarPlaneSimulation with relevant parameters
-    simulation = SolarPlaneSimulation(
-        lat=30,
-        lon=-90,
-        tz="America/Chicago",  # Location parameters
-        start_date="2025-01-01",  # Simulation start date
-        end_date="2025-06-03",  # Simulation end date
-        dt=15,  # Time step in minutes
-        num_runs=1,  # Number of simulation runs
-        visualize=True,  # Enable visualization
-        save_dir=r".",  # Directory to save results
-        show=False,  # Suppress immediate plot display
-    )
-
-    # Define simulation parameters
-    success_prob = 0.99995  # True stepwise success probability
-    thresholds = []  # Threshold values for 'Threshold' algorithm
-    charge_thresholds = []
-    capacities = [100]  # Battery capacities in Amp-hours
-    mdp_probs = [success_prob]  # MDP success probabilities for 'Optimal' algorithm
-
-    # Run the simulation
-    simulation.run(
-        capacities=capacities,
-        thresholds=thresholds,
-        mdp_probs=mdp_probs,
-        charge_thresholds=charge_thresholds,
-        success_prob=success_prob,
-    )
+    #TODO: Write Example use case
+    pass

@@ -37,9 +37,9 @@ def run_simulation(params):
             simulate_failure=params["simulate_failure"],
             transition_model=transition_model,
             use_multiprocessing=params.get("use_multiprocessing", True),
+            failure_penalty=params.get("failure_penalty",0),
         )
         print(f"Running simulation with parameters for latitude {lat}:")
-        print(params)
 
         simulation.run(
             capacities=params["capacities"],
@@ -47,6 +47,7 @@ def run_simulation(params):
             mdp_probs=params.get("mdp_probs", []),
             charge_thresholds=params.get("charge_thresholds", []),
             success_prob=params["success_prob"],
+            
         )
 
 

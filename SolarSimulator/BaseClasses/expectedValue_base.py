@@ -22,6 +22,7 @@ class ExpectedValueTable:
         soc_increment: int,
         timestep_min: int,
         transition_model: ActionSuccessProbabilityModel,
+        failure_penalty: float = 5.0,
     ):
         solar_panel_efficiency = 0.1
         self.plane = plane
@@ -34,7 +35,7 @@ class ExpectedValueTable:
         self.states = self._create_states(soc_increment, [0, 1])
         self.gamma = 1.0
         self.transition_model = transition_model
-        self.failure_penalty = 5.0
+        self.failure_penalty = failure_penalty
 
         if 100 % soc_increment != 0:
             raise ValueError("Given state of charge increment does not divide evenly into 100%.")

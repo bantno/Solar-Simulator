@@ -33,6 +33,7 @@ class AbstractSimulation(ABC):
         use_expected=False,
         simulate_failure=True,
         transition_model=None,
+        failure_penalty=None,
     ):
         pass
 
@@ -43,11 +44,10 @@ class AbstractSimulation(ABC):
         end_date,
         dt,
         algo=None,
-        mdp_success_prob=0,
-        true_success_prob=0,
         runs=1,
         threshold=None,
         transition_model=None,
+        failure_penalty=None,
     ):
         pass
 
@@ -58,11 +58,10 @@ class AbstractSimulation(ABC):
         end_date,
         dt,
         algo,
-        mdp_success_prob,
-        true_success_prob,
         num_runs,
         threshold,
         transition_model,
+        failure_penalty,
     ):
         pass
 
@@ -110,6 +109,7 @@ class Simulation(AbstractSimulation):
         use_expected: bool = False,
         simulate_failure: bool = True,
         transition_model: ActionSuccessProbabilityModel = None,
+        failure_penalty: float = None
     ) -> None:
         self.plane = plane
         self.lat = lat
@@ -131,6 +131,7 @@ class Simulation(AbstractSimulation):
         runs=1,
         threshold=None,
         transition_model=None,
+        failure_penalty=None,
     ):
         """Simulates and plots the duty cycle for the given parameters."""
         self.plane.update_plane()
@@ -141,11 +142,10 @@ class Simulation(AbstractSimulation):
             end_date=end_date,
             dt=dt,
             algo=algo,
-            mdp_success_prob=mdp_success_prob,
-            true_success_prob=true_success_prob,
             num_runs=runs,
             threshold=threshold,
             transition_model=transition_model,
+            failure_penalty=failure_penalty
         )
 
         times = pd.date_range(start_date, end_date, freq=f"{dt}min")
@@ -157,15 +157,12 @@ class Simulation(AbstractSimulation):
         end_date,
         dt,
         algo: str,
-        mdp_success_prob,
-        true_success_prob,
         num_runs,
         threshold,
         transition_model,
+        failure_penalty,
     ):
 
-        # profiler = cProfile.Profile()
-        # profiler.enable()
 
         self.plane.update_plane()
         times = pd.date_range(
@@ -194,6 +191,7 @@ class Simulation(AbstractSimulation):
             soc_increment=1,
             timestep_min=dt,
             transition_model=transition_model,
+            failure_penalty=failure_penalty
         )
 
         auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected)
@@ -233,16 +231,12 @@ class Simulation(AbstractSimulation):
                 solar_data=sim_solar_data,
                 wind_data=sim_wind_data,
                 whale_data=whale_observation_data,
-                true_success_prob=true_success_prob,
                 simulate_failure=self.simulate_failure,
                 save_history=self.save_history,
                 threshold=threshold if algo == "Threshold" else None,
             )
 
             data[i] = self._format_simulation_result(result, expected_data)
-
-        # profiler.disable()
-        # profiler.dump_stats("sim_profile_output.prof")
 
         return pd.DataFrame.from_dict(data)
 

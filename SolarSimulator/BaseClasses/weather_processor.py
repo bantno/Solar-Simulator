@@ -35,9 +35,7 @@ class WeatherDataProcessor:
         )[0]
         print(f"Coordinates {self.response.Latitude()}°N {self.response.Longitude()}°E")
         print(f"Elevation {self.response.Elevation()} m asl")
-        print(
-            f"Timezone {self.response.Timezone()} {self.response.TimezoneAbbreviation()}"
-        )
+        print(f"Timezone {self.response.Timezone()} {self.response.TimezoneAbbreviation()}")
         print(f"UTC Offset {self.response.UtcOffsetSeconds()} s")
 
     def process_hourly_data(self):
@@ -45,12 +43,8 @@ class WeatherDataProcessor:
         offset = timezone(timedelta(seconds=self.response.UtcOffsetSeconds()))
         data = {
             "date": pd.date_range(
-                start=pd.to_datetime(hourly.Time(), unit="s", utc=True).tz_convert(
-                    offset
-                ),
-                end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True).tz_convert(
-                    offset
-                ),
+                start=pd.to_datetime(hourly.Time(), unit="s", utc=True).tz_convert(offset),
+                end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True).tz_convert(offset),
                 freq=pd.Timedelta(seconds=hourly.Interval()),
                 inclusive="left",
             ),
@@ -68,9 +62,9 @@ class WeatherDataProcessor:
         print(f"Hourly data saved to {filename}.")
 
     def resample_data(self, interval_minutes=15, filename=None):
-        df_resampled = self.hourly_dataframe.resample(
-            f"{interval_minutes}min"
-        ).interpolate(method="linear")
+        df_resampled = self.hourly_dataframe.resample(f"{interval_minutes}min").interpolate(
+            method="linear"
+        )
         if filename:
             df_resampled.to_pickle(filename)
             print(f"Resampled data saved to {filename}.")
@@ -155,9 +149,7 @@ def generate_single_synthetic_year(
     if seed is not None:
         random.seed(seed + dataset_number)
     synthetic_year = []
-    original_timezone = (
-        historical_data.index.tz if historical_data.index.tz is not None else "UTC"
-    )
+    original_timezone = historical_data.index.tz if historical_data.index.tz is not None else "UTC"
 
     for week_number in range(52):
         while True:
@@ -184,15 +176,11 @@ def generate_single_synthetic_year(
     return file_path
 
 
-def generate_yearly_weather_data(
-    historical_data, N, latitude, longitude, seed=None, save_path="."
-):
+def generate_yearly_weather_data(historical_data, N, latitude, longitude, seed=None, save_path="."):
     if not isinstance(historical_data.index, pd.DatetimeIndex):
         raise ValueError("historical_data must have a DatetimeIndex.")
 
-    timestep = int(
-        (historical_data.index[1] - historical_data.index[0]).total_seconds()
-    )
+    timestep = int((historical_data.index[1] - historical_data.index[0]).total_seconds())
     points_per_week = int((7 * 24 * 3600) / timestep)
     years = historical_data.index.year.unique()
 

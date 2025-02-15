@@ -10,12 +10,10 @@ setup(
     long_description=open("README.md").read() if os.path.exists("README.md") else "",
     long_description_content_type="text/markdown",
     url="https://github.com/bantno/Solar-Simulator",
-    
     packages=find_packages(include=["SolarSimulator", "SolarSimulator.*"]),
-    
     install_requires=[
         "numpy>=1.26.4",
-        "pandas>=2.2.2", 
+        "pandas>=2.2.2",
         "scipy>=1.13.1",
         "matplotlib>=3.9.0",
         "pvlib>=0.10.5",
@@ -29,9 +27,8 @@ setup(
         "shapely>=1.8.5",
         "openmeteo-requests>=1.1.0",
         "requests-cache>=1.1.0",
-        "retry-requests>=2.0.0"
+        "retry-requests>=2.0.0",
     ],
-    
     extras_require={
         "dev": [
             "pytest>=6.0",
@@ -40,15 +37,12 @@ setup(
             "flake8>=4.0",
         ],
     },
-    
     entry_points={
         "console_scripts": [
             "solar-sim=SolarSimulator.Scripts.run:main",
         ],
     },
-    
     python_requires=">=3.11",
-    
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Science/Research",
@@ -58,7 +52,6 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Operating System :: OS Independent",
     ],
-    
     package_data={
         "SolarSimulator": ["Data/*", "Figures/*"],
     },

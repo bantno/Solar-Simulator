@@ -5,20 +5,20 @@ import pandas as pd
 from retry_requests import retry
 
 # Setup the Open-Meteo API client with cache and retry on error
-cache_session = requests_cache.CachedSession('.cache', expire_after = -1)
-retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
-openmeteo = openmeteo_requests.Client(session = retry_session)
+cache_session = requests_cache.CachedSession(".cache", expire_after=-1)
+retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
+openmeteo = openmeteo_requests.Client(session=retry_session)
 
 # Make sure all required weather variables are listed here
 # The order of variables in hourly or daily is important to assign them correctly below
 url = "https://archive-api.open-meteo.com/v1/archive"
 params = {
-	"latitude": 30,
-	"longitude": -90,
-	"start_date": "2000-01-01",
-	"end_date": "2009-12-31",
-	"hourly": ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
-	"timezone": "America/New_York"
+    "latitude": 30,
+    "longitude": -90,
+    "start_date": "2000-01-01",
+    "end_date": "2009-12-31",
+    "hourly": ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
+    "timezone": "America/New_York",
 }
 responses = openmeteo.weather_api(url, params=params)
 
@@ -35,28 +35,28 @@ hourly_wind_speed_10m = hourly.Variables(0).ValuesAsNumpy()
 hourly_wind_direction_10m = hourly.Variables(1).ValuesAsNumpy()
 hourly_shortwave_radiation = hourly.Variables(2).ValuesAsNumpy()
 
-hourly_data = {"date": pd.date_range(
-	start = pd.to_datetime(hourly.Time(), unit = "s", utc = True),
-	end = pd.to_datetime(hourly.TimeEnd(), unit = "s", utc = True),
-	freq = pd.Timedelta(seconds = hourly.Interval()),
-	inclusive = "left"
-)}
+hourly_data = {
+    "date": pd.date_range(
+        start=pd.to_datetime(hourly.Time(), unit="s", utc=True),
+        end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True),
+        freq=pd.Timedelta(seconds=hourly.Interval()),
+        inclusive="left",
+    )
+}
 hourly_data["wind_speed_10m"] = hourly_wind_speed_10m
 hourly_data["wind_direction_10m"] = hourly_wind_direction_10m
 hourly_data["shortwave_radiation"] = hourly_shortwave_radiation
 
-hourly_dataframe = pd.DataFrame(data = hourly_data)
+hourly_dataframe = pd.DataFrame(data=hourly_data)
 hourly_dataframe.to_pickle(f"data_hourly.pkl")
 print(hourly_dataframe)
 
 df_new = hourly_dataframe.copy()
 
-df_new['date'] = pd.to_datetime(df_new['date'])
-df_new.set_index('date', inplace=True)
+df_new["date"] = pd.to_datetime(df_new["date"])
+df_new.set_index("date", inplace=True)
 
 # Resampling to new interval and interpolating
 time_step = 10
-df_resampled = df_new.resample(f"{time_step}min").interpolate(method='linear')
+df_resampled = df_new.resample(f"{time_step}min").interpolate(method="linear")
 df_resampled.to_pickle(f"data_{time_step}min.pkl")
-
-

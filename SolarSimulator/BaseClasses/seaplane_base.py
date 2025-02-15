@@ -86,9 +86,7 @@ class Seaplane:
         self.location = location.Location(self.lat, self.lon, tz=self.tz)
 
     def calculate_pdc0(self):
-        self.pdc0 = (
-            self.S * 3.3 / 0.034
-        )  # based on ascent solar bare module - mid scale
+        self.pdc0 = self.S * 3.3 / 0.034  # based on ascent solar bare module - mid scale
 
     def calculate_weight(self, energy_density=150) -> float:
         """Estimates weight of the aircraft based on fixed airframe mass and variable battery mass.
@@ -107,9 +105,7 @@ class Seaplane:
         propulsion_mass = 0.0002 * 4000  # k_ps*P_ps
         k_str = 0.6
 
-        mass = (payload_mass + pv_mass + fcs_mass + propulsion_mass) / (
-            1 - k_str
-        ) + battery_mass
+        mass = (payload_mass + pv_mass + fcs_mass + propulsion_mass) / (1 - k_str) + battery_mass
         # mass = self.af_mass # Set mass to imported mass from openVSP
         self.weight = 9.81 * (mass)
 
@@ -125,11 +121,7 @@ class Seaplane:
 
         """
         p_req = self.get_required_power(u, rho)
-        e = (
-            self.Rt ** (1.0 - self.n)
-            * (self.n_tot * self.voltage * self.capacity)
-            / p_req
-        )
+        e = self.Rt ** (1.0 - self.n) * (self.n_tot * self.voltage * self.capacity) / p_req
         return e
 
     def get_dynamic_pressure(self, U, rho) -> float:

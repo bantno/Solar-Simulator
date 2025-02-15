@@ -3,9 +3,9 @@ from scipy.optimize import linprog
 
 # Define the MDP parameters
 states = [0, 1, 2]  # Example states
-actions = [0, 1]     # Example actions
-gamma = 0.9          # Discount factor
-time_steps = 5       # Define number of time steps to plan over
+actions = [0, 1]  # Example actions
+gamma = 0.9  # Discount factor
+time_steps = 5  # Define number of time steps to plan over
 
 # Rewards
 rewards = [1, 2, 3]
@@ -42,14 +42,14 @@ A = np.array(A)
 b = np.array(b)
 
 # Solve the linear program
-result = linprog(c, A_ub=A, b_ub=b, bounds=[(None, None)] * len(c), method='highs')
+result = linprog(c, A_ub=A, b_ub=b, bounds=[(None, None)] * len(c), method="highs")
 
 # Check the result
 if result.success:
     optimal_values = result.x
     print("Optimal value function over time:", -result.fun)  # Negate to get the maximized value
     print("Optimal values for states over time:")
-    
+
     for t in range(time_steps):
         print(f"Time step {t}:")
         for s in states:

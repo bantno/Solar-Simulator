@@ -161,9 +161,7 @@ class SolarPlaneSimulation:
             for mdp_prob in mdp_probs:
                 tasks.append((cap, "Optimal", None, mdp_prob, success_prob))
             for charge_threshold in charge_thresholds:
-                tasks.append(
-                    (cap, "Charge Threshold", None, charge_threshold, success_prob)
-                )
+                tasks.append((cap, "Charge Threshold", None, charge_threshold, success_prob))
 
         if self.use_multiprocessing:
             num_cores_to_use = max(1, os.cpu_count())

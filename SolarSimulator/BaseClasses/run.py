@@ -1,4 +1,5 @@
 """Script to read simulation parameters and run batch of simulations."""
+
 import yaml
 from BaseClasses.run_sim import SolarPlaneSimulation
 from BaseClasses.transition_model_base import ProbabilityModelFactory
@@ -51,7 +52,7 @@ def run_simulation(params):
 
 def main():
     """Run batch of simulations."""
-    config_file = r"Results\monthtest\simulation_params.yaml"
+    config_file = r"Results\Analysis\simulation_params.yaml"
     simulations = load_simulations_config(config_file)
     print(f"Number of simulations: {len(simulations)}")
 

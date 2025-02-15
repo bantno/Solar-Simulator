@@ -263,7 +263,7 @@ class TestExpectedValueTable(unittest.TestCase):
     def test_ev_entry(self):
         """Test _ev_entry method."""
         # Sample data for k and state
-        k = 1  # Index for whale observation
+        k = 0  # Index for whale observation
         state = (50, 0)  # 50% SOC, moored
 
         # Mock the required methods
@@ -277,7 +277,7 @@ class TestExpectedValueTable(unittest.TestCase):
             [0.5, 0.6, 0.7]
         )  # Example whale probabilities
         self.ev_table.expected_wind = np.array(
-            [[10, 5], [15, 6]]
+            [[10, 5], [15, 6], [30, 2]]
         )  # Wind data for two different times
 
         reward_k = (
@@ -298,9 +298,11 @@ class TestExpectedValueTable(unittest.TestCase):
         )  # Should return 0.9
 
         # Compute expected value E_J_k using the formula
-        expected_E_J_k = (1 - p_4) * p_success_u_0 * alpha_u_0 + p_4 * (
-            reward_k + p_success_u_1 * alpha_u_1
-        )
+        fly_case_value = p_4 * (reward_k + p_success_u_1 * alpha_u_1 - (1 - p_success_u_1) * self.ev_table.failure_penalty)
+        float_case_value = (1-p_4) * (p_success_u_0 * alpha_u_0 - (1-p_success_u_0)*self.ev_table.failure_penalty)
+
+
+        expected_E_J_k = fly_case_value + float_case_value
 
         # Call _ev_entry method
         result = self.ev_table._ev_entry(k, state)

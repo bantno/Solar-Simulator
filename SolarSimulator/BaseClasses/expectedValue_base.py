@@ -453,20 +453,20 @@ class ExpectedValueTable:
             k, state, reward_k, p_success_u_0, p_success_u_1
         )
 
-        # case_1_2_3 = (1-case_probs[3])*(
-        #     p_success_u_0*alpha_u_0 + (1-p_success_u_0)*(-1*self.failure_penalty))
+        case_1_2_3 = (1-case_probs[3])*(
+            p_success_u_0*alpha_u_0 + (1-p_success_u_0)*(-1*self.failure_penalty))
 
-        # future_reward_4 = p_success_u_1*alpha_u_1+((1-p_success_u_1)*(-1*self.failure_penalty))
-        # case_4 = case_probs[3]*(reward_k + future_reward_4)
+        future_reward_4 = p_success_u_1*alpha_u_1+((1-p_success_u_1)*(-1*self.failure_penalty))
+        case_4 = case_probs[3]*(reward_k + future_reward_4)
 
-        # # Need to include the negative effect of penalty
-        # e_j_k =  case_1_2_3 + case_4
+        # Need to include the negative effect of penalty
+        e_j_k =  case_1_2_3 + case_4
 
-        p_4 = case_probs[3]
+        # p_4 = case_probs[3]
 
-        e_j_k = (1 - p_4) * (p_success_u_0) * (alpha_u_0) * self.gamma + p_4 * (
-            reward_k + self.gamma * p_success_u_1 * alpha_u_1
-        )
+        # e_j_k = (1 - p_4) * (p_success_u_0) * (alpha_u_0) * self.gamma + p_4 * (
+        #     reward_k + self.gamma * p_success_u_1 * alpha_u_1
+        # )
         return e_j_k
 
     def f_W_vectorized(self, w, c_k, scale_k):

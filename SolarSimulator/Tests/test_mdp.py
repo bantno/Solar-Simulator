@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 import numpy as np
 from BaseClasses.expectedValue_base import ExpectedValueTable
 from BaseClasses.seaplane_base import Seaplane

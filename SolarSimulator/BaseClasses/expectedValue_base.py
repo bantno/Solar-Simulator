@@ -629,7 +629,7 @@ class ExpectedValueTable:
 
         # Add Moored State surface
         fig.add_trace(
-            go.Surface(z=moored_data, x=x, y=y, colorscale="Blues", opacity=0.95, name="Moored")
+            go.Surface(z=moored_data, x=x, y=y, colorscale="Blues", opacity=1.0, name="Moored")
         )
 
         # Add Flying State surface

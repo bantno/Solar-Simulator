@@ -1,6 +1,9 @@
+"""Class to test functionality of transition models."""
+
 import unittest
 import numpy as np
 from BaseClasses.transition_model_base import (
+    ProbabilityModelFactory,
     LinearSuccessProbability,
     OnlySuccessProbability,
     TestSuccessProbability,
@@ -10,6 +13,8 @@ from BaseClasses.transition_model_base import (
 
 
 class TestTransitionModelVectorization(unittest.TestCase):
+    """Testing class to evaluate broadcasting and vectorization capabilities
+      of transition model classes."""
     def setUp(self):
         """Set up test fixtures."""
         self.wind_speeds = np.array([5.0, 10.0, 15.0])
@@ -20,40 +25,42 @@ class TestTransitionModelVectorization(unittest.TestCase):
         self.single_state = (50, 0)
 
     def test_linear_success_probability(self):
+        """Evaluate vectorization of linear success model."""
         model = LinearSuccessProbability(failure_slope=0.05)
         result = model.compute_probability(self.wind_speeds, self.actions, self.states)
         self.assertEqual(len(result), len(self.wind_speeds))
 
     def test_only_success_probability(self):
+        """Evaluate vectorization of only success model."""
         model = OnlySuccessProbability()
         result = model.compute_probability(self.wind_speeds, self.actions, self.states)
         self.assertEqual(len(result), len(self.wind_speeds))
 
     def test_test_success_probability(self):
+        """Evaluate vectorization of testing success model."""
         model = TestSuccessProbability()
         result = model.compute_probability(self.wind_speeds, self.actions, self.states)
         self.assertEqual(len(result), len(self.wind_speeds))
 
     def test_realistic_success_probability(self):
+        """Evaluate vectorization of realistic transition model."""
         model = RealisticSuccessProbability()
         result = model.compute_probability(self.wind_speeds, self.actions, self.states)
         self.assertEqual(len(result), len(self.wind_speeds))
 
     def test_optimistic_success_probability(self):
+        """Evaluate vectorization of optimistic succcess probability."""
         model = OptimisticSuccessProbability()
         result = model.compute_probability(self.wind_speeds, self.actions, self.states)
         self.assertEqual(len(result), len(self.wind_speeds))
 
     def test_broadcasting(self):
-        models = [
-            LinearSuccessProbability(failure_slope=0.05),
-            OnlySuccessProbability(),
-            TestSuccessProbability(),
-            RealisticSuccessProbability(),
-            OptimisticSuccessProbability(),
-        ]
+        """Evaluate input broadcasting behavior for all available transition success models."""
+        factory = ProbabilityModelFactory
+        models = factory.list_models()
 
-        for model in models:
+        for model_name in models:
+            model = factory.select_probability_model(model_name)
             # Test broadcasting single wind_speed
             result = model.compute_probability(self.single_wind_speed, self.actions, self.states)
             self.assertEqual(len(result), len(self.actions))
@@ -68,6 +75,7 @@ class TestTransitionModelVectorization(unittest.TestCase):
 
 
 class TestTransitionModelValues(unittest.TestCase):
+    """Evalute return values of transition success models."""
     def setUp(self):
         """Set up test fixtures."""
         self.wind_speeds = np.array([0.0, 0.0, 10.0, 10.0, 100.0, 100.0])
@@ -78,6 +86,7 @@ class TestTransitionModelValues(unittest.TestCase):
         self.single_state = (50, 0)
 
     def test_linear_success_probability(self):
+        """Evaluate vectorization of linear success transition model."""
         failure_slope = 0.05
         model = LinearSuccessProbability(failure_slope=failure_slope)
         probabilities = model.compute_probability(
@@ -90,7 +99,14 @@ class TestTransitionModelValues(unittest.TestCase):
         self.assertTrue(np.array_equal(probabilities, expected_probabilities))
 
     def test_realistic_success_probability(self):
-        pass
+        """Ensure that transition probabilities from realistic model
+          are approximately accurate."""
+        raise NotImplementedError()
+    
+    def test_optimistic_success_probability(self):
+        """Ensure that transition probabilities from optimistic model are
+          approximately accurate."""
+        raise NotImplementedError()
 
 
 if __name__ == "__main__":

@@ -167,7 +167,7 @@ class SolarPlaneSimulation:
                 tasks.append((cap, "Charge Threshold", None, charge_threshold, success_prob))
 
         if self.use_multiprocessing:
-            num_cores_to_use = max(1, os.cpu_count())
+            num_cores_to_use = max(1, os.cpu_count()-1) # Leave one core to prevent freezing
             print(f"Running with {num_cores_to_use} cores.")
 
             try:

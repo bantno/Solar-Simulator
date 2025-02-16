@@ -1,0 +1,40 @@
+# simulation_params.yaml
+simulations:
+  - algorithms: ["Optimal"]
+    capacities: [10,20,30,40,50,60] # capacity in Ah
+    thresholds: [0.0,0.1,0.25] # probability
+    mdp_probs: [1.0]
+    charge_thresholds: []
+    success_prob: 0.99995
+    dt: 15
+    num_runs: 1000
+    start_date: "2025-03-01"
+    end_date: "2025-07-01"
+    latitude: [30,0,-30]
+    longitude: -90
+    save_dir: "Results\\Analysis\\use-expected"
+    save_states: False
+    use_expected: True
+    simulate_failure: True
+    transition_model: "Optimistic"
+    use_multiprocessing: True
+    wind_threshold: 10 # meters/second
+
+  - algorithms: ["Optimal"]
+    capacities: [10,20,30,40,50,60]
+    thresholds: [0.0,0.1,0.25]
+    mdp_probs: [1.0]
+    charge_thresholds: []
+    success_prob: 0.99995
+    dt: 15
+    num_runs: 1000
+    start_date: "2025-03-01"
+    end_date: "2025-07-01"
+    latitude: [30,0,-30]
+    longitude: -90
+    save_dir: "Results\\Analysis\\dont-use-expected"
+    save_states: False
+    use_expected: False
+    simulate_failure: True
+    transition_model: "Optimistic"
+    use_multiprocessing: True

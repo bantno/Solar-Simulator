@@ -35,7 +35,7 @@ class SolarPlaneSimulation:
         start_date="2019-07-01",
         end_date="2019-08-02",
         dt=30,
-        num_runs=100,
+        num_runs=10000,
         visualize=False,
         save_dir=".",
         show=False,
@@ -110,7 +110,6 @@ class SolarPlaneSimulation:
             failure_penalty=failure_penalty
         )
         self.results = []  # To store processed results
-        self.transition_model = transition_model
 
     @staticmethod
     def _get_utc_offset(lat, lon, date=None):
@@ -146,6 +145,124 @@ class SolarPlaneSimulation:
         finally:
             del data  # Free memory
             gc.collect()
+
+    def run(
+        self,
+        capacities=[],
+        thresholds=[],
+        mdp_probs=[],
+        charge_thresholds=[],
+        success_prob=0.0,
+    ):
+        for cap in tqdm(capacities, desc="Processing capacities"):
+            self.simulation.plane.capacity = cap
+            self.simulation.plane.update_plane()
+
+            for threshold in tqdm(
+                thresholds, desc=f"Processing for cap={cap}", leave=False
+            ):
+                algo = "Threshold"
+                times, data = self.simulation.run_simulation(
+                    self.start_date,
+                    self.end_date,
+                    self.dt,
+                    algo=algo,
+                    mdp_success_prob=0.9,
+                    true_success_prob=success_prob,
+                    runs=self.num_runs,
+                    threshold=threshold,
+                )
+                data.to_pickle(
+                    f"{self.save_dir}/{algo}_Data_c{cap}_t{threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl"
+                )
+                del data
+                gc.collect()
+
+            for mdp_success_prob in tqdm(
+                mdp_probs, desc=f"Processing for cap={cap}", leave=False
+            ):
+                algo = "Optimal"
+                times, data = self.simulation.run_simulation(
+                    self.start_date,
+                    self.end_date,
+                    self.dt,
+                    algo=algo,
+                    mdp_success_prob=mdp_success_prob,
+                    true_success_prob=success_prob,
+                    runs=self.num_runs,
+                )
+                data.to_pickle(
+                    f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl"
+                )
+                del data
+                gc.collect()
+
+            for charge_threshold in tqdm(
+                charge_thresholds, desc=f"Processing for cap={cap}", leave=False
+            ):
+                algo = "Charge Threshold"
+                times, data = self.simulation.run_simulation(
+                    self.start_date,
+                    self.end_date,
+                    self.dt,
+                    algo=algo,
+                    mdp_success_prob=0.0,
+                    true_success_prob=success_prob,
+                    runs=self.num_runs,
+                )
+                data.to_pickle(
+                    f"{self.save_dir}/{algo}_Data_c{cap}_t{charge_threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}.pkl"
+                )
+                del data
+                gc.collect()
+
+    def _simulation_task(self, args):
+        """Helper function to execute a single simulation run."""
+        cap, algo, threshold, mdp_success_prob, success_prob = args
+        self.simulation.plane.capacity = cap
+
+        if algo == "Threshold":
+            times, data = self.simulation.run_simulation(
+                self.start_date,
+                self.end_date,
+                self.dt,
+                algo=algo,
+                mdp_success_prob=0.0,
+                true_success_prob=success_prob,
+                runs=self.num_runs,
+                threshold=threshold,
+            )
+            filename = f"{self.save_dir}/{algo}_Data_c{cap}_t{threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
+        elif algo == "Optimal":
+            times, data = self.simulation.run_simulation(
+                self.start_date,
+                self.end_date,
+                self.dt,
+                algo=algo,
+                mdp_success_prob=mdp_success_prob,
+                true_success_prob=success_prob,
+                runs=self.num_runs,
+            )
+            filename = f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
+        elif algo == "Charge Threshold":
+            times, data = self.simulation.run_simulation(
+                self.start_date,
+                self.end_date,
+                self.dt,
+                algo=algo,
+                mdp_success_prob=mdp_success_prob,
+                true_success_prob=success_prob,
+                runs=self.num_runs,
+            )
+            filename = f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
+        else:
+            return None
+
+        data.to_pickle(filename)
+        del data
+        gc.collect()
+
+        return filename
 
     def run(
         self,

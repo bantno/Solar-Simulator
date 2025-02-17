@@ -118,7 +118,6 @@ class Simulation(AbstractSimulation):
         self.simulate_failure = simulate_failure
         self.save_history = save_history
         self.use_expected = use_expected
-        self.transition_model = transition_model
 
     def run_simulation(
         self,

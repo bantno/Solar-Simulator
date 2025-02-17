@@ -2,7 +2,6 @@
 
 import yaml
 from BaseClasses.run_sim import SolarPlaneSimulation
-from BaseClasses.transition_model_base import ProbabilityModelFactory
 
 
 def load_simulations_config(file_path):
@@ -65,4 +64,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()

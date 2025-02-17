@@ -1,0 +1,48 @@
+name: Run Tests on Ubuntu 20.04, 24.04, and Windows with Conda
+
+on:
+  push:
+    branches:
+      - main
+      - parametrize-wind-threshold
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, ubuntu-24.04, windows-latest]  # Add Windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.11.9
+          activate-environment: test-env
+          auto-activate-base: false
+          use-only-tar-bz2: true  # Important for caching on Windows
+
+      - name: Cache Conda Environment
+        uses: actions/cache@v3
+        with:
+          path: ${{ runner.os == 'Windows' && 'C:/Miniconda3/pkgs' || '~/conda_pkgs_dir' }}
+          key: ${{ runner.os }}-conda-${{ hashFiles('**/environment.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-conda-
+
+      - name: Install Dependencies
+        run: |
+          conda env update --file environment.yml --name test-env
+
+      - name: Run Tests
+        shell: bash -l {0}
+        run: |
+          conda activate test-env
+          python -m unittest discover

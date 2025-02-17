@@ -1,13 +1,13 @@
 """This module contains the base class for the autonomy module of the solar-powered seaplane simulator."""
 
 import numpy as np
-from BaseClasses.expectedValue_base import ExpectedValueTable
+from BaseClasses.valueFunction_base import ValueFunction
 
 
 class Autonomy:
     """Represents the autonomy module for a solar-powered seaplane."""
 
-    def __init__(self, dt, mdp_model: ExpectedValueTable, use_expected_reward: bool = False, wind_threshold: float = 0.):
+    def __init__(self, dt, mdp_model: ValueFunction, use_expected_reward: bool = False, wind_threshold: float = 0.):
         self.dt = dt
         self.mdp_model = mdp_model
         self.failure_penalty = mdp_model.failure_penalty

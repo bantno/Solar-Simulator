@@ -10,9 +10,8 @@ from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.transition_model_base import ActionSuccessProbabilityModel
 
 
-class ExpectedValueTable:
+class ValueFunction:
     """The ExpectedValueTable class for the Seaplane MDP."""
-
     def __init__(
         self,
         plane: Seaplane,

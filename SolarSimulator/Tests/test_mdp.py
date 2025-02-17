@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 import numpy as np
-from BaseClasses.expectedValue_base import ExpectedValueTable
+from BaseClasses.valueFunction_base import ValueFunction
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.transition_model_base import TestSuccessProbability, RealisticSuccessProbability
 
@@ -29,7 +29,7 @@ class TestExpectedValueTable(unittest.TestCase):
         self.mock_transition_model = TestSuccessProbability()
 
         # Instantiate the class to test
-        self.ev_table = ExpectedValueTable(
+        self.ev_table = ValueFunction(
             plane=self.mock_plane,
             expected_solar_data=self.expected_solar_data,
             expected_wind_data=self.expected_wind_data,

@@ -10,7 +10,7 @@ import pytz
 from timezonefinder import TimezoneFinder
 import cProfile
 
-from BaseClasses.expectedValue_base import ExpectedValueTable
+from BaseClasses.valueFunction_base import ValueFunction
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.autonomy_base import Autonomy
 from BaseClasses.transition_model_base import (
@@ -182,7 +182,7 @@ class Simulation(AbstractSimulation):
 
         whale_observation_data = self.get_whale_observation_probabilities(times)
         self.plane.update_plane()
-        mdp_model = ExpectedValueTable(
+        mdp_model = ValueFunction(
             self.plane,
             expected_solar_data,
             expected_wind_data,
@@ -491,7 +491,7 @@ class SingleCaseSimulation(Simulation):
                 f"Input data is not the same length. Solar: {len(expected_solar_data)}, Wind: {len(expected_wind_data)}, Whale: {len(whale_observation_data)}."
             )
 
-        mdp_model = ExpectedValueTable(
+        mdp_model = ValueFunction(
             self.plane,
             expected_solar_data,
             expected_wind_data,

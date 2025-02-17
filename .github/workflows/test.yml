@@ -1,4 +1,4 @@
-name: Run Tests on Ubuntu 20.04, 24.04, and Windows with Conda
+name: Run Tests on Windows with Conda
 
 on:
   push:
@@ -26,23 +26,24 @@ jobs:
         with:
           python-version: 3.11.9
           activate-environment: test-env
-          auto-activate-base: false
           use-only-tar-bz2: true  # Important for caching on Windows
+          environment-file: environment.yml
 
-      - name: Cache Conda Environment
-        uses: actions/cache@v3
-        with:
-          path: ${{ runner.os == 'Windows' && 'C:/Miniconda3/pkgs' || '~/conda_pkgs_dir' }}
-          key: ${{ runner.os }}-conda-${{ hashFiles('**/environment.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-conda-
+      - name: Install mamba
+        run: conda install mamba -c conda-forge
 
-      - name: Install Dependencies
-        run: |
-          conda env update --file environment.yml --name test-env
+      # - name: Cache Conda Environment
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: ${{ runner.os == 'Windows' && 'C:/Miniconda3/pkgs' || '~/conda_pkgs_dir' }}
+      #     key: ${{ runner.os }}-conda-${{ hashFiles('**/environment.yml') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-conda-
+
+      - name: Create environment with mamba
+        run: mamba env create --file environment.yml --name test-env
 
       - name: Run Tests
-        shell: bash -l {0}
         run: |
-          conda activate test-env
+          call activate test-env
           python -m unittest discover

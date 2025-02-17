@@ -1,4 +1,4 @@
-from BaseClasses.plotting_base import SolarChargePlotter,DataProcessor
+from BaseClasses.plotting_base import SolarChargePlotter, DataProcessor
 import datetime
 
 if __name__ == "__main__":
@@ -22,13 +22,13 @@ if __name__ == "__main__":
     df = processor.get_results_df()
     processor.calculate_percent_improvement(df).to_csv("test.csv")
     processor.plot_all_data()
-    
+
     # Calculate percent improvement
     processor.process_files()
     mcs_results = processor.get_results_df()
     processor.calculate_percent_improvement(mcs_results).to_csv("Improvement.csv")
 
     #
-    
+
     # processor.plot_reward_histogram(directory=dire,bins=30)
     # print(processor.results)

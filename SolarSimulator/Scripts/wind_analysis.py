@@ -6,36 +6,36 @@ import plotly.express as px
 df = pd.read_pickle(r"Data\HISTORICAL_DATA\data_60min_lat_30.pkl")
 
 # Filter data for daylight hours (shortwave_radiation > 0)
-daylight_df = df[df['shortwave_radiation'] > 0]
+daylight_df = df[df["shortwave_radiation"] > 0]
 
 # If no data passes the filter, provide a message and exit
 if daylight_df.empty:
     print("No data available for daylight hours (shortwave_radiation > 0).")
 else:
     # Extract month from the datetime index
-    daylight_df['month'] = daylight_df.index.month
-    daylight_df['month_name'] = daylight_df.index.strftime('%B')
+    daylight_df["month"] = daylight_df.index.month
+    daylight_df["month_name"] = daylight_df.index.strftime("%B")
 
     # Group by month and calculate average wind speed
     monthly_avg_wind_speed = (
-        daylight_df.groupby(['month', 'month_name'])['wind_speed_10m']
+        daylight_df.groupby(["month", "month_name"])["wind_speed_10m"]
         .mean()
         .reset_index()
-        .sort_values(by='month')
+        .sort_values(by="month")
     )
 
     # Create a plotly bar chart
     fig = px.bar(
         monthly_avg_wind_speed,
-        x='month_name',
-        y='wind_speed_10m',
-        title='Average Wind Speed by Month (Daylight Hours)',
-        labels={'wind_speed_10m': 'Average Wind Speed (m/s)', 'month_name': 'Month'},
-        text='wind_speed_10m'
+        x="month_name",
+        y="wind_speed_10m",
+        title="Average Wind Speed by Month (Daylight Hours)",
+        labels={"wind_speed_10m": "Average Wind Speed (m/s)", "month_name": "Month"},
+        text="wind_speed_10m",
     )
 
     # Update layout for better visuals
-    fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+    fig.update_traces(texttemplate="%{text:.2f}", textposition="outside")
     fig.update_layout(xaxis_title="Month", yaxis_title="Average Wind Speed (m/s)")
     fig.show()
 
@@ -49,7 +49,7 @@ else:
 #     # Determine daylight hours dynamically for each day
 #     daylight_df['date_only'] = daylight_df.index.date
 #     daylight_hours = daylight_df.groupby('date_only').apply(lambda group: sorted(group.index.hour)).reset_index(name='hours')
-    
+
 #     # Map hours to time segments (morning, afternoon, evening) for each day
 #     time_of_day_map = {}
 #     for _, row in daylight_hours.iterrows():

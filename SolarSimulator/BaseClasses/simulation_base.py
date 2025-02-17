@@ -8,22 +8,91 @@ from tqdm import tqdm
 from datetime import datetime
 import pytz
 from timezonefinder import TimezoneFinder
-
-# # Add the project root directory to the Python path
-# project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-# sys.path.insert(0, project_root)
+import cProfile
 
 from BaseClasses.expectedValue_base import ExpectedValueTable
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.autonomy_base import Autonomy
+from BaseClasses.transition_model_base import (
+    ActionSuccessProbabilityModel,
+    ProbabilityModelFactory,
+)
+
+from abc import ABC, abstractmethod
 
 
-# Add project root directory to Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, project_root)
+class AbstractSimulation(ABC):
+    @abstractmethod
+    def __init__(
+        self,
+        plane,
+        lat,
+        lon,
+        tz,
+        save_history=False,
+        use_expected=False,
+        simulate_failure=True,
+        transition_model=None,
+    ):
+        pass
+
+    @abstractmethod
+    def run_simulation(
+        self,
+        start_date,
+        end_date,
+        dt,
+        algo=None,
+        mdp_success_prob=0,
+        true_success_prob=0,
+        runs=1,
+        threshold=None,
+        transition_model=None,
+    ):
+        pass
+
+    @abstractmethod
+    def simulate_deployment(
+        self,
+        start_date,
+        end_date,
+        dt,
+        algo,
+        mdp_success_prob,
+        true_success_prob,
+        num_runs,
+        threshold,
+        transition_model,
+    ):
+        pass
+
+    @abstractmethod
+    def _format_simulation_result(self, result, expected_data):
+        pass
+
+    @abstractmethod
+    def get_expected_weather_data(self, start_date, end_date, dt, lat, lon):
+        pass
+
+    @abstractmethod
+    def _load_weather_data(self, dt, directory=None, i=None, lat=None, lon=None):
+        pass
+
+    @abstractmethod
+    def _load_expected_weather_data(self, dt, lat, lon, directory):
+        pass
+
+    @abstractmethod
+    def get_whale_observation_probabilities(self, time_index):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def is_data_same_length(solar_data, wind_data, whale_data):
+        pass
 
 
-class Simulation:
+class Simulation(AbstractSimulation):
     """
     A class to simulate the operations of a seaplane using solar energy collection
     and behavioral algorithms. The class handles the initialization of the simulation
@@ -89,6 +158,10 @@ class Simulation:
         num_runs,
         threshold,
     ):
+
+        # profiler = cProfile.Profile()
+        # profiler.enable()
+
         self.plane.update_plane()
         times = pd.date_range(
             start=start_date,
@@ -96,9 +169,7 @@ class Simulation:
             freq=pd.Timedelta(minutes=dt),
             inclusive="both",
         )
-        expected_data = self.get_expected_weather_data(
-            start_date, end_date, dt, self.lat, self.lon
-        )
+        expected_data = self.get_expected_weather_data(start_date, end_date, dt, self.lat, self.lon)
 
         solar_columns = ["beta_alpha", "beta_beta", "expected_solar_rad"]
         expected_solar_data = expected_data[solar_columns].to_numpy()
@@ -109,6 +180,7 @@ class Simulation:
         loc = rf"Data\SYNTHETIC_DATA\lat{int(self.lat)}"
 
         whale_observation_data = self.get_whale_observation_probabilities(times)
+
         mdp_model = ExpectedValueTable(
             self.plane,
             expected_solar_data,
@@ -138,9 +210,7 @@ class Simulation:
         if algo == "Optimal":
             mdp_model.generate_ev_table()
 
-        for i in tqdm(
-            range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1
-        ):
+        for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
             if not self.use_expected:
                 actual_data = self._load_weather_data(
                     dt, directory=loc, i=i, lat=self.lat, lon=self.lon
@@ -166,7 +236,10 @@ class Simulation:
 
             data[i] = self._format_simulation_result(result, expected_data)
 
-        return pd.DataFrame.from_dict(data, orient="index")
+        # profiler.disable()
+        # profiler.dump_stats("sim_profile_output.prof")
+
+        return pd.DataFrame.from_dict(data)
 
     def _format_simulation_result(self, result, expected_data):
         if self.save_history:
@@ -184,14 +257,14 @@ class Simulation:
             return {
                 "Reward": reward,
                 "LastStep": last_step,
-                "ActionHistory": action_history,
-                "FailureProbHistory": failure_prob_history,
-                "StateHistory": state_history,
-                "SolarHistory": solar_list,
-                "ExpectedSolarHistory": expected_data["expected_solar_rad"].values,
-                "WindHistory": wind_history,
-                "ExpectedWindHistory": expected_data["expected_wind_speed"].values,
-                "WhaleHistory": whale_list,
+                "ActionHistory": list(action_history),  # Convert NumPy array to list
+                "FailureProbHistory": list(failure_prob_history),
+                "StateHistory": list(state_history),
+                "SolarHistory": list(solar_list),
+                "ExpectedSolarHistory": list(expected_data["expected_solar_rad"].values),
+                "WindHistory": list(wind_history),
+                "ExpectedWindHistory": list(expected_data["expected_wind_speed"].values),
+                "WhaleHistory": list(whale_list),
                 "FlightHours": flight_minutes / 60,
             }
         else:
@@ -238,11 +311,7 @@ class Simulation:
             & (
                 (df["month"] < end_month)
                 | ((df["month"] == end_month) & (df["day"] < end_day))
-                | (
-                    (df["month"] == end_month)
-                    & (df["day"] == end_day)
-                    & (df["hour"] < end_hour)
-                )
+                | ((df["month"] == end_month) & (df["day"] == end_day) & (df["hour"] < end_hour))
                 | (
                     (df["month"] == end_month)
                     & (df["day"] == end_day)
@@ -255,9 +324,7 @@ class Simulation:
 
         return expected_data
 
-    def _load_weather_data(
-        self, dt: int, directory: str = None, i=None, lat=None, lon=None
-    ):
+    def _load_weather_data(self, dt: int, directory: str = None, i=None, lat=None, lon=None):
         """Load actual solar and wind data from pickle files with a specific timestep and optional index in the filename."""
         # Create regex pattern to match files with the specified timestep, latitude, longitude, and index
         if i is None:
@@ -349,6 +416,10 @@ class Simulation:
         probabilities = np.array(time_index.map(get_probability_for_time))
         return probabilities
 
+    @staticmethod
+    def is_data_same_length(solar_data, wind_data, whale_data) -> bool:
+        return len(np.unique([len(solar_data), len(wind_data), len(whale_data)])) == 1
+
 
 class SingleCaseSimulation(Simulation):
     """
@@ -367,9 +438,23 @@ class SingleCaseSimulation(Simulation):
         save_history: bool = False,
         use_expected: bool = False,
         simulate_failure: bool = True,
+        transition_model_name=None,
     ) -> None:
+
+        factory = ProbabilityModelFactory()
+        if factory.is_model_available(transition_model_name):
+            transition_model = factory.select_probability_model(transition_model_name)
+        else:
+            raise ValueError(f"Invalid transition model: {transition_model_name}")
         super().__init__(
-            plane, lat, lon, tz, save_history, use_expected, simulate_failure
+            plane,
+            lat,
+            lon,
+            tz,
+            save_history,
+            use_expected,
+            simulate_failure,
+            transition_model=transition_model,
         )
         self.expected_file = expected_file
         self.actual_file = actual_file
@@ -380,17 +465,13 @@ class SingleCaseSimulation(Simulation):
         end_date: datetime,
         dt: int,
         algo: str,
-        mdp_success_prob: float,
-        true_success_prob: float,
         threshold: float = None,
     ):
         """Runs a single case of the simulation."""
         self.plane.update_plane()
         threshold = threshold if isinstance(threshold, float) else 0.1
 
-        times = pd.date_range(
-            start=start_date, end=end_date, freq=pd.Timedelta(minutes=dt)
-        )
+        times = pd.date_range(start=start_date, end=end_date, freq=pd.Timedelta(minutes=dt))
         expected_data = pd.read_pickle(self.expected_file)
         actual_data = pd.read_pickle(self.actual_file).loc[start_date:end_date]
 
@@ -401,9 +482,16 @@ class SingleCaseSimulation(Simulation):
         expected_wind_data = expected_data[wind_columns].to_numpy()
 
         # whale_observation_data = self.get_whale_observation_probabilities(times)
-        whale_observation_data = np.ones(len(times))*0.25
+        whale_observation_data = np.ones(len(times)) * 0.25
         whale_observation_data[len(times) // 2 :] = 0.75
-        whale_observation_data[0: len(times) // 4] = 0.00
+        whale_observation_data[0 : len(times) // 4] = 0.00
+
+        if not self.is_data_same_length(
+            expected_solar_data, expected_wind_data, whale_observation_data
+        ):
+            raise ValueError(
+                f"Input data is not the same length. Solar: {len(expected_solar_data)}, Wind: {len(expected_wind_data)}, Whale: {len(whale_observation_data)}."
+            )
 
         mdp_model = ExpectedValueTable(
             self.plane,
@@ -412,7 +500,7 @@ class SingleCaseSimulation(Simulation):
             whale_observation_data,
             soc_increment=1,
             timestep_min=dt,
-            floating_failure_prob=1 - true_success_prob,
+            transition_model=self.transition_model,
         )
 
         auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected)
@@ -442,11 +530,10 @@ class SingleCaseSimulation(Simulation):
             solar_data=sim_solar_data,
             wind_data=sim_wind_data,
             whale_data=whale_observation_data,
-            true_success_prob=true_success_prob,
             simulate_failure=self.simulate_failure,
             save_history=True,
             threshold=threshold if algo == "Threshold" else None,
         )
         data = {}
         data[0] = self._format_simulation_result(result, expected_data)
-        return pd.DataFrame.from_dict(data, orient="index")
+        return pd.DataFrame.from_dict(data)

@@ -24,7 +24,7 @@ class StateHistoryPlotter:
     def load_first_entry(self, file_path):
         """Load the first row of a DataFrame from the specified pickle file path."""
         df = pd.read_pickle(file_path)
-        return df.head(1)
+        return df.head(10)
 
     def extract_parameters_from_filename(self, filename):
         """
@@ -32,9 +32,7 @@ class StateHistoryPlotter:
         Returns a tuple with these values.
         """
         # Regex patterns for Greedy and MDP files
-        match = re.match(
-            r"(\w+)_Data_c(\d+)_(p|t)([\d.]+)_(\d+)min_(\d+-\d+)", filename
-        )
+        match = re.match(r"(\w+)_Data_c(\d+)_(p|t)([\d.]+)_(\d+)min_(\d+-\d+)", filename)
         if match:
             algo, cap, param_type, param_value, dt, _ = match.groups()
             cap = int(cap)
@@ -82,16 +80,14 @@ class StateHistoryPlotter:
 
     def get_battery_capacity(self, filename):
         """Extract battery capacity from the filename."""
-        return self.extract_parameter_from_filename(
-            filename, r"c(\d+)", "Unknown Capacity"
-        )
+        return self.extract_parameter_from_filename(filename, r"c(\d+)", "Unknown Capacity")
 
-    def plot_state_of_charge(self, files):
+    def plot_state_of_charge(self, files, case_num=0):
         plt.subplot(7, 1, 1)
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             _, label = self.parse_filename(file)
-            state_charge_levels = [state[0] for state in df["StateHistory"].values[0]]
+            state_charge_levels = [state[0] for state in df.loc["StateHistory", case_num]]
             time_index = pd.date_range(
                 start=self.start_date,
                 periods=len(state_charge_levels),
@@ -104,12 +100,12 @@ class StateHistoryPlotter:
         plt.legend()
         plt.grid(True)
 
-    def plot_action_history(self, files):
+    def plot_action_history(self, files, case_num=0):
         plt.subplot(7, 1, 2)
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             _, label = self.parse_filename(file)
-            action_history = df["ActionHistory"].values[0]
+            action_history = df.loc["ActionHistory", case_num]
             time_index = pd.date_range(
                 start=self.start_date, periods=len(action_history), freq=self.time_step
             )
@@ -120,12 +116,12 @@ class StateHistoryPlotter:
         plt.legend()
         plt.grid(True)
 
-    def plot_cumulative_hours_flight(self, files):
+    def plot_cumulative_hours_flight(self, files, case_num=0):
         plt.subplot(7, 1, 3)
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             _, label = self.parse_filename(file)
-            state_history = df["StateHistory"].values[0]
+            state_history = df.at["StateHistory", case_num]
             cumulative_hours = self.calculate_cumulative_hours(state_history)
             time_index = pd.date_range(
                 start=self.start_date,
@@ -144,34 +140,30 @@ class StateHistoryPlotter:
         cumulative_hours = [0]
         for state in state_history:
             cumulative_hours.append(
-                cumulative_hours[-1] + (self.dt / 60.0)
-                if state[1] == 1
-                else cumulative_hours[-1]
+                cumulative_hours[-1] + (self.dt / 60.0) if state[1] == 1 else cumulative_hours[-1]
             )
         return cumulative_hours
 
-    def plot_solar_history(self, files):
+    def plot_solar_history(self, files, case_num=0):
         plt.subplot(7, 1, 4)
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
-        solar_history = df["SolarHistory"].values[0]
-        expected_solar_history = df["ExpectedSolarHistory"].values[0]
+        solar_history = df.at["SolarHistory", case_num]
+        expected_solar_history = df.at["ExpectedSolarHistory", case_num]
         time_index = pd.date_range(
             start=self.start_date, periods=len(solar_history), freq=self.time_step
         )
         plt.plot(time_index, solar_history, label="Actual")
-        plt.plot(
-            time_index, expected_solar_history[: len(time_index)], label="Expected"
-        )
+        plt.plot(time_index, expected_solar_history[: len(time_index)], label="Expected")
         plt.title("Solar History Over Time")
         plt.xlabel("Datetime")
         plt.ylabel("Solar Power (W/$m^2$)")
         plt.legend()
         plt.grid(True)
 
-    def plot_whale_history(self, files):
+    def plot_whale_history(self, files, case_num=0):
         plt.subplot(7, 1, 5)
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
-        whale_history = df["WhaleHistory"].values[0]
+        whale_history = df.at["WhaleHistory", case_num]
         time_index = pd.date_range(
             start=self.start_date, periods=len(whale_history), freq=self.time_step
         )
@@ -182,30 +174,28 @@ class StateHistoryPlotter:
         plt.legend()
         plt.grid(True)
 
-    def plot_wind_history(self, files):
+    def plot_wind_history(self, files, case_num=0):
         plt.subplot(7, 1, 6)
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
-        wind_history = df["WindHistory"].values[0]
-        expected_wind_history = df["ExpectedWindHistory"].values[0]
+        wind_history = df.at["WindHistory", case_num]
+        expected_wind_history = df.at["ExpectedWindHistory", case_num]
         time_index = pd.date_range(
             start=self.start_date, periods=len(wind_history), freq=self.time_step
         )
         plt.plot(time_index, wind_history, label="Wind History")
-        plt.plot(
-            time_index, expected_wind_history[: len(time_index)], label="Expected Wind"
-        )
+        plt.plot(time_index, expected_wind_history[: len(time_index)], label="Expected Wind")
         plt.title("Wind History Over Time")
         plt.xlabel("Datetime")
         plt.ylabel("Wind Speed (m/s)")
         plt.legend()
         plt.grid(True)
 
-    def plot_failure_prob_history(self, files):
+    def plot_failure_prob_history(self, files, case_num=0):
         plt.subplot(7, 1, 7)
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             _, label = self.parse_filename(file)
-            failure_prob_history = df["FailureProbHistory"].values[0]
+            failure_prob_history = df.at["FailureProbHistory", case_num]
             time_index = pd.date_range(
                 start=self.start_date,
                 periods=len(failure_prob_history),
@@ -268,9 +258,7 @@ class StateHistoryPlotter:
                 file_path = os.path.join(self.directory, file_name)
 
                 # Extract the threshold from the filename using regex
-                threshold_match = re.search(
-                    r"t([\d\.]+)", file_name
-                )  # Capture the value after 't'
+                threshold_match = re.search(r"t([\d\.]+)", file_name)  # Capture the value after 't'
                 if threshold_match:
                     threshold_value = float(threshold_match.group(1))
                     # Load data from the pickle file
@@ -332,9 +320,7 @@ class DataProcessor:
                     filename,
                 )
                 if match:
-                    algo, cap, threshold, prob, dt, date_range, runs, latitude = (
-                        match.groups()
-                    )
+                    algo, cap, threshold, prob, dt, date_range, runs, latitude = match.groups()
                     cap = int(cap)
                     dt = int(dt)
                     runs = int(runs)
@@ -356,9 +342,9 @@ class DataProcessor:
                         median_reward,
                         mean_failure_step,
                         median_failure_step,
-                        num_failures
+                        num_failures,
                     ) = self.calculate_mean_rewards_and_failures(
-                        os.path.join(self.directory, filename),num_timesteps
+                        os.path.join(self.directory, filename), num_timesteps
                     )
 
                     # Store results in a dictionary
@@ -374,6 +360,8 @@ class DataProcessor:
                             "EndDate": end_day,
                             "NumTimesteps": num_timesteps,
                             "NumRuns": runs,
+                            "NumFailures": num_failures,
+                            "FailurePercentage": num_failures / runs,
                             "MeanFailureStep": mean_failure_step,
                             "MedianFailureStep": median_failure_step,
                             "MeanReward": mean_reward,
@@ -430,21 +418,21 @@ class DataProcessor:
 
         plt.savefig(save_dir + rf"\optimal_battery_plot.png")
 
-    def calculate_mean_rewards_and_failures(self, filepath,num_timesteps):
+    def calculate_mean_rewards_and_failures(self, filepath, num_timesteps):
         """Calculate the mean reward and failure step for a given pickle file."""
         df = pd.read_pickle(filepath)
 
-        if "Reward" in df.columns and "LastStep" in df.columns:
-            mean_reward = df["Reward"].mean()
-            median_reward = df["Reward"].median()
-            mean_failure_step = round(df["LastStep"].mean())
-            median_failure_step = df["LastStep"].median()
-            num_failures = len(df[df["LastStep"] < num_timesteps-1])
-            print(f"Number of runs in dataset {filepath}: {len(df)}")
+        if "Reward" in df.index and "LastStep" in df.index:
+            mean_reward = df.loc["Reward"].mean()
+            median_reward = df.loc["Reward"].median()
+            mean_failure_step = round(df.loc["LastStep"].mean())
+            median_failure_step = df.loc["LastStep"].median()
+            num_failures = sum(df.loc["LastStep"].values < num_timesteps)
+            print(f"Number of runs in dataset {filepath}: {len(df.columns)}")
             return mean_reward, median_reward, mean_failure_step, median_failure_step, num_failures
         else:
             print(f"Missing columns in {filepath}")
-            return None, None
+            return None, None, None, None, None
 
     def get_results_df(self):
         """Convert the results list into a DataFrame."""
@@ -464,9 +452,7 @@ class DataProcessor:
         # Iterate over unique algorithms and probabilities
         for i, algo_name in enumerate(algorithms):
             for prob in probabilities:
-                subset = df[
-                    (df["Algorithm"] == algo_name) & (df["Probability"] == prob)
-                ]
+                subset = df[(df["Algorithm"] == algo_name) & (df["Probability"] == prob)]
                 if not subset.empty:
                     plt.scatter(
                         subset["Capacity"],
@@ -507,9 +493,7 @@ class DataProcessor:
             mission_label = f"{start_date}-{end_date}"
 
             # Filter data for the current mission duration
-            mission_df = df[
-                (df["StartDate"] == start_date) & (df["EndDate"] == end_date)
-            ]
+            mission_df = df[(df["StartDate"] == start_date) & (df["EndDate"] == end_date)]
 
             # Get unique latitudes
             latitudes = mission_df["Latitude"].unique()
@@ -542,7 +526,7 @@ class DataProcessor:
                     plt.plot(
                         optimal_df["Capacity"],
                         optimal_df["MedianReward"],
-                        linestyle="--",
+                        linestyle=":",
                         marker="o",
                         color="black",
                         markersize=5,
@@ -554,29 +538,29 @@ class DataProcessor:
                     plt.scatter(
                         charge_threshold_df["Capacity"],
                         charge_threshold_df["MeanReward"],
-                        marker="D",
+                        marker="X",
                         color="blue",
-                        s=60,
+                        s=100,
                         label="Charge Threshold",
                     )
 
                 # Plot the Threshold algorithm grouped by Threshold value
                 for threshold_value, subset in threshold_df.groupby("Threshold"):
                     label = f"Threshold, t={threshold_value}"
-                    plt.scatter(subset["Capacity"], subset["MeanReward"], label=label)
+                    plt.scatter(
+                        subset["Capacity"], subset["MeanReward"], label=label, marker="X", s=100
+                    )
                     plt.plot(
                         subset["Capacity"],
                         subset["MedianReward"],
-                        linestyle="--",
+                        linestyle=":",
                         marker="o",
                         markersize=5,
                         label=f" Median: Threshold, t={threshold_value}",
                     )
 
                 # Plot customization
-                plt.title(
-                    f"Mean Reward vs Capacity\nMission: {mission_label}, Latitude: {lat}"
-                )
+                plt.title(f"Mean Reward vs Capacity\nMission: {mission_label}, Latitude: {lat}")
                 plt.xlabel("Capacity (Ah)")
                 plt.ylabel("Mean Reward")
                 plt.legend(title="Algorithm", loc="best")
@@ -584,9 +568,7 @@ class DataProcessor:
                 plt.tight_layout()  # Adjust layout to prevent overlap
 
                 # Save the plot
-                save_path = os.path.join(
-                    save_dir, f"mean_reward_{mission_label}_lat{lat}.png"
-                )
+                save_path = os.path.join(save_dir, f"mean_reward_{mission_label}_lat{lat}.png")
                 plt.savefig(save_path)
                 plt.close()
 
@@ -598,8 +580,6 @@ class DataProcessor:
         Parameters:
             save_dir (str): The directory where the plots will be saved.
         """
-        import os
-        import matplotlib.pyplot as plt
 
         # Ensure the save directory exists
         os.makedirs(save_dir, exist_ok=True)
@@ -615,9 +595,7 @@ class DataProcessor:
             mission_label = f"{start_date}-{end_date}"
 
             # Filter data for the current mission duration
-            mission_df = df[
-                (df["StartDate"] == start_date) & (df["EndDate"] == end_date)
-            ]
+            mission_df = df[(df["StartDate"] == start_date) & (df["EndDate"] == end_date)]
 
             plt.figure(figsize=(12, 8))
 
@@ -706,15 +684,11 @@ class DataProcessor:
 
             # Find the optimal reward (assuming 'Optimal' is in the 'Algorithm' column)
             optimal_df = capacity_df[capacity_df["Algorithm"] == "Optimal"]
-            optimal_reward = (
-                optimal_df["MeanReward"].mean() if not optimal_df.empty else None
-            )
+            optimal_reward = optimal_df["MeanReward"].mean() if not optimal_df.empty else None
 
             # Find the greedy reward (assuming a threshold of 0.0 represents Greedy)
             greedy_df = threshold_df[threshold_df["Threshold"] == 0.0]
-            greedy_reward = (
-                greedy_df["MeanReward"].mean() if not greedy_df.empty else None
-            )
+            greedy_reward = greedy_df["MeanReward"].mean() if not greedy_df.empty else None
 
             # Sort thresholds and rewards for plotting
             sorted_indices = np.argsort(thresholds)
@@ -733,15 +707,11 @@ class DataProcessor:
 
             # Plot the optimal reward as a horizontal line if available
             if optimal_reward is not None:
-                plt.axhline(
-                    y=optimal_reward, color="blue", linestyle="--", label="Optimal"
-                )
+                plt.axhline(y=optimal_reward, color="blue", linestyle="--", label="Optimal")
 
             # Plot the greedy reward as a horizontal line if available
             if greedy_reward is not None:
-                plt.axhline(
-                    y=greedy_reward, color="red", linestyle="--", label="Greedy"
-                )
+                plt.axhline(y=greedy_reward, color="red", linestyle="--", label="Greedy")
 
             # Customize the plot
             plt.title(f"Reward vs Threshold (Battery Capacity: {capacity} Ah)")
@@ -751,9 +721,7 @@ class DataProcessor:
             plt.grid(True)
 
             # Save the plot to the specified directory
-            output_path = os.path.join(
-                output_dir, f"reward_vs_threshold_c{capacity}.png"
-            )
+            output_path = os.path.join(output_dir, f"reward_vs_threshold_c{capacity}.png")
             plt.savefig(output_path)
             plt.close()
 
@@ -766,9 +734,7 @@ class DataProcessor:
         files = [f for f in os.listdir(directory) if f.endswith(".pkl")]
 
         # Set up the figure with the appropriate number of subplots
-        fig, axes = plt.subplots(
-            len(files), 1, figsize=(10, 4 * len(files)), sharex=True
-        )
+        fig, axes = plt.subplots(len(files), 1, figsize=(10, 4 * len(files)), sharex=True)
         fig.tight_layout(pad=3)
 
         # Ensure axes is always a list for consistent indexing, even with one file
@@ -784,9 +750,7 @@ class DataProcessor:
             df = pd.read_pickle(filepath)
 
             # Regex to handle all cases (Optimal, Threshold, and Greedy)
-            match = re.match(
-                r"(\w+)_Data_c(\d+)_((p|t)([\d.]+))_(\d+)min_(\d+-\d+)", filename
-            )
+            match = re.match(r"(\w+)_Data_c(\d+)_((p|t)([\d.]+))_(\d+)min_(\d+-\d+)", filename)
             if match:
                 algo, cap, _, key, value, dt, days = match.groups()
                 cap = int(cap)
@@ -799,9 +763,7 @@ class DataProcessor:
 
                 # Prepare title details
                 details = f"Capacity: {cap} Ah, "
-                details += (
-                    f"Failure p={value}" if key == "p" else f"Threshold t={value}"
-                )
+                details += f"Failure p={value}" if key == "p" else f"Threshold t={value}"
                 title = f"{algo} ({details}, {dt} min steps)"
 
             else:
@@ -814,7 +776,7 @@ class DataProcessor:
                 ax.set_title(title)
                 ax.set_xlabel("Whales Spotted")
                 ax.set_ylabel("Number of Cases")
-                ax.set_xlim((0, 100))
+                ax.set_xlim((0, 50))
                 ax.tick_params(axis="x", which="both", labelbottom=True)
             else:
                 print(f"No 'Reward' column found in {filename}. Skipping this file.")
@@ -846,9 +808,7 @@ class DataProcessor:
             mission_label = f"{start_date}-{end_date}"
 
             # Filter data for the current mission duration
-            mission_df = df[
-                (df["StartDate"] == start_date) & (df["EndDate"] == end_date)
-            ]
+            mission_df = df[(df["StartDate"] == start_date) & (df["EndDate"] == end_date)]
 
             # Get Optimal algorithm results
             optimal_df = mission_df[mission_df["Algorithm"] == "Optimal"]
@@ -857,9 +817,7 @@ class DataProcessor:
             threshold_df = mission_df[mission_df["Algorithm"] == "Threshold"]
 
             # Get Charge Threshold algorithm results
-            charge_threshold_df = mission_df[
-                mission_df["Algorithm"] == "Charge Threshold"
-            ]
+            charge_threshold_df = mission_df[mission_df["Algorithm"] == "Charge Threshold"]
 
             # Create lists to store results
             capacities = []
@@ -869,14 +827,10 @@ class DataProcessor:
             # Calculate percent improvement over Threshold and Charge Threshold
             for cap in mission_df["Capacity"].unique():
                 # Get the optimal mean reward for the current capacity
-                optimal_reward = optimal_df[optimal_df["Capacity"] == cap][
-                    "MeanReward"
-                ].max()
+                optimal_reward = optimal_df[optimal_df["Capacity"] == cap]["MeanReward"].max()
 
                 # Get the threshold mean reward for the current capacity
-                threshold_reward = threshold_df[threshold_df["Capacity"] == cap][
-                    "MeanReward"
-                ].max()
+                threshold_reward = threshold_df[threshold_df["Capacity"] == cap]["MeanReward"].max()
 
                 # Get the charge threshold mean reward for the current capacity
                 charge_threshold_reward = charge_threshold_df[
@@ -891,12 +845,9 @@ class DataProcessor:
                 else:
                     improvements_threshold.append(np.nan)
 
-                if not np.isnan(optimal_reward) and not np.isnan(
-                    charge_threshold_reward
-                ):
+                if not np.isnan(optimal_reward) and not np.isnan(charge_threshold_reward):
                     improvement_charge_threshold = (
-                        (optimal_reward - charge_threshold_reward)
-                        / charge_threshold_reward
+                        (optimal_reward - charge_threshold_reward) / charge_threshold_reward
                     ) * 100
                     improvements_charge_threshold.append(improvement_charge_threshold)
                 else:
@@ -933,9 +884,7 @@ class DataProcessor:
 
             # Save the plot
             plt.tight_layout()
-            save_path = os.path.join(
-                save_dir, f"percent_improvement_{mission_label}.png"
-            )
+            save_path = os.path.join(save_dir, f"percent_improvement_{mission_label}.png")
             plt.savefig(save_path)
             plt.close()
 

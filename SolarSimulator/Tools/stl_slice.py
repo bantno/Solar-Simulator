@@ -9,38 +9,39 @@ import trimesh
 
 import matplotlib.pyplot as plt
 
-def merge_polygons(cross_section,normal):
+
+def merge_polygons(cross_section, normal):
     """
     Merge overlapping polygons from a given cross section.
 
-    This function takes a cross section, converts it to a 2D planar representation, 
-    and then extracts and merges polygons that do not overlap. It uses the unary_union 
-    operation from the Shapely library to merge any overlapping polygons to avoid 
+    This function takes a cross section, converts it to a 2D planar representation,
+    and then extracts and merges polygons that do not overlap. It uses the unary_union
+    operation from the Shapely library to merge any overlapping polygons to avoid
     double counting.
 
     Parameters:
-    cross_section (CrossSection): An object representing the cross section of a 
-                                   3D object. This object must have a `to_planar` 
-                                   method that converts the cross section to a 2D 
+    cross_section (CrossSection): An object representing the cross section of a
+                                   3D object. This object must have a `to_planar`
+                                   method that converts the cross section to a 2D
                                    planar representation.
 
     Returns:
     tuple: A tuple containing:
-        - merged_polygons (Polygon or MultiPolygon): A Shapely polygon or 
-          multipolygon resulting from merging the individual polygons in the 
+        - merged_polygons (Polygon or MultiPolygon): A Shapely polygon or
+          multipolygon resulting from merging the individual polygons in the
           cross section.
-        - polygons (list of Polygon): A list of individual Shapely polygons 
+        - polygons (list of Polygon): A list of individual Shapely polygons
           before merging.
 
     Notes:
-    - If the cross_section is None, the function will print a message and return 
+    - If the cross_section is None, the function will print a message and return
       (0, None).
     """
 
     if cross_section is None:
         print("No cross section found at the given plane.")
         return 0, None
-    planar = trimesh.geometry.align_vectors(normal, [0,0,-1])
+    planar = trimesh.geometry.align_vectors(normal, [0, 0, -1])
     slice_, _ = cross_section.to_planar(to_2D=planar)
     polygons = []
     for poly in slice_.polygons_closed:
@@ -51,37 +52,39 @@ def merge_polygons(cross_section,normal):
 
     return merged_polygons, polygons
 
+
 # Plot the merged geometry
 def plot_merged_geometry(merged_polygon):
     """
     Plot a merged polygon or multipolygon using Matplotlib.
 
-    This function takes a Shapely polygon or multipolygon resulting from a 
-    cross-sectional merge operation and plots it using Matplotlib. It 
-    distinguishes between single polygons and multipolygons and plots them 
+    This function takes a Shapely polygon or multipolygon resulting from a
+    cross-sectional merge operation and plots it using Matplotlib. It
+    distinguishes between single polygons and multipolygons and plots them
     accordingly.
 
     Parameters:
-    merged_polygon (Polygon or MultiPolygon): A Shapely polygon or multipolygon 
-                                              representing the merged geometry 
+    merged_polygon (Polygon or MultiPolygon): A Shapely polygon or multipolygon
+                                              representing the merged geometry
                                               of a cross section.
     """
     _, ax = plt.subplots()
 
-    if isinstance(merged_polygon,Polygon):
+    if isinstance(merged_polygon, Polygon):
         x, y = merged_polygon.exterior.xy
         ax.plot(x, y)
-    elif isinstance(merged_polygon,MultiPolygon):
+    elif isinstance(merged_polygon, MultiPolygon):
         for i, polygon in enumerate(merged_polygon.geoms):
             x, y = polygon.exterior.xy  # Extract the exterior coordinates
-            ax.plot(x, y, label=f'Polygon {i + 1}')
+            ax.plot(x, y, label=f"Polygon {i + 1}")
 
-    ax.set_aspect('equal', adjustable='box')
-    plt.xlabel('X-axis')
-    plt.ylabel('Y-axis')
+    ax.set_aspect("equal", adjustable="box")
+    plt.xlabel("X-axis")
+    plt.ylabel("Y-axis")
     # plt.title('Merged Cross Section Geometry')
     plt.grid(True)
     plt.show()
+
 
 def plot_geometry(polygons):
     """
@@ -94,27 +97,28 @@ def plot_geometry(polygons):
     i = 0
     for polygon in polygons:
         x, y = polygon.exterior.xy
-        ax.plot(x, y, label = i)
-        i+=1
+        ax.plot(x, y, label=i)
+        i += 1
 
-    ax.set_aspect('equal', adjustable='box')
-    plt.xlabel('X-axis')
-    plt.ylabel('Y-axis')
+    ax.set_aspect("equal", adjustable="box")
+    plt.xlabel("X-axis")
+    plt.ylabel("Y-axis")
     # plt.title('Cross Section Geometry')
     plt.grid(True)
-    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
     plt.tight_layout()
     plt.show()
 
+
 def second_moment_of_area(polygon):
     """Determine second moment of area of a polygon.
-    
+
     Parameters:
     polygon (Polygon): The original Shapely polygon.
 
     Returns:
     tuple: The second moments of area (Ixx, Iyy, Ixy).
-    
+
     """
 
     if isinstance(polygon, Polygon):
@@ -159,6 +163,7 @@ def second_moment_of_area(polygon):
 
     return ix_total, iy_total, ixy_total
 
+
 def cut_polygon(polygon, cutoff, plane, direction):
     """
     Cuts a polygon along a specified plane (x or y) at a given cutoff coordinate.
@@ -177,9 +182,9 @@ def cut_polygon(polygon, cutoff, plane, direction):
 
     # Create a cutting line based on the specified plane and cutoff
     min_x, min_y, max_x, max_y = polygon.bounds
-    if plane == 'x':
+    if plane == "x":
         cutting_line = LineString([(cutoff, min_y), (cutoff, max_y)])
-    elif plane == 'y':
+    elif plane == "y":
         cutting_line = LineString([(min_x, cutoff), (max_x, cutoff)])
     else:
         raise ValueError("plane must be 'x' or 'y'")
@@ -188,14 +193,14 @@ def cut_polygon(polygon, cutoff, plane, direction):
     split_polygons = split(polygon, cutting_line)
 
     # Filter the parts based on the cut direction and plane
-    if plane == 'x':
+    if plane == "x":
         if direction == "left":
             remaining_polygons = [poly for poly in split_polygons.geoms if poly.bounds[0] < cutoff]
         elif direction == "right":
             remaining_polygons = [poly for poly in split_polygons.geoms if poly.bounds[2] > cutoff]
         else:
             raise ValueError("cut_direction must be 'left' or 'right'")
-    elif plane == 'y':
+    elif plane == "y":
         if direction == "below":
             remaining_polygons = [poly for poly in split_polygons.geoms if poly.bounds[1] < cutoff]
         elif direction == "above":
@@ -212,9 +217,10 @@ def cut_polygon(polygon, cutoff, plane, direction):
     else:
         return MultiPolygon(remaining_polygons)
 
+
 def cut_at_plane(geometry, cutoff, plane, direction):
     """
-    Cuts a geometry (polygon or multipolygon) along a specified plane (x or y) 
+    Cuts a geometry (polygon or multipolygon) along a specified plane (x or y)
     at a given cutoff coordinate.
 
     Parameters:
@@ -242,6 +248,7 @@ def cut_at_plane(geometry, cutoff, plane, direction):
     else:
         raise TypeError("Input must be a Polygon or MultiPolygon")
 
+
 def plot_polygon(polygon: Polygon | MultiPolygon, ax, **kwargs):
     """
     Plots a polygon or multipolygon on the given axes.
@@ -254,16 +261,17 @@ def plot_polygon(polygon: Polygon | MultiPolygon, ax, **kwargs):
     if isinstance(polygon, Polygon):
         x, y = polygon.exterior.xy
         ax.plot(x, y, **kwargs)
-        ax.set_aspect('equal', adjustable='box')
+        ax.set_aspect("equal", adjustable="box")
 
     elif isinstance(polygon, MultiPolygon):
-        for i,poly in enumerate(polygon.geoms):
+        for i, poly in enumerate(polygon.geoms):
             x, y = poly.exterior.xy
             if i == 0:
                 ax.plot(x, y, **kwargs)
-                kwargs.pop('label', None)
+                kwargs.pop("label", None)
             ax.plot(x, y, **kwargs)
-        ax.set_aspect('equal', adjustable='box')
+        ax.set_aspect("equal", adjustable="box")
+
 
 def plot_xsec(polygon: list | Polygon | MultiPolygon, ax, **kwargs):
     """
@@ -279,8 +287,9 @@ def plot_xsec(polygon: list | Polygon | MultiPolygon, ax, **kwargs):
             plot_polygon(poly, ax, **kwargs)
     if polygon.is_empty:
         return
-    if isinstance(polygon, Polygon) or isinstance(polygon,MultiPolygon):
-        plot_polygon(polygon, ax,**kwargs)
+    if isinstance(polygon, Polygon) or isinstance(polygon, MultiPolygon):
+        plot_polygon(polygon, ax, **kwargs)
+
 
 def calculate_mc(inertia: float, w: float, h_cb: float, rho: float):
     """
@@ -291,15 +300,16 @@ def calculate_mc(inertia: float, w: float, h_cb: float, rho: float):
     W (float): Mass or weight of object. [kg or lbf]
     h_cb (float): Distance between center of buoyancy and center of gravity.
     rho_w (float): Density of fluid. [kg/m^3 or lbf/ft^3]
-    
+
     Returns:
     mc (float): Metacenter height. [m or ft]
 
     """
-    mc = rho*(inertia/w)-h_cb
+    mc = rho * (inertia / w) - h_cb
     return mc
 
-def calculate_draft(m_kg: float,file_path):
+
+def calculate_draft(m_kg: float, file_path):
     """
     Calculate the draft of the object
 
@@ -315,22 +325,23 @@ def calculate_draft(m_kg: float,file_path):
 
     while not done:
         submerged = mesh.slice_plane(plane_origin, plane_normal)
-        displaced_mass = submerged.volume*1000
-        if displaced_mass > m_kg-m_tol and displaced_mass < m_kg+m_tol:
+        displaced_mass = submerged.volume * 1000
+        if displaced_mass > m_kg - m_tol and displaced_mass < m_kg + m_tol:
             done = True
         elif displaced_mass > m_kg:
             plane_origin[2] -= 0.001
         elif displaced_mass < m_kg:
             plane_origin[2] += 0.001
-    
+
     waterline = plane_origin[2]
     min_ind = mesh.vertices[:, 2].argmin()
-    draft = waterline - mesh.vertices[min_ind,2]
+    draft = waterline - mesh.vertices[min_ind, 2]
     return draft, waterline
 
 
-
-def calculate_hstab(file_path,filename, origin,normal,cutoff,plane,cut_direction,weight,cg,rho_w = 1001.15):
+def calculate_hstab(
+    file_path, filename, origin, normal, cutoff, plane, cut_direction, weight, cg, rho_w=1001.15
+):
     """
     Calculates the height of the hydrostatic stabilizer for a given 3D model.
 
@@ -364,45 +375,41 @@ def calculate_hstab(file_path,filename, origin,normal,cutoff,plane,cut_direction
     mesh.apply_translation(translation_vector)
     # plot_mesh(mesh)
 
-
-
     cross_section = mesh.section(plane_origin=origin, plane_normal=normal)
-    merged_polygon, polygons = merge_polygons(cross_section,normal)
+    merged_polygon, polygons = merge_polygons(cross_section, normal)
 
     result = cut_at_plane(merged_polygon, cutoff, plane, cut_direction)
 
     fig, ax = plt.subplots()
-    plot_polygon(merged_polygon, ax, color='blue')
+    plot_polygon(merged_polygon, ax, color="blue")
     if result:
-        plot_polygon(result, ax, color='red',label='Submerged')
-
+        plot_polygon(result, ax, color="red", label="Submerged")
 
     i_zz = np.max(second_moment_of_area(result))
     print(f"Izz: {i_zz}")
-    cb = (result.centroid.x,result.centroid.y)
+    cb = (result.centroid.x, result.centroid.y)
     if normal[0] == 1.0:
         h_cb = cg[2] - cb[1]
-        ax.plot(cg[1],cg[2],color='red',marker = 'o',label='Center of Gravity')
+        ax.plot(cg[1], cg[2], color="red", marker="o", label="Center of Gravity")
         # ax.set_title('Lateral Hydrostatic Stability')
-        ax.set_xlabel('Y-Axis [m]')
-        ax.set_ylabel('Z-Axis [m]')
+        ax.set_xlabel("Y-Axis [m]")
+        ax.set_ylabel("Z-Axis [m]")
     elif normal[1] == 1.0:
         h_cb = cg[2] - cb[1]
-        ax.plot(-cg[0],cg[2],color='red',marker = 'o',label='Center of Gravity')
+        ax.plot(-cg[0], cg[2], color="red", marker="o", label="Center of Gravity")
         # ax.set_title('Longitudinal Hydrostatic Stability')
-        ax.set_xlabel('X-Axis [m]')
-        ax.set_ylabel('Z-Axis [m]')
+        ax.set_xlabel("X-Axis [m]")
+        ax.set_ylabel("Z-Axis [m]")
 
-    h_mc = calculate_mc(i_zz,weight,h_cb,rho_w)
+    h_mc = calculate_mc(i_zz, weight, h_cb, rho_w)
 
-    ax.plot(cb[0],cb[1],color='green',marker='o',label='Center of Buoyancy')
+    ax.plot(cb[0], cb[1], color="green", marker="o", label="Center of Buoyancy")
     # ax.plot(cb[0],cb[1]+h_mc,color='purple',marker='o',label='Metacenter')
-    ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    
-    plot_path = os.path.join("Figures", f"{filename}.png")
-    plt.savefig(plot_path,bbox_inches='tight')
-    plt.close(fig)
+    ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
 
+    plot_path = os.path.join("Figures", f"{filename}.png")
+    plt.savefig(plot_path, bbox_inches="tight")
+    plt.close(fig)
 
     print(f"Center of Buoyancy [m]: {h_cb}")
     print(f"Height of Metacenter [ft]: {h_mc*3.281}")

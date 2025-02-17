@@ -4,6 +4,7 @@ import pytz
 from datetime import datetime
 from BaseClasses.simulation_base import SingleCaseSimulation
 from BaseClasses.seaplane_base import Seaplane
+from BaseClasses.transition_model_base import ProbabilityModelFactory
 
 
 class TestSingleCaseSimulation(unittest.TestCase):
@@ -28,40 +29,62 @@ class TestSingleCaseSimulation(unittest.TestCase):
         self.lat = 30
         self.lon = -90
         self.tz = "Etc/GMT-6"
-        self.expected_file = r"Data\TEST_CASES\Wind\expected_fake_weather_data_low_wind.pkl"
-        self.actual_file = r"Data\TEST_CASES\Wind\fake_weather_data_low_wind.pkl"
+
+        # Low wind case files
+        self.expected_low_wind = r"SolarSimulator\Tests\test_data\sample_cases\data\expected_fake_weather_data_low_wind.pkl"
+        self.actual_low_wind = r"SolarSimulator\Tests\test_data\sample_cases\data\fake_weather_data_low_wind.pkl"
+
+        # Constant wind case files
+        self.expected_constant_wind = r"SolarSimulator\Tests\test_data\sample_cases\data\expected_fake_weather_data_constant_wind.pkl"
+        self.actual_constant_wind = r"SolarSimulator\Tests\test_data\sample_cases\data\fake_weather_data_constant_wind.pkl"
+        
+        # Constant wind case files
+        self.expected_constant_wind = r"SolarSimulator\Tests\test_data\sample_cases\data\expected_fake_weather_data_constant_wind.pkl"
+        self.actual_constant_wind = r"SolarSimulator\Tests\test_data\sample_cases\data\fake_weather_data_constant_wind.pkl"
+        
+
         self.save_history = True
         self.use_expected = False
         self.simulate_failure = True
-        self.transition_model_name = "Realistic"
 
-        # Initialize SingleCaseSimulation
-        self.simulation = SingleCaseSimulation(
-            self.plane,
-            self.lat,
-            self.lon,
-            self.tz,
-            self.expected_file,
-            self.actual_file,
-            self.save_history,
-            self.use_expected,
-            self.simulate_failure,
-            self.transition_model_name,
-        )
+        self.transition_models = ProbabilityModelFactory.list_models()
+        self.algorithms = ["Threshold","Optimal"]
 
         # Define simulation parameters
 
-        tz = pytz.timezone("Etc/GMT+6")  # UTC-6 timezone
+        tz = pytz.timezone("Etc/GMT-6")  # UTC-6 timezone
 
         self.start_date = datetime(2025, 6, 1, tzinfo=tz)
         self.end_date = datetime(2025, 6, 5, tzinfo=tz)
         self.dt = 15
 
     def test_run_single_optimal_case(self):
+        """Test single optimal case simulation using fake data and test transition model."""
+        # Set data files
+        expected_file = self.expected_low_wind
+        actual_file = self.actual_low_wind
+
+        # Set transition model
+        transition_model_name = "test"
+        
+        # Initialize SingleCaseSimulation
+        simulation = SingleCaseSimulation(
+            self.plane,
+            self.lat,
+            self.lon,
+            self.tz,
+            expected_file,
+            actual_file,
+            self.save_history,
+            self.use_expected,
+            self.simulate_failure,
+            transition_model_name,
+        )
+        
         algo = "Optimal"
         threshold = None
         # Run the single case simulation
-        result = self.simulation.run_single_case(
+        result = simulation.run_single_case(
             self.start_date,
             self.end_date,
             self.dt,
@@ -78,10 +101,32 @@ class TestSingleCaseSimulation(unittest.TestCase):
         self.assertTrue(os.path.exists(filename))
 
     def test_run_single_threshold_case(self):
+        """Test single threshold case simulation using fake data and test transition model."""
+        # Set data files
+        expected_file = self.expected_low_wind
+        actual_file = self.actual_low_wind
+
+        # Set transition model
+        transition_model_name = "test"
+
+        # Initialize SingleCaseSimulation
+        simulation = SingleCaseSimulation(
+            self.plane,
+            self.lat,
+            self.lon,
+            self.tz,
+            expected_file,
+            actual_file,
+            self.save_history,
+            self.use_expected,
+            self.simulate_failure,
+            transition_model_name,
+        )
+
         algo = "Threshold"
         threshold = 0.25
         # Run the single case simulation
-        result = self.simulation.run_single_case(
+        result = simulation.run_single_case(
             self.start_date,
             self.end_date,
             self.dt,
@@ -94,6 +139,35 @@ class TestSingleCaseSimulation(unittest.TestCase):
         result.to_pickle(filename)
         print(f"Test simulation completed and result saved to '{filename}'.")
 
+    def test_run_single_low_wind_all_transition(self):
+        """Run test cases for three example scenarios for each valid transition model."""
+        for model in self.transition_models:
+            for algo in self.algorithms:
+                with self.subTest(msg=f"{model},{algo}"):
+                    simulation = SingleCaseSimulation(
+                        self.plane,
+                        self.lat,
+                        self.lon,
+                        self.tz,
+                        self.expected_low_wind,
+                        self.actual_low_wind,
+                        self.save_history,
+                        self.use_expected,
+                        self.simulate_failure,
+                        transition_model_name=model,
+                    )
+                    threshold = 0.25
+                    result = simulation.run_single_case(
+                        self.start_date,
+                        self.end_date,
+                        self.dt,
+                        algo,
+                        threshold,
+                    )
+                    filename = f"{algo}_c{self.plane.capacity}_model-{model}_test_simulation_result.pkl"
+                    result.to_pickle(filename)
+                    print(f"Test simulation for model '{model}' completed and result saved to '{filename}'.")
+                    self.assertTrue(os.path.exists(filename))
 
 if __name__ == "__main__":
     unittest.main()

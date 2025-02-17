@@ -62,6 +62,7 @@ class AbstractSimulation(ABC):
         threshold,
         transition_model,
         failure_penalty,
+        wind_threshold,
     ):
         pass
 

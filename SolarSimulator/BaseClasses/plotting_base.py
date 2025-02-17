@@ -366,6 +366,7 @@ class DataProcessor:
                             "MedianFailureStep": median_failure_step,
                             "MeanReward": mean_reward,
                             "MedianReward": median_reward,
+                            "NumFailues": num_failures
                         }
                     )
                 else:

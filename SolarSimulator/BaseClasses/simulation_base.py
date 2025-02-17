@@ -109,7 +109,6 @@ class Simulation(AbstractSimulation):
         save_history: bool = False,
         use_expected: bool = False,
         simulate_failure: bool = True,
-        transition_model: ActionSuccessProbabilityModel = None,
     ) -> None:
         self.plane = plane
         self.lat = lat
@@ -118,7 +117,6 @@ class Simulation(AbstractSimulation):
         self.simulate_failure = simulate_failure
         self.save_history = save_history
         self.use_expected = use_expected
-        self.transition_model = transition_model
 
     def run_simulation(
         self,
@@ -130,7 +128,6 @@ class Simulation(AbstractSimulation):
         true_success_prob=0,
         runs=1,
         threshold=None,
-        transition_model=None,
     ):
         """Simulates and plots the duty cycle for the given parameters."""
         self.plane.update_plane()
@@ -145,7 +142,6 @@ class Simulation(AbstractSimulation):
             true_success_prob=true_success_prob,
             num_runs=runs,
             threshold=threshold,
-            transition_model=transition_model,
         )
 
         times = pd.date_range(start_date, end_date, freq=f"{dt}min")
@@ -161,7 +157,6 @@ class Simulation(AbstractSimulation):
         true_success_prob,
         num_runs,
         threshold,
-        transition_model,
     ):
 
         # profiler = cProfile.Profile()
@@ -193,7 +188,7 @@ class Simulation(AbstractSimulation):
             whale_observation_data,
             soc_increment=1,
             timestep_min=dt,
-            transition_model=transition_model,
+            floating_failure_prob=1 - true_success_prob,
         )
 
         auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected)

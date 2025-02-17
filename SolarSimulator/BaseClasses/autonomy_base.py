@@ -1,7 +1,6 @@
 """This module contains the base class for the autonomy module of the solar-powered seaplane simulator."""
 
 import numpy as np
-from BaseClasses.expectedValue_base import ExpectedValueTable
 
 
 class Autonomy:
@@ -10,7 +9,6 @@ class Autonomy:
     def __init__(self, dt, mdp_model: ExpectedValueTable, use_expected_reward: bool = False):
         self.dt = dt
         self.mdp_model = mdp_model
-        self.failure_penalty = mdp_model.failure_penalty
         self.plane = mdp_model.plane
         self.soc_increment = 1
         self.panel_efficiency = 0.10
@@ -97,11 +95,9 @@ class Autonomy:
 
             if not is_action_successful:
                 state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
-                reward -= self.failure_penalty
                 break
             elif new_state[0] < 0:
                 state_history_list[k:] = [(-15, 2)] * (len(state_history_list) - k)
-                reward -= self.failure_penalty
                 break
 
         return self._finalize_simulation(
@@ -164,6 +160,7 @@ class Autonomy:
                 collected_solar_power,
                 wind_speed,
                 whale_prob,
+                true_success_prob,
             )
 
             failure_prob = self._compute_failure_prob(wind_speed, best_action, current_state)
@@ -189,11 +186,9 @@ class Autonomy:
 
             if not is_action_successful:
                 state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
-                reward -= self.failure_penalty
                 break
             elif new_state[0] < 0:
                 state_history_list[k:] = [(-15, 2)] * (len(state_history_list) - k)
-                reward -= self.failure_penalty
                 break
 
         return self._finalize_simulation(
@@ -421,6 +416,7 @@ class Autonomy:
         collected_solar_power,
         wind_speed,
         whale_prob,
+        true_success_prob,
     ):
         """Determine the best action using the MDP model."""
         for idx, action in enumerate(action_list):
@@ -474,7 +470,6 @@ class Autonomy:
         flight_minutes,
     ):
         """Finalize the simulation results."""
-        k += 1
         if save_history:
             return (
                 reward,

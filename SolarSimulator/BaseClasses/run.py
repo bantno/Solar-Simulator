@@ -25,7 +25,7 @@ def run_simulation(params):
         simulation = SolarPlaneSimulation(
             lat=lat,
             lon=params["longitude"],
-            tz="Etc/GMT-0",
+            tz="Etc/GMT-6",
             start_date=params["start_date"],
             end_date=params["end_date"],
             dt=params["dt"],
@@ -38,6 +38,7 @@ def run_simulation(params):
             transition_model=transition_model,
             use_multiprocessing=params.get("use_multiprocessing", True),
             failure_penalty=params.get("failure_penalty",0),
+            wind_threshold=params.get("wind_threshold",0),
         )
         print(f"Running simulation with parameters for latitude {lat}:")
 
@@ -46,7 +47,8 @@ def run_simulation(params):
             thresholds=params.get("thresholds", []),
             mdp_probs=params.get("mdp_probs", []),
             charge_thresholds=params.get("charge_thresholds", []),
-            success_prob=params["success_prob"],
+            success_prob=params.get("success_prob",0),
+            wind_speed=params.get("wind_threshold",0),
             
         )
 
@@ -63,4 +65,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()

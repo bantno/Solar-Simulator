@@ -44,6 +44,7 @@ class SolarPlaneSimulation:
         transition_model=None,
         use_multiprocessing=True,
         failure_penalty=None,
+        wind_threshold=0,
     ):
 
         # Define plane parameters
@@ -123,8 +124,8 @@ class SolarPlaneSimulation:
         date = date or datetime.now()
 
         # Calculate the UTC offset
-        timezone = ZoneInfo(timezone_str)
-        utc_offset_seconds = date.astimezone(timezone).utcoffset().total_seconds()
+        tz = ZoneInfo(timezone_str)
+        utc_offset_seconds = date.astimezone(tz).utcoffset().total_seconds()
         utc_offset = timedelta(seconds=utc_offset_seconds)
 
         return utc_offset
@@ -153,6 +154,7 @@ class SolarPlaneSimulation:
         mdp_probs=[],
         charge_thresholds=[],
         success_prob=1.0,
+        wind_speed=0,
     ):
         """
         Assign tasks for a simulation run.
@@ -160,11 +162,11 @@ class SolarPlaneSimulation:
         tasks = []
         for cap in capacities:
             for threshold in thresholds:
-                tasks.append((cap, "Threshold", threshold, None, success_prob))
+                tasks.append((cap, "Threshold", threshold, None, success_prob, wind_speed))
             for mdp_prob in mdp_probs:
-                tasks.append((cap, "Optimal", None, mdp_prob, success_prob))
+                tasks.append((cap, "Optimal", None, mdp_prob, success_prob, wind_speed))
             for charge_threshold in charge_thresholds:
-                tasks.append((cap, "Charge Threshold", None, charge_threshold, success_prob))
+                tasks.append((cap, "Charge Threshold", None, charge_threshold, success_prob, wind_speed))
 
         if self.use_multiprocessing:
             num_cores_to_use = max(1, os.cpu_count()-1) # Leave one core to prevent freezing
@@ -201,7 +203,7 @@ class SolarPlaneSimulation:
 
     def _simulation_task(self, args):
         """Helper function to execute a single simulation run."""
-        cap, algo, threshold, mdp_success_prob, success_prob = args
+        cap, algo, threshold, mdp_success_prob, success_prob, wind_speed = args
         self.simulation.plane.capacity = cap
 
         if algo == "Threshold":
@@ -210,12 +212,11 @@ class SolarPlaneSimulation:
                 self.end_date,
                 self.dt,
                 algo=algo,
-                mdp_success_prob=0.0,
-                true_success_prob=success_prob,
                 runs=self.num_runs,
                 threshold=threshold,
                 transition_model=self.transition_model,
-                failure_penalty=self.failure_penalty
+                failure_penalty=self.failure_penalty,
+                wind_threshold = wind_speed,
             )
             filename = f"{self.save_dir}/{algo}_Data_c{cap}_t{threshold}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
         elif algo == "Optimal":
@@ -224,11 +225,10 @@ class SolarPlaneSimulation:
                 self.end_date,
                 self.dt,
                 algo=algo,
-                mdp_success_prob=mdp_success_prob,
-                true_success_prob=success_prob,
                 runs=self.num_runs,
                 transition_model=self.transition_model,
-                failure_penalty=self.failure_penalty
+                failure_penalty=self.failure_penalty,
+                wind_threshold = wind_speed,
             )
             filename = f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
         elif algo == "Charge Threshold":
@@ -237,11 +237,10 @@ class SolarPlaneSimulation:
                 self.end_date,
                 self.dt,
                 algo=algo,
-                mdp_success_prob=mdp_success_prob,
-                true_success_prob=success_prob,
                 runs=self.num_runs,
                 transition_model=self.transition_model,
                 failure_penalty=self.failure_penalty,
+                wind_threshold = wind_speed,
             )
             filename = f"{self.save_dir}/{algo}_Data_c{cap}_p{mdp_success_prob}_{self.dt}min_{self.start_date.day_of_year}-{self.end_date.day_of_year}_{self.num_runs}_lat{self.lat}.pkl"
         else:

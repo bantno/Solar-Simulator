@@ -126,12 +126,11 @@ class Simulation(AbstractSimulation):
         end_date: datetime,
         dt,
         algo=None,
-        mdp_success_prob=0,
-        true_success_prob=0,
         runs=1,
         threshold=None,
         transition_model=None,
         failure_penalty=None,
+        wind_threshold=None,
     ):
         """Simulates and plots the duty cycle for the given parameters."""
         self.plane.update_plane()
@@ -145,7 +144,8 @@ class Simulation(AbstractSimulation):
             num_runs=runs,
             threshold=threshold,
             transition_model=transition_model,
-            failure_penalty=failure_penalty
+            failure_penalty=failure_penalty,
+            wind_threshold=wind_threshold
         )
 
         times = pd.date_range(start_date, end_date, freq=f"{dt}min")
@@ -161,10 +161,9 @@ class Simulation(AbstractSimulation):
         threshold,
         transition_model,
         failure_penalty,
+        wind_threshold,
     ):
 
-
-        self.plane.update_plane()
         times = pd.date_range(
             start=start_date,
             end=end_date,
@@ -182,7 +181,7 @@ class Simulation(AbstractSimulation):
         loc = rf"Data\SYNTHETIC_DATA\lat{int(self.lat)}"
 
         whale_observation_data = self.get_whale_observation_probabilities(times)
-
+        self.plane.update_plane()
         mdp_model = ExpectedValueTable(
             self.plane,
             expected_solar_data,
@@ -191,10 +190,10 @@ class Simulation(AbstractSimulation):
             soc_increment=1,
             timestep_min=dt,
             transition_model=transition_model,
-            failure_penalty=failure_penalty
+            failure_penalty=failure_penalty,
         )
 
-        auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected)
+        auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected,wind_threshold=wind_threshold)
         mdp_model.show_progress = True
 
         data = {}
@@ -213,7 +212,7 @@ class Simulation(AbstractSimulation):
         if algo == "Optimal":
             mdp_model.generate_ev_table()
 
-        for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=1):
+        for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=10):
             if not self.use_expected:
                 actual_data = self._load_weather_data(
                     dt, directory=loc, i=i, lat=self.lat, lon=self.lon

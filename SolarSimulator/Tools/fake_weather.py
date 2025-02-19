@@ -1,195 +1,121 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from datetime import datetime, timezone, timedelta
 
+class FakeDataGenerator:
+    def __init__(self, start_time, end_time, freq="15min"):
+        self.time_index = pd.date_range(start=start_time, end=end_time, freq=freq, tz="UTC-06:00")
+        self.cases = self._initialize_cases()
 
-def generate_alternating_wind_weather(
-    start_time,
-    end_time,
-    freq="15min",
-    high_wind_period=24,
-    low_wind_period=24,
-    high_wind_speed=40,
-    low_wind_speed=5,
-):
-    """
-    Generate fake weather data with alternating high and low wind speeds and square wave solar radiation.
+    def _initialize_cases(self):
+        return {
+            "constant_low": ("constant_low", "constant"),
+            "constant_high": ("constant_high", "constant"),
+            "low_to_high": ("low_to_high", "low_to_high"),
+            "high_to_low": ("high_to_low", "high_to_low"),
+            "high_except_short_low": ("high_except_short_low", "constant")
+        }
 
-    Parameters:
-        start_time (str): Start datetime (e.g., '2025-01-01 00:00:00')
-        end_time (str): End datetime (e.g., '2025-01-02 00:00:00')
-        freq (str): Time interval (default is '15T' for 15 minutes)
-        high_wind_period (int): Number of hours for high wind period
-        low_wind_period (int): Number of hours for low wind period
-        high_wind_speed (float): Wind speed during high wind period
-        low_wind_speed (float): Wind speed during low wind period
-    """
+    def _generate_solar_radiation(self):
+        hours = self.time_index.hour
+        return np.where((hours >= 6) & (hours < 14), 342, 0)
 
-    # Generate timestamp index
-    time_index = pd.date_range(start=start_time, end=end_time, freq=freq, tz="UTC-06:00")
+    def _generate_wind_data(self, pattern, low_speed=5, high_speed=20):
+        patterns = {
+            'constant_low': np.full(self.time_index.size, low_speed),
+            'constant_high': np.full(self.time_index.size, high_speed),
+            'low_to_high': np.concatenate((np.full(len(self.time_index)//2, low_speed), np.full(len(self.time_index)-len(self.time_index)//2, high_speed))),
+            'high_to_low': np.concatenate((np.full(len(self.time_index)//2, high_speed), np.full(len(self.time_index)-len(self.time_index)//2, low_speed))),
+            'high_except_short_low': np.full(self.time_index.size, high_speed)
+        }
+        if pattern == 'high_except_short_low':
+            patterns[pattern][len(self.time_index)//3:len(self.time_index)//2] = low_speed
+        wind_speeds = patterns.get(pattern)
+        wind_directions = np.random.uniform(0, 360, size=self.time_index.size)
+        return wind_speeds, wind_directions
 
-    # Create alternating wind speed pattern
-    total_hours = time_index.size // 4  # Convert 15-min intervals to hours
-    wind_speeds = np.tile(
-        np.concatenate(
-            (
-                np.full(high_wind_period * 4, high_wind_speed),
-                np.full(low_wind_period * 4, low_wind_speed),
-            )
-        ),
-        total_hours // (high_wind_period + low_wind_period) + 1,
-    )[: time_index.size]
+    def _generate_whale_probability(self, pattern, low_prob=0.1, high_prob=0.9):
+        solar = self._generate_solar_radiation()
+        patterns = {
+            'constant': np.where(solar > 0, 0.5, 0),
+            'low_to_high': np.concatenate((np.full(len(self.time_index)//2, low_prob), np.full(len(self.time_index)-len(self.time_index)//2, high_prob))),
+            'high_to_low': np.concatenate((np.full(len(self.time_index)//2, high_prob), np.full(len(self.time_index)-len(self.time_index)//2, low_prob)))
+        }
+        whale_prob = patterns.get(pattern)
+        whale_prob[solar == 0] = 0
+        return whale_prob
 
-    # Generate wind direction (random for variety)
-    wind_directions = np.random.uniform(0, 360, size=time_index.size)
+    def generate_case(self, wind_pattern, whale_pattern):
+        solar_radiation = self._generate_solar_radiation()
+        wind_speeds, wind_directions = self._generate_wind_data(wind_pattern)
+        whale_prob = self._generate_whale_probability(whale_pattern)
+        
+        hours = self.time_index.hour
+        beta_alpha = np.where((hours >= 6) & (hours < 14), 10, 1)
+        beta_beta = np.where((hours >= 6) & (hours < 14), 30, 40)
+        k = [10] * len(self.time_index)
+        scale = wind_speeds
 
-    # Create square wave for solar radiation (day/night cycle, assume 8h sunlight)
-    hours = time_index.hour
-    shortwave_radiation = np.where(
-        (hours >= 6) & (hours < 14), 1000, 0
-    )  # 500 represents arbitrary sunlight intensity
-
-    # Create DataFrame
-    df = pd.DataFrame(
-        {
-            "wind_speed_10m": wind_speeds,
-            "wind_direction_10m": wind_directions,
-            "shortwave_radiation": shortwave_radiation,
-        },
-        index=time_index,
-    )
-
-    beta_alpha = np.where((hours >= 6) & (hours < 14), 10, 1)
-    beta_beta = np.where((hours >= 6) & (hours < 14), 3.5, 10)
-    k = [10] * len(time_index)
-    scale = wind_speeds
-
-    expected_data = pd.DataFrame(
-        {
-            "month": time_index.month,
-            "day": time_index.day,
-            "hour": time_index.hour,
-            "minute": time_index.minute,
+        expected_data = pd.DataFrame({
+            "month": self.time_index.month,
+            "day": self.time_index.day,
+            "hour": self.time_index.hour,
+            "minute": self.time_index.minute,
+            "expected_solar_rad": solar_radiation,
+            "expected_wind_speed": wind_speeds,
+            "expected_whale_prob": whale_prob,
             "beta_alpha": beta_alpha,
             "beta_beta": beta_beta,
-            "expected_solar_rad": shortwave_radiation,
             "weibull_k": k,
-            "weibull_loc": [0] * len(time_index),
+            "weibull_loc": [0] * len(self.time_index),
             "weibull_scale": scale,
-            "expected_wind_speed": wind_speeds,
-        }
-    )
+        }, index=self.time_index)
 
-    return df, expected_data
-
-
-def generate_low_wind_weather(start_time, end_time, freq="15min"):
-    """
-    Generate fake weather data with no wind and square wave solar radiation.
-    """
-    time_index = pd.date_range(start=start_time, end=end_time, freq=freq, tz="UTC-06:00")
-    hours = time_index.hour
-
-    # No wind
-    wind_speeds = np.ones(time_index.size)
-    wind_directions = np.zeros(time_index.size)
-
-    # Square wave solar radiation
-    shortwave_radiation = np.where((hours >= 6) & (hours < 14), 1000, 0)
-
-    df = pd.DataFrame(
-        {
+        actual_data = pd.DataFrame({
             "wind_speed_10m": wind_speeds,
             "wind_direction_10m": wind_directions,
-            "shortwave_radiation": shortwave_radiation,
-        },
-        index=time_index,
-    )
+            "shortwave_radiation": solar_radiation,
+            "whale_observation_probability": whale_prob
+        }, index=self.time_index)
 
-    beta_alpha = np.where((hours >= 6) & (hours < 14), 10, 1)
-    beta_beta = np.where((hours >= 6) & (hours < 14), 3.5, 10)
-    k = [10] * len(time_index)
-    scale = wind_speeds
+        combined_data = pd.concat([expected_data, actual_data], axis=1)
+        filename = f"data_wind-{wind_pattern}_whale-{whale_pattern}.pkl"
+        with open(filename, 'wb') as f:
+            pd.to_pickle(combined_data, f)
+        return expected_data, actual_data
 
-    expected_data = pd.DataFrame(
-        {
-            "month": time_index.month,
-            "day": time_index.day,
-            "hour": time_index.hour,
-            "minute": time_index.minute,
-            "beta_alpha": beta_alpha,
-            "beta_beta": beta_beta,
-            "expected_solar_rad": shortwave_radiation,
-            "weibull_k": k,
-            "weibull_loc": [0] * len(time_index),
-            "weibull_scale": scale,
-            "expected_wind_speed": wind_speeds,
-        }
-    )
+    def visualize_data(self, expected, actual,  case_name="Case"):
+        fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+        fig.suptitle(case_name, fontsize=16)
 
-    return df, expected_data
+        expected[["expected_solar_rad"]].plot(ax=axes[0], label="Expected Solar Rad", linestyle='--')
+        actual[["shortwave_radiation"]].plot(ax=axes[0], label="Actual Solar Rad")
 
+        expected[["expected_wind_speed"]].plot(ax=axes[1], label="Expected Wind Speed", linestyle='--')
+        actual[["wind_speed_10m"]].plot(ax=axes[1], label="Actual Wind Speed")
 
-def generate_constant_wind_weather(start_time, end_time, freq="15min", wind_speed=20):
-    """
-    Generate fake weather data with constant wind and square wave solar radiation.
-    """
-    time_index = pd.date_range(start=start_time, end=end_time, freq=freq, tz="UTC-06:00")
-    hours = time_index.hour
+        expected[["expected_whale_prob"]].plot(ax=axes[2], label="Expected Whale Probability", linestyle='--')
+        actual[["whale_observation_probability"]].plot(ax=axes[2], label="Actual Whale Probability")
 
-    # Constant wind
-    wind_speeds = np.full(time_index.size, wind_speed)
-    wind_directions = np.random.uniform(0, 360, size=time_index.size)
+        for ax in axes:
+            ax.set_xlabel("Time")
+            ax.grid(True)
+            ax.legend()
 
-    # Square wave solar radiation
-    shortwave_radiation = np.where((hours >= 6) & (hours < 14), 1000, 0)
+        plt.tight_layout()
+        plt.show()
 
-    df = pd.DataFrame(
-        {
-            "wind_speed_10m": wind_speeds,
-            "wind_direction_10m": wind_directions,
-            "shortwave_radiation": shortwave_radiation,
-        },
-        index=time_index,
-    )
+def run_all_cases():
+    start_time = datetime(2025, 1, 1, 0, 0, tzinfo=timezone(timedelta(hours=-6)))
+    end_time = datetime(2025, 1, 4, 0, 0, tzinfo=timezone(timedelta(hours=-6)))
 
-    beta_alpha = np.where((hours >= 6) & (hours < 14), 10, 1)
-    beta_beta = np.where((hours >= 6) & (hours < 14), 3.5, 10)
-    k = [10] * len(time_index)
-    scale = wind_speeds
+    generator = FakeDataGenerator(start_time, end_time)
 
-    expected_data = pd.DataFrame(
-        {
-            "month": time_index.month,
-            "day": time_index.day,
-            "hour": time_index.hour,
-            "minute": time_index.minute,
-            "beta_alpha": beta_alpha,
-            "beta_beta": beta_beta,
-            "expected_solar_rad": shortwave_radiation,
-            "weibull_k": k,
-            "weibull_loc": [0] * len(time_index),
-            "weibull_scale": scale,
-            "expected_wind_speed": wind_speeds,
-        }
-    )
+    for case_name, (wind_pattern, whale_pattern) in generator.cases.items():
+        expected, actual = generator.generate_case(wind_pattern, whale_pattern)
+        print(f"Generated data for: {case_name}")
+        # generator.visualize_data(expected, actual, case_name)
 
-    return df, expected_data
-
-
-# Example usage
-start = "2025-01-01 00:00:00"
-end = "2025-01-05 00:00:00"
-alt_wind_data, expected_alt_wind_data = generate_alternating_wind_weather(start, end)
-alt_wind_data.to_pickle(r"Data\TEST_CASES\Wind\fake_weather_data_alternating.pkl")
-expected_alt_wind_data.to_pickle(r"Data\TEST_CASES\Wind\expected_fake_weather_data_alternating.pkl")
-
-constant_wind_data, expected_constant_wind_data = generate_constant_wind_weather(start, end)
-constant_wind_data.to_pickle(r"Data\TEST_CASES\Wind\fake_weather_data_constant_wind.pkl")
-expected_constant_wind_data.to_pickle(
-    r"Data\TEST_CASES\Wind\expected_fake_weather_data_constant_wind.pkl"
-)
-
-low_wind_data, expected_low_wind_data = generate_low_wind_weather(start, end)
-low_wind_data.to_pickle(r"Data\TEST_CASES\Wind\fake_weather_data_low_wind.pkl")
-expected_low_wind_data.to_pickle(r"Data\TEST_CASES\Wind\expected_fake_weather_data_low_wind.pkl")
+if __name__ == "__main__":
+    run_all_cases()

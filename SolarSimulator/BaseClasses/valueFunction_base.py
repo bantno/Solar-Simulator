@@ -60,8 +60,8 @@ class ValueFunction:
             for idx, state in enumerate(self.states[:-1]):
                 self.ev_table[idx, k] = self._ev_entry(k, state)
 
-        filename = f"evTable_{self.plane.capacity}_{self.plane.lat}"
-        self.plot_surface_plotly(self.ev_table, self.plane.capacity, filename)
+        filename = f"evTable_{self.plane.capacity}_{self.plane.lat}_{self.transition_model.name}"
+        self.plot_surface_plotly(self.ev_table, self.plane.capacity, self.failure_penalty, filename)
         np.savetxt("Results\\" + filename + ".csv", self.ev_table, delimiter=",")
 
     def _calculate_case_probabilities(self, stage, state, reward_k, ps_0, ps_1):
@@ -601,7 +601,7 @@ class ValueFunction:
         plt.savefig("ev_table_broken.png")
 
     @staticmethod
-    def plot_surface_plotly(data, capacity=50, filename=None):
+    def plot_surface_plotly(data, capacity=50, failure_penalty=None, filename=None):
         """
         Plots an interactive 3D surface plot for the 'moored,' 'flying,' and 'broken'
         states using Plotly.
@@ -628,7 +628,7 @@ class ValueFunction:
 
         # Add Moored State surface
         fig.add_trace(
-            go.Surface(z=moored_data, x=x, y=y, colorscale="Blues", opacity=1.0, name="Moored")
+            go.Surface(z=moored_data, x=x, y=y, colorscale="Blues", opacity=.9, name="Moored")
         )
 
         # Add Flying State surface
@@ -636,23 +636,23 @@ class ValueFunction:
             go.Surface(z=flying_data, x=x, y=y, colorscale="Magma", opacity=0.8, name="Flying")
         )
 
-        # Add Broken State line
-        fig.add_trace(
-            go.Scatter3d(
-                x=time_steps,
-                y=[0] * len(time_steps),
-                z=broken_data,
-                mode="lines",
-                line=dict(color="red", width=4),
-                name="Broken",
-            )
-        )
+        # # Add Broken State line
+        # fig.add_trace(
+        #     go.Scatter3d(
+        #         x=time_steps,
+        #         y=[0] * len(time_steps),
+        #         z=broken_data,
+        #         mode="lines",
+        #         line=dict(color="red", width=4),
+        #         name="Broken",
+        #     )
+        # )
 
         # Update layout
         fig.update_layout(
             title=(
                 "Surface Plot for Moored, Flying, and Broken States "
-                f"(Battery Capacity: {capacity} Ah)"
+                f"({capacity} Ah, Penalty: {failure_penalty})"
             ),
             scene=dict(
                 xaxis_title="Stages",

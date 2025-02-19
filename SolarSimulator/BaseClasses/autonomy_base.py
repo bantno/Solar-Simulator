@@ -7,7 +7,7 @@ from BaseClasses.valueFunction_base import ValueFunction
 class Autonomy:
     """Represents the autonomy module for a solar-powered seaplane."""
 
-    def __init__(self, dt, mdp_model: ValueFunction, use_expected_reward: bool = False, wind_threshold: float = 0.):
+    def __init__(self, dt, mdp_model: ValueFunction, use_expected_reward: bool = False, wind_threshold: float = 100.):
         self.dt = dt
         self.mdp_model = mdp_model
         self.failure_penalty = mdp_model.failure_penalty
@@ -101,7 +101,7 @@ class Autonomy:
                 reward -= self.failure_penalty
                 break
             elif new_state[0] < 0:
-                state_history_list[k:] = [(-15, 2)] * (len(state_history_list) - k)
+                state_history_list[k:] = [(-30, 2)] * (len(state_history_list) - k)
                 reward -= self.failure_penalty
                 break
 
@@ -350,7 +350,7 @@ class Autonomy:
             value_list[idx] = alpha * p_success - self.failure_penalty * (
                 1 - p_success
             )  # need to apply possibility of failure to decision making
-        return 1 if whale_prob >= (value_list[0] - value_list[1]) else 0
+        return 1 if whale_prob > (value_list[0] - value_list[1]) else 0
 
     def _compute_failure_prob(self, wind_speed, best_action, current_state):
         """Compute the probability of failure given the wind conditions and action."""

@@ -502,7 +502,7 @@ class DataProcessor:
                 lat_df = mission_df[mission_df["Latitude"] == lat]
 
                 # Separate the optimal algorithm (Threshold = NaN)
-                optimal_df = lat_df[lat_df["Threshold"].isna()]
+                optimal_df = lat_df[lat_df["Algorithm"]=="Optimal"]
                 # Separate Charge Threshold algorithm
                 charge_threshold_df = lat_df[lat_df["Algorithm"] == "Charge Threshold"]
                 # Separate other Threshold algorithms

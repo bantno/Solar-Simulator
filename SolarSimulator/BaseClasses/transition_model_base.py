@@ -85,7 +85,7 @@ class SigmoidSuccessProbability(ActionSuccessProbabilityModel):
 class LinearSuccessProbability(ActionSuccessProbabilityModel):
     """Alternative probability model where failure probability increases linearly with wind speed."""
 
-    def __init__(self, failure_slope=0.05):
+    def __init__(self, failure_slope=0.05,name="linear"):
         """
         Initialize the linear failure probability model.
 
@@ -93,6 +93,7 @@ class LinearSuccessProbability(ActionSuccessProbabilityModel):
         - failure_slope (float): Slope controlling how fast failure probability increases with wind speed.
         """
         self.failure_slope = failure_slope
+        self.name=name
 
     def compute_probability(self, wind_speed, action, state):
         """
@@ -120,11 +121,11 @@ class LinearSuccessProbability(ActionSuccessProbabilityModel):
 class OnlySuccessProbability(ActionSuccessProbabilityModel):
     """Probability model using where a valid vehicle state and action always leads to a successful transition."""
 
-    def __init__(self):
+    def __init__(self,name="nofail"):
         """
         Initialize the probability model with default parameters.
         """
-        pass
+        self.name=name
 
     def compute_probability(self, wind_speed, action, state):
         """
@@ -174,11 +175,11 @@ class OnlySuccessProbability(ActionSuccessProbabilityModel):
 class TestSuccessProbability(ActionSuccessProbabilityModel):
     """Probability model using where a valid vehicle state and action always leads to a successful transition."""
 
-    def __init__(self):
+    def __init__(self, name="test"):
         """
         Initialize the probability model with default parameters.
         """
-        pass
+        self.name = name
 
     def compute_probability(self, wind_speed, action, state):
         """
@@ -229,14 +230,16 @@ class RealisticSuccessProbability(SigmoidSuccessProbability):
     def __init__(
         self,
         floating_failure=0.0,
-        flying_failure=0.0,
+        flying_failure=0.01,
         takeoff_params=(5, 0.5),
         landing_params=(4, 0.5),
+        name = "realistic"
     ):
         self.a1, self.b1 = takeoff_params
         self.a2, self.b2 = landing_params
         self.floating_failure = floating_failure
         self.flying_failure = flying_failure
+        self.name = name
 
     def compute_probability(self, wind_speed, action, state):
         """
@@ -303,11 +306,13 @@ class OptimisticSuccessProbability(SigmoidSuccessProbability):
         flying_failure=0.0,
         takeoff_params=(17, 0.5),
         landing_params=(16, 0.5),
+        name = "optimistic"
     ):
         self.a1, self.b1 = takeoff_params
         self.a2, self.b2 = landing_params
         self.floating_failure = floating_failure
         self.flying_failure = flying_failure
+        self.name=name
 
     def compute_probability(self, wind_speed, action, state):
         """

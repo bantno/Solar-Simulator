@@ -1,14 +1,16 @@
 import os
-import sys
 import re
-from suntime import Sun
+import cProfile
+from datetime import datetime
+from abc import ABC, abstractmethod
+
+
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-from datetime import datetime
 import pytz
+from tqdm import tqdm
+from suntime import Sun
 from timezonefinder import TimezoneFinder
-import cProfile
 
 from BaseClasses.valueFunction_base import ValueFunction
 from BaseClasses.seaplane_base import Seaplane
@@ -18,7 +20,7 @@ from BaseClasses.transition_model_base import (
     ProbabilityModelFactory,
 )
 
-from abc import ABC, abstractmethod
+
 
 
 class AbstractSimulation(ABC):
@@ -432,8 +434,6 @@ class SingleCaseSimulation(Simulation):
         lat: float,
         lon: float,
         tz: str,
-        expected_file: str,
-        actual_file: str,
         save_history: bool = False,
         use_expected: bool = False,
         simulate_failure: bool = True,
@@ -455,35 +455,33 @@ class SingleCaseSimulation(Simulation):
             simulate_failure,
             transition_model=transition_model,
         )
-        self.expected_file = expected_file
-        self.actual_file = actual_file
 
     def run_single_case(
         self,
         start_date: datetime,
         end_date: datetime,
         dt: int,
+        data_file: str,
         algo: str,
         threshold: float = None,
+        num_runs: int = 1,
+        failure_penalty = 0
     ):
         """Runs a single case of the simulation."""
         self.plane.update_plane()
         threshold = threshold if isinstance(threshold, float) else 0.1
 
         times = pd.date_range(start=start_date, end=end_date, freq=pd.Timedelta(minutes=dt))
-        expected_data = pd.read_pickle(self.expected_file)
-        actual_data = pd.read_pickle(self.actual_file).loc[start_date:end_date]
+        data = pd.read_pickle(data_file).loc[start_date:end_date]
 
         solar_columns = ["beta_alpha", "beta_beta", "expected_solar_rad"]
-        expected_solar_data = expected_data[solar_columns].to_numpy()
+        expected_solar_data = data[solar_columns].to_numpy()
 
         wind_columns = ["weibull_k", "weibull_scale", "expected_wind_speed"]
-        expected_wind_data = expected_data[wind_columns].to_numpy()
+        expected_wind_data = data[wind_columns].to_numpy()
 
         # whale_observation_data = self.get_whale_observation_probabilities(times)
-        whale_observation_data = np.ones(len(times)) * 0.25
-        whale_observation_data[len(times) // 2 :] = 0.75
-        whale_observation_data[0 : len(times) // 4] = 0.00
+        whale_observation_data = data["whale_observation_probability"]
 
         if not self.is_data_same_length(
             expected_solar_data, expected_wind_data, whale_observation_data
@@ -500,6 +498,7 @@ class SingleCaseSimulation(Simulation):
             soc_increment=1,
             timestep_min=dt,
             transition_model=self.transition_model,
+            failure_penalty=failure_penalty
         )
 
         auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected)
@@ -519,20 +518,20 @@ class SingleCaseSimulation(Simulation):
         if algo == "Optimal":
             mdp_model.generate_ev_table()
 
-        sim_solar_data = expected_data["expected_solar_rad"].values
-        sim_wind_data = expected_data["expected_wind_speed"].values
+        sim_solar_data = data["expected_solar_rad"].values
+        sim_wind_data = data["expected_wind_speed"].values
 
         simulate_method = simulation_methods[algo]
-
-        result = simulate_method(
-            initial_state=(100, 0),
-            solar_data=sim_solar_data,
-            wind_data=sim_wind_data,
-            whale_data=whale_observation_data,
-            simulate_failure=self.simulate_failure,
-            save_history=True,
-            threshold=threshold if algo == "Threshold" else None,
-        )
-        data = {}
-        data[0] = self._format_simulation_result(result, expected_data)
-        return pd.DataFrame.from_dict(data)
+        results_df = {}
+        for i in tqdm(range(num_runs)):
+            result = simulate_method(
+                initial_state=(100, 0),
+                solar_data=sim_solar_data,
+                wind_data=sim_wind_data,
+                whale_data=whale_observation_data,
+                simulate_failure=self.simulate_failure,
+                save_history=self.save_history,
+                threshold=threshold if algo == "Threshold" else None,
+            )
+            results_df[i] = self._format_simulation_result(result, data)
+        return pd.DataFrame.from_dict(results_df)

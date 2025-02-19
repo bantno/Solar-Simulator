@@ -501,7 +501,7 @@ class SingleCaseSimulation(Simulation):
             failure_penalty=failure_penalty
         )
 
-        auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected)
+        auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected,wind_threshold=10)
         mdp_model.show_progress = True
 
         simulation_methods = {

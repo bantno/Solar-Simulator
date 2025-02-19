@@ -171,7 +171,7 @@ class TestSingleCaseSimulation(unittest.TestCase):
             simulate_failure=True,
             transition_model_name=transition_model_name,
         )
-        num_runs = 20000
+        num_runs = 2500
         algos = ["Threshold","Optimal"]
         for algo in algos:
             threshold = 0.25
@@ -184,7 +184,7 @@ class TestSingleCaseSimulation(unittest.TestCase):
                 threshold=threshold,
                 data_file=data_file,
                 num_runs=num_runs,
-                failure_penalty=2
+                failure_penalty=15,
             )
             # Save the result to a file
             filename = f"{algo}_Data_c{self.plane.capacity}_t{threshold}_{self.dt}min_{self.start_date.timetuple().tm_yday}-{self.end_date.timetuple().tm_yday}_{num_runs}_lat{self.lat}.pkl"

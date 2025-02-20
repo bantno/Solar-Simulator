@@ -628,12 +628,16 @@ class ValueFunction:
 
         # Add Moored State surface
         fig.add_trace(
-            go.Surface(z=moored_data, x=x, y=y, colorscale="Blues", opacity=.9, name="Moored")
+            go.Surface(
+                z=moored_data, x=x, y=y, colorscale="Blues", opacity=0.9, name="Moored", showlegend=True
+            )
         )
 
         # Add Flying State surface
         fig.add_trace(
-            go.Surface(z=flying_data, x=x, y=y, colorscale="Magma", opacity=0.8, name="Flying")
+            go.Surface(
+                z=flying_data, x=x, y=y, colorscale="Magma", opacity=0.8, name="Flying", showlegend=True
+            )
         )
 
         # # Add Broken State line

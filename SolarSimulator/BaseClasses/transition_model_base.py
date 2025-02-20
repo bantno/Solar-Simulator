@@ -231,8 +231,8 @@ class RealisticSuccessProbability(SigmoidSuccessProbability):
         self,
         floating_failure=0.0,
         flying_failure=0.01,
-        takeoff_params=(5, 0.5),
-        landing_params=(4, 0.5),
+        takeoff_params=(10, 0.1),
+        landing_params=(9, 0.1),
         name = "realistic"
     ):
         self.a1, self.b1 = takeoff_params

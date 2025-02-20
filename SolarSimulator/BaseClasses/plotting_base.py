@@ -565,7 +565,7 @@ class DataProcessor:
             median_reward = df.loc["Reward"].median()
             mean_failure_step = round(df.loc["LastStep"].mean())
             median_failure_step = df.loc["LastStep"].median()
-            num_failures = sum(df.loc["LastStep"].values < num_timesteps)
+            num_failures = sum(df.loc["Failure"].values)
             print(f"Number of runs in dataset {filepath}: {len(df.columns)}")
             return mean_reward, median_reward, mean_failure_step, median_failure_step, num_failures
         else:

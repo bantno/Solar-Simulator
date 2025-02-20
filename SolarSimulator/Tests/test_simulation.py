@@ -155,7 +155,7 @@ class TestSingleCaseSimulation(unittest.TestCase):
     def test_run_single_many_runs(self):
         """Test the ability to run a single set of parameters for multiple iterations."""
         # Set data files
-        data_file = r"SolarSimulator\Tests\test_data\sample_cases\data\data_wind-constant_low_whale-constant.pkl"
+        data_file = r"SolarSimulator\Tests\test_data\sample_cases\sample_data\data_wind-constant_low_whale-constant.pkl"
 
         # Set transition model
         transition_model_name = "realistic"
@@ -190,5 +190,46 @@ class TestSingleCaseSimulation(unittest.TestCase):
             filename = f"{algo}_Data_c{self.plane.capacity}_t{threshold}_{self.dt}min_{self.start_date.timetuple().tm_yday}-{self.end_date.timetuple().tm_yday}_{num_runs}_lat{self.lat}.pkl"
             result.to_pickle(filename)
             print(f"Test simulation completed and result saved to '{filename}'.")
+
+    def test_run_all_cases_in_folder(self):
+        """Test running all cases in the target folder."""
+        data_directory = r"SolarSimulator\Tests\test_data\sample_cases\sample_data"
+        transition_model_name = "realistic"
+        num_runs = 1
+        algos = ["Threshold"]#, "Optimal"]
+        tz = pytz.timezone("Etc/GMT-6")  # UTC-6 timezone
+
+        self.start_date = datetime(2025, 1, 1, tzinfo=tz)
+        self.end_date = datetime(2025, 1, 28, tzinfo=tz)
+
+        for data_file in os.listdir(data_directory):
+            if data_file.endswith('.pkl'):
+                for algo in algos:
+                    with self.subTest(data_file=data_file, algo=algo):
+                        simulation = SingleCaseSimulation(
+                            plane=self.plane,
+                            lat=self.lat,
+                            lon=self.lon,
+                            tz=self.tz,
+                            save_history=True,
+                            use_expected=self.use_expected,
+                            simulate_failure=True,
+                            transition_model_name=transition_model_name,
+                        )
+                        threshold = 0.25
+                        result = simulation.run_single_case(
+                            start_date=self.start_date,
+                            end_date=self.end_date,
+                            dt=self.dt,
+                            algo=algo,
+                            threshold=threshold,
+                            data_file=os.path.join(data_directory, data_file),
+                            num_runs=num_runs,
+                            failure_penalty=10,
+                        )
+                        filename = f"{algo}_Data_c{self.plane.capacity}_t{threshold}_{self.dt}min_{self.start_date.timetuple().tm_yday}-{self.end_date.timetuple().tm_yday}_{num_runs}_lat{self.lat}_{data_file}.pkl"
+                        result.to_pickle(filename)
+                        print(f"Test simulation for file '{data_file}' completed and result saved to '{filename}'.")
+
 if __name__ == "__main__":
     unittest.main()

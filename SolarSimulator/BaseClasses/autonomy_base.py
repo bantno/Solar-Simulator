@@ -42,6 +42,7 @@ class Autonomy:
         samples = self._generate_mcs_samples(max_stages)
 
         flight_minutes, reward = 0.0, 0
+        is_failure = False
 
         # Simulation loop
         for k in range(max_stages - 1):
@@ -99,10 +100,12 @@ class Autonomy:
             if not is_action_successful:
                 state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
                 reward -= self.failure_penalty
+                is_failure = True
                 break
             elif new_state[0] < 0:
                 state_history_list[k:] = [(-30, 2)] * (len(state_history_list) - k)
                 reward -= self.failure_penalty
+                is_failure = True
                 break
 
         return self._finalize_simulation(
@@ -116,6 +119,7 @@ class Autonomy:
             wind_data,
             whale_data,
             flight_minutes,
+            is_failure
         )
 
     def simulate_optimal_mission(
@@ -141,7 +145,8 @@ class Autonomy:
 
         flight_minutes, reward = 0.0, 0
         action_list = [0, 1]
-        value_list = [-1000, -1000]
+        value_list = [-1000, -1000] # Why is this outside loop?
+        is_failure=False
 
         # Simulation loop
         for k in range(max_stages - 1):
@@ -191,10 +196,12 @@ class Autonomy:
             if not is_action_successful:
                 state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
                 reward -= self.failure_penalty
+                is_failure=True
                 break
             elif new_state[0] < 0:
                 state_history_list[k:] = [(-15, 2)] * (len(state_history_list) - k)
                 reward -= self.failure_penalty
+                is_failure=True
                 break
 
         return self._finalize_simulation(
@@ -208,6 +215,7 @@ class Autonomy:
             wind_data,
             whale_data,
             flight_minutes,
+            is_failure
         )
 
     def simulate_charge_threshold_mission(
@@ -390,6 +398,7 @@ class Autonomy:
         wind_data,
         whale_data,
         flight_minutes,
+        is_failure,
     ):
         """Finalize the simulation results."""
         k += 1
@@ -404,8 +413,9 @@ class Autonomy:
                 wind_data,
                 whale_data,
                 flight_minutes,
+                is_failure,
             )
-        return reward, k, flight_minutes
+        return reward, k, flight_minutes, is_failure
 
     def simulate_stochastic_reward(
         self, state, action, stage, whale_prob, use_expected_value=False

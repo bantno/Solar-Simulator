@@ -108,7 +108,7 @@ class FakeDataGenerator:
 
 def run_all_cases():
     start_time = datetime(2025, 1, 1, 0, 0, tzinfo=timezone(timedelta(hours=-6)))
-    end_time = datetime(2025, 1, 4, 0, 0, tzinfo=timezone(timedelta(hours=-6)))
+    end_time = datetime(2025, 2, 1, 0, 0, tzinfo=timezone(timedelta(hours=-6)))
 
     generator = FakeDataGenerator(start_time, end_time)
 

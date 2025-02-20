@@ -134,6 +134,12 @@ class WeatherDataProcessor:
             params, expected = (np.nan, np.nan, np.nan), np.nan
         return params, expected
 
+def generate_single_synthetic_year_worker(args):
+    # Unpack the tuple into individual arguments
+    dataset_number, historical_data, years, timestep, points_per_week, save_path, latitude, longitude, seed = args
+    
+    # Call the original function with the unpacked arguments
+    return generate_single_synthetic_year(dataset_number, historical_data, years, timestep, points_per_week, save_path, latitude, longitude, seed)
 
 def generate_single_synthetic_year(
     dataset_number,
@@ -146,11 +152,11 @@ def generate_single_synthetic_year(
     longitude,
     seed=None,
 ):
+    
     if seed is not None:
         random.seed(seed + dataset_number)
     synthetic_year = []
     original_timezone = historical_data.index.tz if historical_data.index.tz is not None else "UTC"
-
     for week_number in range(52):
         while True:
             selected_year = random.choice(years)
@@ -186,8 +192,8 @@ def generate_yearly_weather_data(historical_data, N, latitude, longitude, seed=N
 
     try:
         with Pool() as pool:
-            return pool.starmap(
-                generate_single_synthetic_year,
+            results = tqdm(pool.imap_unordered(
+                generate_single_synthetic_year_worker,
                 [
                     (
                         i,
@@ -202,7 +208,8 @@ def generate_yearly_weather_data(historical_data, N, latitude, longitude, seed=N
                     )
                     for i in range(N)
                 ],
-            )
+            ), total=N, desc="Generating Synthetic Years")
+            return list(results)
     except KeyboardInterrupt:
         print("Process interrupted by user. Cleaning up...")
         pool.terminate()  # Immediately terminate workers
@@ -225,10 +232,51 @@ if __name__ == "__main__":
     hourly_df = processor.process_hourly_data()
     resampled_df = processor.resample_data(timestep_min)
 
-    expected_data_filename = rf"C:\Users\bepstein8\OneDrive - Georgia Institute of Technology\Documents\Research\Solar-Simulator\Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
+    # expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
+    # processor.fit_distributions(resampled_df, expected_data_filename)
+
+    synthetic_data_directory = rf"Data\SYNTHETIC_DATA\lat{lat}"
+
+    N = 2500
+    filenames = generate_yearly_weather_data(resampled_df, N, lat, lon, 1, synthetic_data_directory)
+
+    lat, lon = 0, -90
+    timestep_min = 15
+    processor.fetch_weather_data(
+        lat,
+        lon,
+        "1950-01-01",
+        "2022-12-31",
+        ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
+    )
+    hourly_df = processor.process_hourly_data()
+    resampled_df = processor.resample_data(timestep_min)
+
+    expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
     processor.fit_distributions(resampled_df, expected_data_filename)
 
-    synthetic_data_directory = rf"C:\Users\bepstein8\OneDrive - Georgia Institute of Technology\Documents\Research\Solar-Simulator\Data\SYNTHETIC_DATA\lat{lat}"
+    synthetic_data_directory = rf"Data\SYNTHETIC_DATA\lat{lat}"
 
-    N = 100
-    generate_yearly_weather_data(resampled_df, N, lat, lon, 1, synthetic_data_directory)
+    N = 2500
+    filenames = generate_yearly_weather_data(resampled_df, N, lat, lon, 1, synthetic_data_directory)
+
+    lat, lon = -30, -90
+    timestep_min = 15
+    processor.fetch_weather_data(
+        lat,
+        lon,
+        "1950-01-01",
+        "2022-12-31",
+        ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
+    )
+    hourly_df = processor.process_hourly_data()
+    resampled_df = processor.resample_data(timestep_min)
+
+    expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
+    processor.fit_distributions(resampled_df, expected_data_filename)
+
+    synthetic_data_directory = rf"Data\SYNTHETIC_DATA\lat{lat}"
+
+    N = 2500
+    filenames = generate_yearly_weather_data(resampled_df, N, lat, lon, 1, synthetic_data_directory)
+    

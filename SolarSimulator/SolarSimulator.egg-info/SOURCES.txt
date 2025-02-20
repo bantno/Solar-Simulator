@@ -5,7 +5,7 @@ SolarSimulator.egg-info/dependency_links.txt
 SolarSimulator.egg-info/entry_points.txt
 SolarSimulator.egg-info/requires.txt
 SolarSimulator.egg-info/top_level.txt
-tests/test.py
 tests/test_mdp.py
-tests/test_new_mdp.py
-tests/testwhalegenerate.py
+tests/test_parametrization.py
+tests/test_simulation.py
+tests/test_transition_model_base.py

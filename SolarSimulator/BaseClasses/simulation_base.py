@@ -254,6 +254,7 @@ class Simulation(AbstractSimulation):
                 wind_history,
                 whale_list,
                 flight_minutes,
+                is_failure,
             ) = result
             return {
                 "Reward": reward,
@@ -267,13 +268,15 @@ class Simulation(AbstractSimulation):
                 "ExpectedWindHistory": list(expected_data["expected_wind_speed"].values),
                 "WhaleHistory": list(whale_list),
                 "FlightHours": flight_minutes / 60,
+                "Failure": is_failure,
             }
         else:
-            reward, last_step, flight_minutes = result
+            reward, last_step, flight_minutes, is_failure = result
             return {
                 "Reward": reward,
                 "LastStep": last_step,
                 "FlightHours": flight_minutes / 60,
+                "Failure": is_failure,
             }
 
     def get_expected_weather_data(
@@ -473,6 +476,7 @@ class SingleCaseSimulation(Simulation):
 
         times = pd.date_range(start=start_date, end=end_date, freq=pd.Timedelta(minutes=dt))
         data = pd.read_pickle(data_file).loc[start_date:end_date]
+        print(len(data))
 
         solar_columns = ["beta_alpha", "beta_beta", "expected_solar_rad"]
         expected_solar_data = data[solar_columns].to_numpy()
@@ -501,7 +505,7 @@ class SingleCaseSimulation(Simulation):
             failure_penalty=failure_penalty
         )
 
-        auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected,wind_threshold=10)
+        auto = Autonomy(dt, mdp_model, use_expected_reward=self.use_expected,wind_threshold=6)
         mdp_model.show_progress = True
 
         simulation_methods = {

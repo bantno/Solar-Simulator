@@ -435,12 +435,38 @@ class ValueFunction:
         result = simpson(x=w, y=conditional_success_prob * wind_pdf)
         return result
 
+    def last_entry(self,k,state):
+        reward_k = self.whale_probability_data[k] * 1
+
+        wind_shape_k = self.expected_wind[k, 0]
+        wind_scale_k = self.expected_wind[k, 1]
+        p_success_u_0 = self._compute_success_probability(0, state, wind_shape_k, wind_scale_k)
+        p_success_u_1 = self._compute_success_probability(1, state, wind_shape_k, wind_scale_k)
+
+        alpha_u_0 = 0
+        alpha_u_1 = 0
+        case_1_2_3 = (
+            p_success_u_0*alpha_u_0 + (1-p_success_u_0)*(-1*self.failure_penalty))
+
+        future_reward_4 = 0
+        case_4 = 0
+
+        # Need to include the negative effect of penalty
+        e_j_k =  case_1_2_3 + case_4
+
+        # p_4 = case_probs[3]
+
+        # e_j_k = (1 - p_4) * (p_success_u_0) * (alpha_u_0) * self.gamma + p_4 * (
+        #     reward_k + self.gamma * p_success_u_1 * alpha_u_1
+        # )
+        return e_j_k
+
     def _ev_entry(self, k, state):
 
         if state[0] == 0:
             return -self.failure_penalty
         elif k == self.ev_table.shape[1] - 1:
-            return 0
+            return self.last_entry(k,state)
 
         reward_k = self.whale_probability_data[k] * 1
 

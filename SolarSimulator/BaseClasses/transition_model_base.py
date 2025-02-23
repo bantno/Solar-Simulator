@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class ActionSuccessProbabilityModel(ABC):
@@ -46,6 +47,35 @@ class ActionSuccessProbabilityModel(ABC):
         state = np.broadcast_to(state, (max_len, state.shape[1])) if state.shape[0] == 1 else state
 
         return wind_speed, action, state
+
+    def visualize_success_probability(self):
+        """
+        Visualize the success probability for wind speeds from 0-40 for all combinations of action and state.
+        """
+        wind_speeds = np.linspace(0, 40, 400)
+        actions = [0, 1]
+        states = [(0, 0), (0, 1)]
+        labels = [
+            "Float",
+            "Land",
+            "Takeoff",
+            "Fly"
+        ]
+
+        plt.figure(figsize=(12, 8))
+        i=0
+        for action in actions:
+            for state in states:
+                probabilities = self.compute_probability(wind_speeds, action, np.array([state] * len(wind_speeds)))
+                plt.plot(wind_speeds, probabilities, label=labels[i])
+                i+=1
+
+        plt.xlabel("Wind Speed [m/s]")
+        plt.ylabel("Success Probability")
+        plt.title("Success Probability vs Wind Speed for Different Actions and States")
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
 
 class SigmoidSuccessProbability(ActionSuccessProbabilityModel):
@@ -229,10 +259,10 @@ class RealisticSuccessProbability(SigmoidSuccessProbability):
 
     def __init__(
         self,
-        floating_failure=0.0,
+        floating_failure=0.001,
         flying_failure=0.01,
-        takeoff_params=(10, 0.1),
-        landing_params=(9, 0.1),
+        takeoff_params=(5, 0.5),
+        landing_params=(4, 0.7),
         name = "realistic"
     ):
         self.a1, self.b1 = takeoff_params
@@ -277,8 +307,8 @@ class RealisticSuccessProbability(SigmoidSuccessProbability):
         success_prob[floating_mask] = 1 - failure_prob_floating
 
         # Flying (action == 1 and vehicle_mode == 1)
-        failure_prob_flying = self.flying_failure
-        success_prob[flying_mask] = 1 - failure_prob_flying
+        failure_prob_flying = self.sigmoid(wind_speed, self.a1, 0.35)
+        success_prob[flying_mask] = 0.99 - failure_prob_flying[flying_mask]
 
         # Landing (action == 0 and vehicle_mode == 1)
         failure_prob_landing = self.sigmoid(wind_speed, self.a2, self.b2)
@@ -295,6 +325,80 @@ class RealisticSuccessProbability(SigmoidSuccessProbability):
 
     def sigmoid(self, x, a, b):
         return 1 / (1.1 + np.exp(a - b * x))
+
+
+class ModerateSuccessProbability(SigmoidSuccessProbability):
+    """Sigmoid probability model using a logistic function for takeoff and landing failure probabilities."""
+
+    def __init__(
+        self,
+        floating_failure=0.000,
+        flying_failure=0.001,
+        takeoff_params=(8, 0.5),
+        landing_params=(7, 0.7),
+        name = "moderate"
+    ):
+        self.a1, self.b1 = takeoff_params
+        self.a2, self.b2 = landing_params
+        self.floating_failure = floating_failure
+        self.flying_failure = flying_failure
+        self.name = name
+
+    def compute_probability(self, wind_speed, action, state):
+        """
+        Compute P(S=1 | w_k) based on the vehicle's state and action.
+
+        Parameters:
+        - wind_speed (float or np.array): Current wind speed or an array of wind speeds.
+        - action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
+        - state (tuple or np.array): System state at the current stage, or an array of states.
+
+        Returns:
+        - np.array: Probabilities of success for each element.
+        """
+        wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
+        vehicle_mode = state[:, 1]  # Mode: 0 = Floating, 1 = Flying, 2 = Broken
+
+        # Initialize probabilities
+        success_prob = np.ones_like(vehicle_mode, dtype=float)
+
+        # Handle broken vehicle case (mode == 2)
+        success_prob[vehicle_mode == 2] = 0
+
+        # Compute failure probabilities for each action-state combination
+        takeoff_mask = (action == 1) & (vehicle_mode == 0)
+        floating_mask = (action == 0) & (vehicle_mode == 0)
+        flying_mask = (action == 1) & (vehicle_mode == 1)
+        landing_mask = (action == 0) & (vehicle_mode == 1)
+
+        # Takeoff (action == 1 and vehicle_mode == 0)
+        failure_prob_takeoff = self.sigmoid(wind_speed, self.a1, self.b1)
+        success_prob[takeoff_mask] = 1 - failure_prob_takeoff[takeoff_mask]
+
+        # Floating (action == 0 and vehicle_mode == 0)
+        failure_prob_floating = self.floating_failure
+        success_prob[floating_mask] = 1 - failure_prob_floating
+
+        # Flying (action == 1 and vehicle_mode == 1)
+        failure_prob_flying = self.sigmoid(wind_speed, self.a1, 0.35)
+        success_prob[flying_mask] = 1 - failure_prob_flying[flying_mask]
+
+        # Landing (action == 0 and vehicle_mode == 1)
+        failure_prob_landing = self.sigmoid(wind_speed, self.a2, self.b2)
+        success_prob[landing_mask] = 1 - failure_prob_landing[landing_mask]
+
+        # Check for invalid combinations and raise error if found
+        invalid_combinations = (action == 1) & (vehicle_mode == 2) | (action == 0) & (
+            vehicle_mode == 2
+        )
+        if np.any(invalid_combinations):
+            raise ValueError("Invalid combination of action and vehicle mode.")
+
+        return success_prob
+
+    def sigmoid(self, x, a, b):
+        return 1 / (1.1 + np.exp(a - b * x))
+
 
 
 class OptimisticSuccessProbability(SigmoidSuccessProbability):
@@ -377,6 +481,7 @@ class ProbabilityModelFactory:
         "realistic": RealisticSuccessProbability,
         "optimistic": OptimisticSuccessProbability,
         "test": TestSuccessProbability,
+        "moderate": ModerateSuccessProbability,
         # Add more models here as needed
         # 'new_model': NewModelClass,
     }
@@ -425,6 +530,7 @@ class ProbabilityModelFactory:
 if __name__ == "__main__":
     factory = ProbabilityModelFactory()
     model = factory.select_probability_model(
-        "sigmoid", failure_prob=0.8, takeoff_params=(18, 0.6), landing_params=(15, 0.7)
+        "moderate",
     )
     print(model)
+    model.visualize_success_probability()

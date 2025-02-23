@@ -28,6 +28,7 @@ class WeatherDataProcessor:
             "end_date": end_date,
             "hourly": hourly_vars,
             "timezone": timezone,
+            "wind_speed_unit": "ms",
             "cell_selection": "sea",
         }
         self.response = self.client.weather_api(
@@ -220,26 +221,6 @@ def generate_yearly_weather_data(historical_data, N, latitude, longitude, seed=N
 # Example usage
 if __name__ == "__main__":
     processor = WeatherDataProcessor()
-    lat, lon = 30, -90
-    timestep_min = 15
-    processor.fetch_weather_data(
-        lat,
-        lon,
-        "1950-01-01",
-        "2022-12-31",
-        ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
-    )
-    hourly_df = processor.process_hourly_data()
-    resampled_df = processor.resample_data(timestep_min)
-
-    # expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
-    # processor.fit_distributions(resampled_df, expected_data_filename)
-
-    synthetic_data_directory = rf"Data\SYNTHETIC_DATA\lat{lat}"
-
-    N = 2500
-    filenames = generate_yearly_weather_data(resampled_df, N, lat, lon, 1, synthetic_data_directory)
-
     lat, lon = 0, -90
     timestep_min = 15
     processor.fetch_weather_data(
@@ -250,33 +231,13 @@ if __name__ == "__main__":
         ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
     )
     hourly_df = processor.process_hourly_data()
-    resampled_df = processor.resample_data(timestep_min)
+    hourly_df.to_pickle(rf"Data\HISTORICAL_DATA\data_{lat}_{lon}")
+    # resampled_df = processor.resample_data(timestep_min)
 
-    expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
-    processor.fit_distributions(resampled_df, expected_data_filename)
+    # expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
+    # processor.fit_distributions(resampled_df, expected_data_filename)
 
-    synthetic_data_directory = rf"Data\SYNTHETIC_DATA\lat{lat}"
+    # synthetic_data_directory = rf"Data\SYNTHETIC_DATA\lat{lat}"
 
-    N = 2500
-    filenames = generate_yearly_weather_data(resampled_df, N, lat, lon, 1, synthetic_data_directory)
-
-    lat, lon = -30, -90
-    timestep_min = 15
-    processor.fetch_weather_data(
-        lat,
-        lon,
-        "1950-01-01",
-        "2022-12-31",
-        ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
-    )
-    hourly_df = processor.process_hourly_data()
-    resampled_df = processor.resample_data(timestep_min)
-
-    expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
-    processor.fit_distributions(resampled_df, expected_data_filename)
-
-    synthetic_data_directory = rf"Data\SYNTHETIC_DATA\lat{lat}"
-
-    N = 2500
-    filenames = generate_yearly_weather_data(resampled_df, N, lat, lon, 1, synthetic_data_directory)
-    
+    # N = 2500
+    # filenames = generate_yearly_weather_data(resampled_df, N, lat, lon, 1, synthetic_data_directory)

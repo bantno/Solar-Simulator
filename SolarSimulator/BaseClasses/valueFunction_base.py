@@ -1,5 +1,6 @@
 """This module contains the implementation of the ExpectedValueTable class for the Seaplane MDP."""
 
+from abc import ABC, abstractmethod
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
@@ -8,6 +9,122 @@ from scipy.stats import beta as betaDist
 from scipy.integrate import simpson
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.transition_model_base import ActionSuccessProbabilityModel
+
+
+class AbstractValueFunction(ABC):
+    """Abstract base class for computing P(S=1 | w_k), the probability of action success given wind speed."""
+    def __init__(
+        self,
+        plane: Seaplane,
+        expected_solar_data: np.ndarray,
+        expected_wind_data: np.ndarray,
+        whale_observation_data: np.ndarray,
+        soc_increment: int,
+        timestep_min: int,
+        transition_model: ActionSuccessProbabilityModel,
+        failure_penalty: float = 0.0,
+    ):
+        self.plane = plane
+        self.battery_capacity_wh = self.plane.capacity * self.plane.voltage
+        self.max_collected_power = 1367 * self.plane.solar_panel_efficieny * plane.S
+        self.dt = timestep_min
+        self.soc_increment = soc_increment
+
+        self.expected_solar = expected_solar_data
+        self.expected_wind = expected_wind_data
+        self.expected_whale = whale_observation_data
+
+        self.states = self._create_states(soc_increment, [0, 1])
+        self.transition_model = transition_model
+        self.failure_penalty = failure_penalty
+
+        self.value_table = np.zeros(
+                (int(2 * (100 / soc_increment + 1) + 1), expected_solar_data.shape[0])
+            )
+        self.value_table[-1, :] = -self.failure_penalty
+
+
+    def _create_states(self, soc_increment: int, vehicle_states: list) -> np.ndarray:
+        """
+        Generate a 2D NumPy array representing all possible states of the system.
+
+        The states are defined as pairs of (state of charge, vehicle state) and 
+        are grouped by vehicle state. The state of charge (SoC) values range from 
+        0 to 100 in increments of `soc_increment`. An additional terminal state (-1, 2) 
+        is appended at the end.
+
+        Parameters:
+        -----------
+        soc_increment : int
+            The step size for discretizing the state of charge (SoC) from 0 to 100.
+        vehicle_states : list
+            A list of possible vehicle states.
+
+        Returns:
+        --------
+        np.ndarray
+            A 2D NumPy array where each row represents a state as [SoC, vehicle_state].
+            The states are grouped by vehicle state.
+        """
+        
+        soc_values = np.arange(0, 101, soc_increment)  # Generate SoC values
+        state_values = np.array(vehicle_states)[:, None]  # Convert to column vector
+
+        # Repeat SoC values for each vehicle state (grouped)
+        soc_repeated = np.tile(soc_values, (len(vehicle_states), 1)).T
+        state_repeated = np.repeat(state_values, len(soc_values), axis=1).T
+
+        # Stack the results into a 2D array
+        states = np.column_stack((soc_repeated.ravel(), state_repeated.ravel()))
+
+        # Append the additional (-1, 2) state
+        states = np.vstack([states, [-1, 2]])
+
+        return states
+
+
+
+    @abstractmethod
+    def _value_table_entry(self,full_state, stage)->float:
+        """
+        Calculate the entry in the value table for a specified state and stage.
+
+        Parameters:
+        - full_state (numpy array with two entries): first entry represents the state of charge of the vehicle, second entry represents the vehicle state, either 0 or 1
+        - stage (int): the stage of the simulation
+
+        Returns:
+        - value: float, value table entry for the specified parameters
+        """
+        
+    
+    def _value_table_column(self,stage)->np.ndarray:
+        """
+        Calculate all the entries in the column of the value table that corresponds to a given stage
+
+        Parameters:
+        - stage (int): the stage of the value table that should be calculated
+
+        Returns:
+        - column (np.ndarray): column array that represents the specified column of the value table
+        """
+        num_states = self.states.shape[0]  # Number of possible states
+        column = np.zeros(num_states)
+        
+        for i in range(num_states):
+            full_state = self.states
+            column[i] = self._value_table_entry(full_state, stage)
+        
+        return column
+
+    def _generate_value_table(self)->None:
+        """
+        Populate the value table.
+        """
+        for stage in reversed(range(self.value_table.shape[1])):
+            self.value_table[:,stage] = self._value_table_column(stage)
+
+        return
 
 
 class ValueFunction:
@@ -21,7 +138,7 @@ class ValueFunction:
         soc_increment: int,
         timestep_min: int,
         transition_model: ActionSuccessProbabilityModel,
-        failure_penalty: float = 5.0,
+        failure_penalty: float = 0.0,
     ):
         solar_panel_efficiency = 0.1
         self.plane = plane
@@ -156,7 +273,7 @@ class ValueFunction:
         return 1 - insufficient_energy_probability
 
     def _calculate_sufficient_reward_probability(
-        self, stage, state, reward_k, alpha_k, beta_k, shape, scale, ps_0, ps_1, n=1000
+        self, stage, state, reward_k, alpha_k, beta_k, shape, scale, ps_0, ps_1, n=5000
     ):
         """
         Calculate the probability of obtaining sufficient reward for a given action.
@@ -186,7 +303,10 @@ class ValueFunction:
             difference `d_alpha` is greater than or equal to the threshold `reward_k`.
         """
         # TODO Add wind sampling to this method and vectorize.
-        solar_samples = np.random.beta(alpha_k, beta_k, size=n) * self.max_collected_power
+        if beta_k == 1000:
+            solar_samples = np.zeros(n)
+        else:
+            solar_samples = np.random.beta(alpha_k, beta_k, size=n) * self.max_collected_power
         wind_samples = np.random.weibull(shape, size=n) * scale
 
         ev_0 = np.array(
@@ -196,10 +316,8 @@ class ValueFunction:
             self._alpha(stage, state, 1, solar_power_w=solar_samples, wind_speed_ms=wind_samples)
         )
 
-        d_alpha = (ev_0 * ps_0 - self.failure_penalty * (1 - ps_0)) - (
-            ev_1 * ps_1 - self.failure_penalty * (1 - ps_1)
-        )  # Do I need to account for the possibility that i dont make it to these states
-        p_sufficient_reward = np.mean(reward_k >= d_alpha)
+        d_alpha = (ev_0 - ev_1)
+        p_sufficient_reward = np.mean(reward_k > d_alpha)
 
         return p_sufficient_reward, np.mean(ev_0), np.mean(ev_1)
 
@@ -267,14 +385,8 @@ class ValueFunction:
         # TODO: Make this fully account for the stochastic nature of the transition.
         #  As is, only solar irradiation is considered, leaving out the probability of action failure
         next_state = self.calculate_next_state(state, action, solar_power_w)
-        p_success_u = self.transition_model.compute_probability(
-            wind_speed=wind_speed_ms, action=action, state=state
-        )
-        # if len(p_success_u) != len(next_state):
-        # raise ValueError("Probability vector length does not match next state vector length.")
-        ev = self.lookup_expected_value(
-            self.ev_table, stage + 1, next_state
-        ) * p_success_u - self.failure_penalty * (1 - p_success_u)
+        p_success_u = self.transition_model.compute_probability(wind_speed=wind_speed_ms, action=action, state=state)
+        ev = self.lookup_expected_value(self.ev_table, stage + 1, next_state) * p_success_u - self.failure_penalty * (1 - p_success_u)
         return ev
 
     def soc_to_joules(self, soc):
@@ -479,20 +591,13 @@ class ValueFunction:
             k, state, reward_k, p_success_u_0, p_success_u_1
         )
 
-        case_1_2_3 = (1-case_probs[3])*(
-            p_success_u_0*alpha_u_0 + (1-p_success_u_0)*(-1*self.failure_penalty))
-
-        future_reward_4 = p_success_u_1*alpha_u_1+((1-p_success_u_1)*(-1*self.failure_penalty))
-        case_4 = case_probs[3]*(reward_k + future_reward_4)
+        # Removed probabilities from here because I think i was double counting them. Alpha already accounts for probability of failure
+        # Really before i fixed this i was tripple counting the probability of failure
+        case_1_2_3 = (1-case_probs[3])*(alpha_u_0)
+        case_4 = case_probs[3]*(reward_k + alpha_u_1)
 
         # Need to include the negative effect of penalty
         e_j_k =  case_1_2_3 + case_4
-
-        # p_4 = case_probs[3]
-
-        # e_j_k = (1 - p_4) * (p_success_u_0) * (alpha_u_0) * self.gamma + p_4 * (
-        #     reward_k + self.gamma * p_success_u_1 * alpha_u_1
-        # )
         return e_j_k
 
     def f_W_vectorized(self, w, c_k, scale_k):

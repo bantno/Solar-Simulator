@@ -73,34 +73,40 @@ class StateHistoryPlotter:
             )
         )
 
-        self.plot_state_of_charge_plotly(fig, files)
-        self.plot_action_history_plotly(fig, files)
-        self.plot_cumulative_hours_flight_plotly(fig, files)
-        self.plot_solar_history_plotly(fig, files)
-        self.plot_whale_history_plotly(fig, files)
-        self.plot_wind_history_plotly(fig, files)
-        self.plot_failure_prob_history_plotly(fig, files)
+        # Add dropdown for case selection
+        case_options = [f"Case {i}" for i in range(10)]  # Assuming up to 10 cases
+        buttons = [
+            {
+                "label": case,
+                "method": "update",
+                "args": [
+                    {"visible": [i == j for j in range(len(case_options)) for _ in range(7)]},
+                    {"title": f"Battery Capacity: {battery_capacity} Ah - {case}"}
+                ]
+            }
+            for i, case in enumerate(case_options)
+        ]
+
+        for i, case in enumerate(case_options):
+            self.plot_state_of_charge_plotly(fig, files, case_num=i)
+            self.plot_action_history_plotly(fig, files, case_num=i)
+            self.plot_cumulative_hours_flight_plotly(fig, files, case_num=i)
+            self.plot_solar_history_plotly(fig, files, case_num=i)
+            self.plot_whale_history_plotly(fig, files, case_num=i)
+            self.plot_wind_history_plotly(fig, files, case_num=i)
+            self.plot_failure_prob_history_plotly(fig, files, case_num=i)
+
+            for trace in fig.data[i * 7:(i + 1) * 7]:
+                trace.visible = (i == 0)
 
         fig.update_layout(
-            height=2000, 
+            height=2000,
             title_text=f"Battery Capacity: {battery_capacity} Ah",
             updatemenus=[{
-                "buttons": [
-                    {
-                        "label": "All",
-                        "method": "update",
-                        "args": [{"visible": [True] * len(fig.data)}]
-                    },
-                    {
-                        "label": "None",
-                        "method": "update",
-                        "args": [{"visible": [False] * len(fig.data)}]
-                    }
-                ],
-                "direction": "left",
+                "buttons": buttons,
+                "direction": "down",
                 "pad": {"r": 10, "t": 10},
                 "showactive": True,
-                "type": "buttons",
                 "x": 0.1,
                 "xanchor": "left",
                 "y": 1.1,
@@ -121,10 +127,9 @@ class StateHistoryPlotter:
                 periods=len(state_charge_levels),
                 freq=self.time_step,
             )
-            fig.add_trace(go.Scatter(x=time_index, y=state_charge_levels, mode='lines', name=label, line=dict(color=self.colors.get(algo, "gray"))), row=1, col=1)
+            fig.add_trace(go.Scatter(x=time_index, y=state_charge_levels, mode='lines', name=f"{label} - Case {case_num}", line=dict(color=self.colors.get(algo, "gray"))), row=1, col=1)
 
     def plot_action_history_plotly(self, fig, files, case_num=0):
-        colors = {"Optimal": "blue", "Threshold": "green", "Greedy": "red", "Unknown": "gray"}
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             algo, label = self.parse_filename(file)
@@ -132,10 +137,9 @@ class StateHistoryPlotter:
             time_index = pd.date_range(
                 start=self.start_date, periods=len(action_history), freq=self.time_step
             )
-            fig.add_trace(go.Scatter(x=time_index, y=action_history, mode='lines', name=label, line=dict(color=self.colors.get(algo, "gray"))), row=2, col=1)
+            fig.add_trace(go.Scatter(x=time_index, y=action_history, mode='lines', name=f"{label} - Case {case_num}", line=dict(color=self.colors.get(algo, "gray"))), row=2, col=1)
 
     def plot_cumulative_hours_flight_plotly(self, fig, files, case_num=0):
-        colors = {"Optimal": "blue", "Threshold": "green", "Greedy": "red", "Unknown": "gray"}
         for file in files:
             df = self.load_first_entry(os.path.join(self.directory, file))
             algo, label = self.parse_filename(file)
@@ -146,7 +150,7 @@ class StateHistoryPlotter:
                 periods=len(cumulative_hours),
                 freq=self.time_step,
             )
-            fig.add_trace(go.Scatter(x=time_index, y=cumulative_hours, mode='lines', name=label, line=dict(color=self.colors.get(algo, "gray"))), row=3, col=1)
+            fig.add_trace(go.Scatter(x=time_index, y=cumulative_hours, mode='lines', name=f"{label} - Case {case_num}", line=dict(color=self.colors.get(algo, "gray"))), row=3, col=1)
 
     def plot_solar_history_plotly(self, fig, files, case_num=0):
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
@@ -155,8 +159,8 @@ class StateHistoryPlotter:
         time_index = pd.date_range(
             start=self.start_date, periods=len(solar_history), freq=self.time_step
         )
-        fig.add_trace(go.Scatter(x=time_index, y=solar_history, mode='lines', name="Actual", line=dict(color='blue')), row=7, col=1)
-        fig.add_trace(go.Scatter(x=time_index, y=expected_solar_history[: len(time_index)], mode='lines', name="Expected", line=dict(color='red')), row=7, col=1)
+        fig.add_trace(go.Scatter(x=time_index, y=solar_history, mode='lines', name=f"Actual - Case {case_num}", line=dict(color='blue')), row=7, col=1)
+        fig.add_trace(go.Scatter(x=time_index, y=expected_solar_history[: len(time_index)], mode='lines', name=f"Expected - Case {case_num}", line=dict(color='red')), row=7, col=1)
 
     def plot_whale_history_plotly(self, fig, files, case_num=0):
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
@@ -164,7 +168,7 @@ class StateHistoryPlotter:
         time_index = pd.date_range(
             start=self.start_date, periods=len(whale_history), freq=self.time_step
         )
-        fig.add_trace(go.Scatter(x=time_index, y=whale_history, mode='lines', name="Whale Observation Probability", line=dict(color='blue')), row=5, col=1)
+        fig.add_trace(go.Scatter(x=time_index, y=whale_history, mode='lines', name=f"Whale Observation Probability - Case {case_num}", line=dict(color='blue')), row=5, col=1)
 
     def plot_wind_history_plotly(self, fig, files, case_num=0):
         df = self.load_first_entry(os.path.join(self.directory, files[0]))
@@ -173,8 +177,8 @@ class StateHistoryPlotter:
         time_index = pd.date_range(
             start=self.start_date, periods=len(wind_history), freq=self.time_step
         )
-        fig.add_trace(go.Scatter(x=time_index, y=wind_history, mode='lines', name="Actual Wind Speed", line=dict(color='blue')), row=6, col=1)
-        fig.add_trace(go.Scatter(x=time_index, y=expected_wind_history[: len(time_index)], mode='lines', name="Expected Wind Speed", line=dict(color='red')), row=6, col=1)
+        fig.add_trace(go.Scatter(x=time_index, y=wind_history, mode='lines', name=f"Actual Wind Speed - Case {case_num}", line=dict(color='blue')), row=6, col=1)
+        fig.add_trace(go.Scatter(x=time_index, y=expected_wind_history[: len(time_index)], mode='lines', name=f"Expected Wind Speed - Case {case_num}", line=dict(color='red')), row=6, col=1)
 
     def plot_failure_prob_history_plotly(self, fig, files, case_num=0):
         for file in files:
@@ -186,7 +190,7 @@ class StateHistoryPlotter:
                 periods=len(failure_prob_history),
                 freq=self.time_step,
             )
-            fig.add_trace(go.Scatter(x=time_index, y=failure_prob_history, mode='lines', name=label, line=dict(color=self.colors.get(algo, "gray"))), row=4, col=1)
+            fig.add_trace(go.Scatter(x=time_index, y=failure_prob_history, mode='lines', name=f"{label} - Case {case_num}", line=dict(color=self.colors.get(algo, "gray"))), row=4, col=1)
 
     def plot_data_matplotlib(self, save_dir):
         """Plot various data histories for the first entry in each file in the directory and save the plot."""

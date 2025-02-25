@@ -332,8 +332,8 @@ class ModerateSuccessProbability(SigmoidSuccessProbability):
 
     def __init__(
         self,
-        floating_failure=0.000,
-        flying_failure=0.001,
+        floating_failure=0.00001,
+        flying_failure=0.0001,
         takeoff_params=(8, 0.5),
         landing_params=(7, 0.7),
         name = "moderate"
@@ -380,8 +380,9 @@ class ModerateSuccessProbability(SigmoidSuccessProbability):
         success_prob[floating_mask] = 1 - failure_prob_floating
 
         # Flying (action == 1 and vehicle_mode == 1)
-        failure_prob_flying = self.sigmoid(wind_speed, self.a1, 0.35)
-        success_prob[flying_mask] = 1 - failure_prob_flying[flying_mask]
+        # failure_prob_flying = self.sigmoid(wind_speed, self.a1, 0.35)
+        failure_prob_flying = self.flying_failure
+        success_prob[flying_mask] = 1 - failure_prob_flying
 
         # Landing (action == 0 and vehicle_mode == 1)
         failure_prob_landing = self.sigmoid(wind_speed, self.a2, self.b2)

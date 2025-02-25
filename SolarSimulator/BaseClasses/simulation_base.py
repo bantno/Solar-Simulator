@@ -183,7 +183,7 @@ class Simulation(AbstractSimulation):
 
         loc = rf"Data\SYNTHETIC_DATA\lat{int(self.lat)}"
 
-        whale_observation_data = self.get_whale_observation_probabilities(times)
+        whale_observation_data = self.get_whale_observation_probabilities(times,expected_solar_data[:,2])
         self.plane.update_plane()
         mdp_model = ValueFunction(
             self.plane,
@@ -215,7 +215,7 @@ class Simulation(AbstractSimulation):
         if algo == "Optimal":
             mdp_model.generate_ev_table()
 
-        for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=10):
+        for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=2):
             if not self.use_expected:
                 actual_data = self._load_weather_data(
                     dt, directory=loc, i=i, lat=self.lat, lon=self.lon
@@ -380,44 +380,41 @@ class Simulation(AbstractSimulation):
                 f"No expected weather file found in '{directory}' with timestep '{dt}' minutes, latitude '{lat}', and longitude '{lon}'."
             )
 
-    def get_whale_observation_probabilities(self, time_index: pd.DatetimeIndex):
+        # Define the time intervals and probabilities
+    def get_whale_observation_probabilities(self, time_index: pd.DatetimeIndex, solar_radiation: np.ndarray) -> np.ndarray:
+        """
+        Get whale observation probabilities based on percentages outlined in PAPER.
+        Also assume that nothing can be observed with no sunlight.
+        
+        Parameters:
+        - time_index (pd.DatetimeIndex): List of times to get whale observation probabilities.
+        - solar_radiation (np.ndarray): Corresponding solar radiation values.
+
+        Returns:
+        - np.ndarray: Whale observation probabilities for each time index.
+        """
+
         # Define the time intervals and probabilities
         time_intervals = [
-            ("0600", "0800", 0.082),
-            ("0800", "1000", 0.098),
-            ("1000", "1200", 0.095),
-            ("1200", "1400", 0.217),
-            ("1400", "1600", 0.215),
-            ("1600", "2000", 0.278),
+            ("06:00", "08:00", 0.082),
+            ("08:00", "10:00", 0.098),
+            ("10:00", "12:00", 0.095),
+            ("12:00", "14:00", 0.217),
+            ("14:00", "16:00", 0.215),
+            ("16:00", "20:00", 0.278),
         ]
-        tz_finder = TimezoneFinder()
-        timezone_str = tz_finder.timezone_at(lng=self.lon, lat=self.lat)
-        tz = pytz.timezone(timezone_str)
 
-        def get_day_night_flag(dt, latitude, longitude):
-            # Create Sun object for the location
-            sun = Sun(latitude, longitude)
+        # Initialize probabilities with zeros
+        probabilities = np.zeros_like(solar_radiation, dtype=float)
 
-            # Get the sunrise and sunset times for the given day
-            sunrise = sun.get_sunrise_time(dt).astimezone(tz)
-            sunset = sun.get_sunset_time(dt).astimezone(tz)
+        # Convert string intervals to time objects for easy comparison
+        for start, end, prob in time_intervals:
+            mask = (time_index.time >= pd.to_datetime(start).time()) & (time_index.time < pd.to_datetime(end).time())
+            probabilities[mask] = prob
 
-            # Determine if current time is day or night
-            if sunrise <= dt <= sunset:
-                return 1
-            else:
-                return 0
+        # Apply sunlight condition (if solar radiation is zero, probability is zero)
+        probabilities[solar_radiation == 0] = 0.0
 
-        # Function to get the whale observation probability for a given time
-        def get_probability_for_time(time):
-            time_str = time.strftime("%H%M")
-            for interval_start, interval_end, prob in time_intervals:
-                if interval_start <= time_str < interval_end:
-                    return prob * get_day_night_flag(time, self.lat, self.lon)
-            return 0.0  # Return 0.0 if the time doesn't fall into any interval
-
-        # Apply the function to the DatetimeIndex and return the probabilities
-        probabilities = np.array(time_index.map(get_probability_for_time))
         return probabilities
 
     @staticmethod

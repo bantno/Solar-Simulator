@@ -354,10 +354,9 @@ class Autonomy:
             alpha = self.mdp_model._alpha(
                 k, current_state, action, collected_solar_power, wind_speed
             )
-            p_success = self.transition_model.compute_probability(wind_speed, action, current_state)
-            value_list[idx] = alpha * p_success - self.failure_penalty * (
-                1 - p_success
-            )  # need to apply possibility of failure to decision making
+            # Removed probability stuff because I'm pretty sure it was once again double counting.
+            # _alpha method already accounts for the probability of failure
+            value_list[idx] = alpha
         return 1 if whale_prob > (value_list[0] - value_list[1]) else 0
 
     def _compute_failure_prob(self, wind_speed, best_action, current_state):

@@ -149,7 +149,6 @@ class ValueFunction:
         self.expected_solar = expected_solar_data
         self.expected_wind = expected_wind_data
         self.states = self._create_states(soc_increment, [0, 1])
-        self.gamma = 1.0
         self.transition_model = transition_model
         self.failure_penalty = failure_penalty
 
@@ -181,7 +180,7 @@ class ValueFunction:
         self.plot_surface_plotly(self.ev_table, self.plane.capacity, self.failure_penalty, filename)
         np.savetxt("Results\\" + filename + ".csv", self.ev_table, delimiter=",")
 
-    def _calculate_case_probabilities(self, stage, state, reward_k, ps_0, ps_1):
+    def _calculate_case_probabilities(self, stage, state, reward_k):
         """
         Calculate the probabilities of different energy and reward sufficiency cases.
 
@@ -228,8 +227,7 @@ class ValueFunction:
         scale_k = self.expected_wind[stage, 1]
 
         p_sufficient_reward, alpha_u_0, alpha_u_1 = self._calculate_sufficient_reward_probability(
-            stage, state, reward_k, alpha_k, beta_k, shape_k, scale_k, ps_0, ps_1
-        )
+            stage, state, reward_k, alpha_k, beta_k, shape_k, scale_k)
 
         p0 = (1 - p_sufficient_solar) * (1 - p_sufficient_reward)
         p1 = (1 - p_sufficient_solar) * (p_sufficient_reward)
@@ -273,7 +271,7 @@ class ValueFunction:
         return 1 - insufficient_energy_probability
 
     def _calculate_sufficient_reward_probability(
-        self, stage, state, reward_k, alpha_k, beta_k, shape, scale, ps_0, ps_1, n=5000
+        self, stage, state, reward_k, alpha_k, beta_k, shape, scale, n=5000
     ):
         """
         Calculate the probability of obtaining sufficient reward for a given action.
@@ -553,25 +551,7 @@ class ValueFunction:
         wind_shape_k = self.expected_wind[k, 0]
         wind_scale_k = self.expected_wind[k, 1]
         p_success_u_0 = self._compute_success_probability(0, state, wind_shape_k, wind_scale_k)
-        p_success_u_1 = self._compute_success_probability(1, state, wind_shape_k, wind_scale_k)
-
-        alpha_u_0 = 0
-        alpha_u_1 = 0
-        case_1_2_3 = (
-            p_success_u_0*alpha_u_0 + (1-p_success_u_0)*(-1*self.failure_penalty))
-
-        future_reward_4 = 0
-        case_4 = 0
-
-        # Need to include the negative effect of penalty
-        e_j_k =  case_1_2_3 + case_4
-
-        # p_4 = case_probs[3]
-
-        # e_j_k = (1 - p_4) * (p_success_u_0) * (alpha_u_0) * self.gamma + p_4 * (
-        #     reward_k + self.gamma * p_success_u_1 * alpha_u_1
-        # )
-        return e_j_k
+        return -self.failure_penalty*(1-p_success_u_0)
 
     def _ev_entry(self, k, state):
 
@@ -581,15 +561,8 @@ class ValueFunction:
             return self.last_entry(k,state)
 
         reward_k = self.whale_probability_data[k] * 1
-
-        wind_shape_k = self.expected_wind[k, 0]
-        wind_scale_k = self.expected_wind[k, 1]
-        p_success_u_0 = self._compute_success_probability(0, state, wind_shape_k, wind_scale_k)
-        p_success_u_1 = self._compute_success_probability(1, state, wind_shape_k, wind_scale_k)
-
         case_probs, alpha_u_0, alpha_u_1 = self._calculate_case_probabilities(
-            k, state, reward_k, p_success_u_0, p_success_u_1
-        )
+            k, state, reward_k)
 
         # Removed probabilities from here because I think i was double counting them. Alpha already accounts for probability of failure
         # Really before i fixed this i was tripple counting the probability of failure

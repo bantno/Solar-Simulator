@@ -18,7 +18,8 @@ def plot_weather_data(file1, file2):
     if not isinstance(data1.index, pd.DatetimeIndex):
         data1.index = pd.to_datetime(data1.index)
     if not isinstance(data2.index, pd.DatetimeIndex):
-        data2.index = pd.to_datetime(data2.index)
+        data2.index = data1.index
+
 
     # Create a figure with subplots
     fig, axes = plt.subplots(3, 2, figsize=(15, 10))
@@ -87,7 +88,8 @@ def plot_first_year_weather_data(file1, file2):
         data2.index = pd.to_datetime(data2.index)
 
     # Get the first year from both datasets and select the earliest one
-    first_year_data1 = data1.index.year.min()
+    # first_year_data1 = data1.index.year.max()
+    first_year_data1 = 2000
     first_year_data2 = data2.index.year.min()
 
     # Filter the data to only include the first year from either dataset
@@ -111,36 +113,35 @@ def plot_first_year_weather_data(file1, file2):
 
     axes[0, 1].plot(
         data2_first_year.index,
-        data2_first_year["wind_speed_10m"],
-        label=f"Recorded Data ({first_year_data2})",
+        data2_first_year["expected_wind_speed"],
+        label=f"Expected Data",
         color="r",
     )
-    axes[0, 1].set_title(f"Wind Speed ({first_year_data2} Data)")
+    axes[0, 1].set_title(f"Wind Speed (Expected Data)")
     axes[0, 1].set_xlabel("Time")
     axes[0, 1].set_ylabel("Wind Speed (m/s)")
     axes[0, 1].legend()
 
-    # Wind Direction Plot (both files)
-    axes[1, 0].plot(
-        data1_first_year.index,
-        data1_first_year["wind_direction_10m"],
-        label=f"Synthetic Data ({first_year_data1})",
-        color="b",
-    )
-    axes[1, 0].set_title("Wind Direction (Synthetic Data)")
-    axes[1, 0].set_xlabel("Time")
-    axes[1, 0].set_ylabel("Wind Direction (°)")
-    axes[1, 0].legend()
-
-    axes[1, 1].plot(
+    # Alpha Beta
+    axes[1, 1].scatter(
         data2_first_year.index,
-        data2_first_year["wind_direction_10m"],
-        label=f"Recorded Data ({first_year_data2})",
-        color="r",
+        data2_first_year["weibull_k"],
+        label=f"Weibull shape",
+        color="k",
+        s=0.1,
     )
-    axes[1, 1].set_title(f"Wind Direction ({first_year_data2} Data)")
+
+    axes[1, 1].scatter(
+    data2_first_year.index,
+    data2_first_year["weibull_scale"],
+    label=f"Weibull scale",
+    color="b",
+    s=0.1,
+    )
+
+    axes[1, 1].set_title(f"Wind Speed Params (Expected Data)")
     axes[1, 1].set_xlabel("Time")
-    axes[1, 1].set_ylabel("Wind Direction (°)")
+    axes[1, 1].set_ylabel("Wind Speed (m/s)")
     axes[1, 1].legend()
 
     # Shortwave Radiation Plot (both files)
@@ -157,7 +158,7 @@ def plot_first_year_weather_data(file1, file2):
 
     axes[2, 1].plot(
         data2_first_year.index,
-        data2_first_year["shortwave_radiation"],
+        data2_first_year["expected_solar_rad"],
         label=f"Recorded Data ({first_year_data2})",
         color="r",
     )
@@ -173,6 +174,10 @@ def plot_first_year_weather_data(file1, file2):
 
 if __name__ == "__main__":
     # Call the function with paths to the two pickle files
+    lat = 30
+    # plot_first_year_weather_data(
+    #     rf"Data\SYNTHETIC_DATA\lat{lat}\data_lat{lat}_lon-90_15min_200.pkl", rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon-90_15min.pkl"
+    # )
     plot_first_year_weather_data(
-        r"Data\SYNTHETIC_DATA\data_30min_0.pkl", r"Data\EXPECTED_DATA\data_expected_30min.pkl"
+        rf"Data\HISTORICAL_DATA\data_{lat}_-90.pkl", rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon-90_15min.pkl"
     )

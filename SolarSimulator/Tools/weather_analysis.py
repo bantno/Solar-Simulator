@@ -37,9 +37,9 @@ class EnvironmentalDataProcessor:
 
     def plot_heatmaps(self, final_df, lat):
         """Generate and save heatmaps for solar radiation and wind speed."""
-        # Pivot the data with hours on y-axis and months on x-axis
-        solar_heatmap = final_df["shortwave_radiation"].unstack().T  # Transpose for correct orientation
-        wind_heatmap = final_df["wind_speed_10m"].unstack().T  # Transpose for correct orientation
+        # Correctly pivot data: Months on x-axis, Hours on y-axis
+        solar_heatmap = final_df["shortwave_radiation"].unstack(level=0)  # Month as columns
+        wind_heatmap = final_df["wind_speed_10m"].unstack(level=0)
 
         # Save Solar Radiation Heatmap
         plt.figure(figsize=(10, 6))
@@ -47,13 +47,11 @@ class EnvironmentalDataProcessor:
         plt.title(f"Solar Radiation Heatmap (Month vs. Hour) for latitude {lat}")
         plt.xlabel("Month")
         plt.ylabel("Hour of the Day")
-        # Reduce the number of x-axis and y-axis ticks
-        plt.xticks(ticks=range(0, len(solar_heatmap.columns), 2), labels=solar_heatmap.columns[::2])  # Adjust step as needed
-        plt.yticks(ticks=range(0, len(solar_heatmap.index), 2), labels=solar_heatmap.index[::2])  # Adjust step as needed
-        plt.tight_layout()  # Adjust layout to prevent clipping
-        solar_filename = os.path.join(self.output_path, f"solar_radiation_lat{lat}.png")
-        plt.savefig(solar_filename)
-        plt.close()  # Close the figure to avoid memory issues
+        plt.xticks(ticks=range(1, 13), labels=range(1, 13))  # Explicitly set months
+        plt.yticks(ticks=range(0, 24, 2), labels=range(0, 24, 2))  # Adjust hour labels
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_path, f"solar_radiation_lat{lat}.png"))
+        plt.close()
 
         # Save Wind Speed Heatmap
         plt.figure(figsize=(10, 6))
@@ -61,12 +59,12 @@ class EnvironmentalDataProcessor:
         plt.title(f"Wind Speed Heatmap (Month vs. Hour) for latitude {lat}")
         plt.xlabel("Month")
         plt.ylabel("Hour of the Day")
-        plt.xticks(ticks=range(0, len(wind_heatmap.columns), 2), labels=wind_heatmap.columns[::2])  # Adjust step as needed
-        plt.yticks(ticks=range(0, len(wind_heatmap.index), 2), labels=wind_heatmap.index[::2])  # Adjust step as needed
-        plt.tight_layout()  # Adjust layout to prevent clipping
-        wind_filename = os.path.join(self.output_path, f"wind_speed_lat{lat}.png")
-        plt.savefig(wind_filename)
-        plt.close()  # Close the figure to avoid memory issues
+        plt.xticks(ticks=range(1, 13), labels=range(1, 13))
+        plt.yticks(ticks=range(0, 24, 2), labels=range(0, 24, 2))
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_path, f"wind_speed_lat{lat}.png"))
+        plt.close()
+
 
     def process_and_save_for_multiple_latitudes(self, latitudes):
         """Process data and save heatmaps for multiple latitudes."""

@@ -180,7 +180,7 @@ class ValueFunction:
         self.plot_surface_plotly(self.ev_table, self.plane.capacity, self.failure_penalty, filename)
         np.savetxt("Results\\" + filename + ".csv", self.ev_table, delimiter=",")
 
-    def _calculate_case_probabilities(self, stage, state, reward_k):
+    def _calculate_case_probabilities(self, stage, state, reward_k_u_1):
         """
         Calculate the probabilities of different energy and reward sufficiency cases.
 
@@ -215,26 +215,18 @@ class ValueFunction:
         """
         alpha_k = self.expected_solar[stage, 0]
         beta_k = self.expected_solar[stage, 1]
-        max_collected_energy_j = self.max_collected_power * self.dt * 60
-        current_energy_j = self.soc_to_joules(state[0])
-        required_energy_j = self._calculate_required_energy(state, action=1)
-        p_sufficient_solar = self._calculate_sufficient_solar_probability(
-            required_energy_j, current_energy_j, max_collected_energy_j, alpha_k, beta_k
-        )
-
-        # TODO: Check if these are the correct index...
         shape_k = self.expected_wind[stage, 0]
         scale_k = self.expected_wind[stage, 1]
 
         p_sufficient_reward, alpha_u_0, alpha_u_1 = self._calculate_sufficient_reward_probability(
-            stage, state, reward_k, alpha_k, beta_k, shape_k, scale_k)
+            stage, state, reward_k_u_1, alpha_k, beta_k, shape_k, scale_k)
 
-        p0 = (1 - p_sufficient_solar) * (1 - p_sufficient_reward)
-        p1 = (1 - p_sufficient_solar) * (p_sufficient_reward)
-        p2 = (p_sufficient_solar) * (1 - p_sufficient_reward)
-        p3 = (p_sufficient_solar) * (p_sufficient_reward)
+        p0 = 1 - p_sufficient_reward
+        p1 = p_sufficient_reward
 
-        return (p0, p1, p2, p3), alpha_u_0, alpha_u_1
+        return (p0, p1), alpha_u_0, alpha_u_1
+    
+        
 
     def _calculate_sufficient_solar_probability(
         self, required_energy, current_energy, max_collected_energy, alpha, beta
@@ -269,6 +261,17 @@ class ValueFunction:
         ) / max_collected_energy  # Calculate the threshold for X <= 0 condition (S <= (P - C) / I)
         insufficient_energy_probability = betaDist.cdf(threshold, alpha, beta)
         return 1 - insufficient_energy_probability
+
+    def expected_reward_function(self, stage, state, action):
+        """"
+        Calculate the reward for a given stage, state, action, and wind speed.
+        """
+        whale_reward = 0 if action==0 else self.whale_probability_data[stage] * 1
+        shape = self.expected_wind[stage, 0]
+        scale = self.expected_wind[stage, 1]
+        failure_reward = -self.failure_penalty * (1-self._compute_success_probability(action,state,shape,scale))
+        reward_k = whale_reward + failure_reward
+        return reward_k
 
     def _calculate_sufficient_reward_probability(
         self, stage, state, reward_k, alpha_k, beta_k, shape, scale, n=5000
@@ -316,7 +319,7 @@ class ValueFunction:
 
         d_alpha = (ev_0 - ev_1)
         p_sufficient_reward = np.mean(reward_k > d_alpha)
-
+        # ^ in this line do i need to be evaluating the CDF of alpha to determine if the reward will be greater than the threshold?
         return p_sufficient_reward, np.mean(ev_0), np.mean(ev_1)
 
     def _calculate_required_energy(self, state, action):
@@ -379,12 +382,9 @@ class ValueFunction:
             which incorporates the effects of the action and available solar power.
             - The expected value for the next state is retrieved from a precomputed
             lookup table (`self.ev_table`) for the subsequent stage (`stage + 1`).
-        """
-        # TODO: Make this fully account for the stochastic nature of the transition.
-        #  As is, only solar irradiation is considered, leaving out the probability of action failure
-        next_state = self.calculate_next_state(state, action, solar_power_w)
-        p_success_u = self.transition_model.compute_probability(wind_speed=wind_speed_ms, action=action, state=state)
-        ev = self.lookup_expected_value(self.ev_table, stage + 1, next_state) * p_success_u - self.failure_penalty * (1 - p_success_u)
+        """        
+        next_states = self.transition_function(stage, state, action, solar_power_w, wind_speed_ms)
+        ev = self.lookup_expected_value(self.ev_table, stage + 1, next_states,self.soc_increment)
         return ev
 
     def soc_to_joules(self, soc):
@@ -407,6 +407,30 @@ class ValueFunction:
         """
         joules = soc / 100 * self.battery_capacity_wh * 3600
         return int(joules)
+    
+    def transition_function(self, stage:int, state:np.ndarray, action:int, solar_power_w:np.ndarray, wind_speed:np.ndarray):
+        """
+        Calculate the next state for a given stage, state, action, solar power, and wind speed.
+
+        This method returns the the states that the system could transition to given the current state and action.
+
+        Args:
+            stage (int): The current stage in the decision-making process.
+            state (np.ndarray): The current state of the system.
+            action (int): The action to evaluate.
+            solar_power_w (np.ndarray): The solar power collected by the plane's solar array (in Watts).
+            wind_speed (np.ndarray): The wind speed at the current stage.
+
+        Returns:
+            np.ndarray: The next state of the system as a 2D array, where each row represents a state
+        """
+        probabilities = self.transition_model.compute_probability(wind_speed, action, state)
+        random_samples = np.random.uniform(0, 1, solar_power_w.shape[0])
+        next_states_no_fail = self.calculate_next_state(state, action, solar_power_w)
+        next_states = np.where(random_samples[:, np.newaxis] > probabilities[:, np.newaxis], 
+                       np.array([-1, 2]), 
+                       next_states_no_fail)
+        return next_states
 
     def calculate_next_state(self, state, action, solar_power_w):
         """
@@ -546,31 +570,29 @@ class ValueFunction:
         return result
 
     def last_entry(self,k,state):
-        reward_k = self.whale_probability_data[k] * 1
-
-        wind_shape_k = self.expected_wind[k, 0]
-        wind_scale_k = self.expected_wind[k, 1]
-        p_success_u_0 = self._compute_success_probability(0, state, wind_shape_k, wind_scale_k)
-        return -self.failure_penalty*(1-p_success_u_0)
+        return 0
 
     def _ev_entry(self, k, state):
 
         if state[0] == 0:
-            return -self.failure_penalty
+            return 0
         elif k == self.ev_table.shape[1] - 1:
             return self.last_entry(k,state)
 
-        reward_k = self.whale_probability_data[k] * 1
+
+        reward_k_u_0 = self.expected_reward_function(k,state,action=0)
+        reward_k_u_1 = self.expected_reward_function(k,state,action=1)
+
         case_probs, alpha_u_0, alpha_u_1 = self._calculate_case_probabilities(
-            k, state, reward_k)
+            k, state,reward_k_u_1)
 
         # Removed probabilities from here because I think i was double counting them. Alpha already accounts for probability of failure
         # Really before i fixed this i was tripple counting the probability of failure
-        case_1_2_3 = (1-case_probs[3])*(alpha_u_0)
-        case_4 = case_probs[3]*(reward_k + alpha_u_1)
+        case_0 = (1-case_probs[1])*(reward_k_u_0 + alpha_u_0)
+        case_1 = case_probs[1]*(reward_k_u_1 + alpha_u_1)
 
         # Need to include the negative effect of penalty
-        e_j_k =  case_1_2_3 + case_4
+        e_j_k =  case_0 + case_1
         return e_j_k
 
     def f_W_vectorized(self, w, c_k, scale_k):
@@ -590,53 +612,39 @@ class ValueFunction:
         return pdf
 
     @staticmethod
-    def lookup_expected_value(array, stage, states, soc_increment=1):
+    def lookup_expected_value(array: np.ndarray, stage: int, states: np.ndarray, soc_increment: float) -> np.ndarray:
         """
-        Look up values in a numpy array based on the stage, state of charge, and vehicle
-        states for multiple states.
-
+        Look up values in a NumPy array based on the stage, state of charge (SOC), and vehicle state for multiple states.
+        
         Parameters:
-            array (np.ndarray): The 2*n*1 by k numpy array to look up values from.
+            array (np.ndarray): The array to lookup values from. 
             stage (int): The column index in the array.
-            states (list): A list of tuples, each containing:
+            states (np.ndarray): A 2D array where each row contains:
                 - state_of_charge (float): The state of charge percentage (0-100 range).
-                - vehicle_state (str): The state of the vehicle, either 0, 1, or 2.
-            soc_increment (int): The increment step for the state of charge (default is 1).
-
+                - vehicle_state (int): The state of the vehicle (0 = moored, 1 = flying, 2 = broken).
+            soc_increment (float): The increment step for the state of charge.
+            
         Returns:
-            list: A list of values from the array corresponding to each input state tuple.
+            np.ndarray: The values from the array corresponding to each input state.
         """
-        states_array = np.atleast_2d(states)
-        state_of_charge = states_array[:, 0].astype(float)
-        vehicle_state = states_array[:, 1]
+        # Compute the number of SOC levels based on the increment (e.g., 10% increment, 11 levels)
+        num_soc_levels = int(100 / soc_increment) + 1  
 
-        if not set(np.unique(vehicle_state)).issubset({0, 1, 2}):
-            raise ValueError("Invalid vehicle state values detected.")
-        if np.any((state_of_charge < -1) | (state_of_charge > 100)):
-            raise ValueError("State of charge not within valid range (-1 to 100).")
+        # Compute SOC indices by scaling and rounding the SOC values to integer indices
+        soc_index = np.round(states[:, 0] / soc_increment).astype(int)
 
-        n = 100 // soc_increment + 1
-        row_indices = np.zeros(len(state_of_charge), dtype=int)
+        # Compute the offsets for each state: moored/flying states
+        state_offsets = states[:, 1] * num_soc_levels
 
-        # Handle special case where state_of_charge = -1 -> last row
-        row_indices[state_of_charge == -1] = array.shape[0] - 1
+        # Use np.where to handle the broken state and compute row indices, ensuring integer type
+        row_indices = np.where(
+            states[:, 1] == 2,  # Condition: broken state
+            array.shape[0] - 1,  # Use the last row for broken state
+            soc_index + state_offsets  # Calculate normal index for moored/flying states
+        ).astype(int)  # Ensure row indices are integers
 
-        # Handle other states normally
-        normal_states = state_of_charge != -1
-        row_indices[normal_states] = (state_of_charge[normal_states] / soc_increment).astype(int)
-        row_indices[normal_states] += np.where(vehicle_state[normal_states] == 1, n, 0)
-        row_indices[normal_states] += np.where(vehicle_state[normal_states] == 2, 2 * n, 0)
-
-        if stage < 0 or stage >= array.shape[1]:
-            raise IndexError(
-                f"Stage index {stage} out of bounds for array with {array.shape[1]} stages."
-            )
-
-        results = np.zeros(len(row_indices), dtype=float)
-        valid_indices = row_indices < array.shape[0]
-        results[valid_indices] = array[row_indices[valid_indices], stage]
-
-        return results[0] if results.size == 1 else results
+        # Return the values corresponding to the computed row indices and the given stage
+        return array[row_indices, stage]
 
     @staticmethod
     def plot_surface(data, capacity=50):
@@ -718,43 +726,35 @@ class ValueFunction:
             capacity (int): Battery capacity in Ah (used for the plot title).
         """
         # Extract data for each state
-        moored_data = data[:101, :]
-        flying_data = data[101:202, :]
-        broken_data = data[202, :]  # Single row for broken state
+        soc_increment = int(100 / ((data.shape[0] - 3)/2))
+        moored_data = data[:int(100/soc_increment), :]
+        flying_data = data[int(100/soc_increment)+1:data.shape[0]-2, :]
+        # broken_data = data[data.shape[0]-1, :]  # Single row for broken state
 
         # Generate grids
         time_steps = np.arange(data.shape[1])  # Time steps (x-axis)
-        battery_percentages = np.linspace(0, 100, 101)  # Battery percentages (y-axis)
+        battery_percentages = np.linspace(0, 100, len(moored_data[:,1]))  # Battery percentages (y-axis)
         x, y = np.meshgrid(time_steps, battery_percentages)
 
         # Create figure
         fig = go.Figure()
 
+        custom_red = [[0, "darkred"], [1, "red"]]
+        custom_blue = [[0, "darkblue"], [1, "blue"]]
+
         # Add Moored State surface
         fig.add_trace(
             go.Surface(
-                z=moored_data, x=x, y=y, colorscale="Blues", opacity=0.9, name="Moored", showlegend=True
+                z=moored_data, x=x, y=y, colorscale="Blues", opacity=0.7, name="Moored", showlegend=True
             )
         )
 
         # Add Flying State surface
         fig.add_trace(
             go.Surface(
-                z=flying_data, x=x, y=y, colorscale="Magma", opacity=0.8, name="Flying", showlegend=True
+                z=flying_data, x=x, y=y, colorscale="Reds", opacity=0.7, name="Flying", showlegend=True
             )
         )
-
-        # # Add Broken State line
-        # fig.add_trace(
-        #     go.Scatter3d(
-        #         x=time_steps,
-        #         y=[0] * len(time_steps),
-        #         z=broken_data,
-        #         mode="lines",
-        #         line=dict(color="red", width=4),
-        #         name="Broken",
-        #     )
-        # )
 
         # Update layout
         fig.update_layout(
@@ -769,9 +769,52 @@ class ValueFunction:
             ),
         )
 
+        # Update layout
+        fig.update_layout(
+            title=(
+                "Surface Plot for Moored, Flying, and Broken States "
+                f"({capacity} Ah, Penalty: {failure_penalty})"
+            ),
+            scene=dict(
+                xaxis_title="Stages",
+                yaxis_title="State of Charge (%)",
+                zaxis_title="Expected Value",
+            ),
+            coloraxis=dict(colorscale="Viridis"),  # Global color scale
+            updatemenus=[  # Add buttons to toggle visibility
+                {
+                    'buttons': [
+                        {
+                            'label': "Show Moored",
+                            'method': "restyle",
+                            'args': [{"visible": [True, False]}, [0, 1]]  # Show moored only
+                        },
+                        {
+                            'label': "Show Flying",
+                            'method': "restyle",
+                            'args': [{"visible": [False, True]}, [0, 1]]  # Show flying only
+                        },
+                        {
+                            'label': "Show Both",
+                            'method': "restyle",
+                            'args': [{"visible": [True, True]}, [0, 1]]  # Show both surfaces
+                        },
+                    ],
+                    'direction': 'down',
+                    'showactive': True,
+                    'x': 0.5,  # Reposition dropdown button to the center
+                    'xanchor': 'center',
+                    'y': 1.15,  # Place above the plot
+                    'yanchor': 'top',
+                    'pad': {'r': 10, 't': 10}  # Adjust padding
+                }
+            ]
+        )
+
         # Save plot
         fig.write_html("Figures\\" + filename + ".html")
 
 
 if __name__ == "__main__":
-    pass
+    data = np.loadtxt("Results\evTable_41_30_realistic.csv", delimiter=",")
+    ValueFunction.plot_surface_plotly(data, capacity=41, failure_penalty=2.0, filename="test")

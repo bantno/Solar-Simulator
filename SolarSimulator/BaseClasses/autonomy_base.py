@@ -350,15 +350,19 @@ class Autonomy:
     ):
         """Determine the best action using the MDP model."""
         for idx, action in enumerate(action_list):
+            next_state = self.mdp_model.calculate_next_state(current_state,action,collected_solar_power)
+            alpha = self.mdp_model.lookup_expected_value(self.mdp_model.ev_table,k+1,next_state,self.mdp_model.soc_increment)
+            value_list[idx] = alpha[0]*self.transition_model.compute_probability(wind_speed, action, current_state)
+        return 1 if self.reward(current_state,1,wind_speed,whale_prob) > (value_list[0] - value_list[1]) else 0
 
-            alpha = self.mdp_model._alpha(
-                k, current_state, action, collected_solar_power, wind_speed
-            )
-            p_success = self.transition_model.compute_probability(wind_speed, action, current_state)
-            value_list[idx] = alpha * p_success - self.failure_penalty * (
-                1 - p_success
-            )  # need to apply possibility of failure to decision making
-        return 1 if whale_prob > (value_list[0] - value_list[1]) else 0
+    def reward(self, state, action, wind_speed, whale_prob):
+        """"
+        Calculate the reward for a given stage, state, action, and wind speed.
+        """
+        whale_reward = 0 if action==0 else whale_prob
+        failure_reward = -self.failure_penalty * (1-self.transition_model.compute_probability(wind_speed,action,state))
+        reward_k = whale_reward + failure_reward
+        return reward_k
 
     def _compute_failure_prob(self, wind_speed, best_action, current_state):
         """Compute the probability of failure given the wind conditions and action."""

@@ -332,8 +332,8 @@ class ModerateSuccessProbability(SigmoidSuccessProbability):
 
     def __init__(
         self,
-        floating_failure=0.000,
-        flying_failure=0.001,
+        floating_failure=0.00001,
+        flying_failure=0.0001,
         takeoff_params=(8, 0.5),
         landing_params=(7, 0.7),
         name = "moderate"
@@ -359,46 +359,28 @@ class ModerateSuccessProbability(SigmoidSuccessProbability):
         wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
         vehicle_mode = state[:, 1]  # Mode: 0 = Floating, 1 = Flying, 2 = Broken
 
-        # Initialize probabilities
+        # Initialize success probability to 1
         success_prob = np.ones_like(vehicle_mode, dtype=float)
 
-        # Handle broken vehicle case (mode == 2)
-        success_prob[vehicle_mode == 2] = 0
-
-        # Compute failure probabilities for each action-state combination
-        takeoff_mask = (action == 1) & (vehicle_mode == 0)
-        floating_mask = (action == 0) & (vehicle_mode == 0)
-        flying_mask = (action == 1) & (vehicle_mode == 1)
-        landing_mask = (action == 0) & (vehicle_mode == 1)
-
-        # Takeoff (action == 1 and vehicle_mode == 0)
+        # Precompute sigmoid values for efficiency
         failure_prob_takeoff = self.sigmoid(wind_speed, self.a1, self.b1)
-        success_prob[takeoff_mask] = 1 - failure_prob_takeoff[takeoff_mask]
-
-        # Floating (action == 0 and vehicle_mode == 0)
-        failure_prob_floating = self.floating_failure
-        success_prob[floating_mask] = 1 - failure_prob_floating
-
-        # Flying (action == 1 and vehicle_mode == 1)
-        failure_prob_flying = self.sigmoid(wind_speed, self.a1, 0.35)
-        success_prob[flying_mask] = 1 - failure_prob_flying[flying_mask]
-
-        # Landing (action == 0 and vehicle_mode == 1)
         failure_prob_landing = self.sigmoid(wind_speed, self.a2, self.b2)
-        success_prob[landing_mask] = 1 - failure_prob_landing[landing_mask]
 
-        # Check for invalid combinations and raise error if found
-        invalid_combinations = (action == 1) & (vehicle_mode == 2) | (action == 0) & (
-            vehicle_mode == 2
-        )
-        if np.any(invalid_combinations):
+        # Assign probabilities efficiently
+        success_prob = np.where(vehicle_mode == 2, 0, success_prob)  # Broken vehicle always fails
+        success_prob = np.where((action == 1) & (vehicle_mode == 0), 1 - failure_prob_takeoff, success_prob)
+        success_prob = np.where((action == 0) & (vehicle_mode == 0), 1 - self.floating_failure, success_prob)
+        success_prob = np.where((action == 1) & (vehicle_mode == 1), 1 - self.flying_failure, success_prob)
+        success_prob = np.where((action == 0) & (vehicle_mode == 1), 1 - failure_prob_landing, success_prob)
+
+        # Raise error for invalid action-mode combinations
+        if np.any(vehicle_mode == 2):  # Broken vehicle should not have valid actions
             raise ValueError("Invalid combination of action and vehicle mode.")
 
         return success_prob
 
     def sigmoid(self, x, a, b):
         return 1 / (1.1 + np.exp(a - b * x))
-
 
 
 class OptimisticSuccessProbability(SigmoidSuccessProbability):
@@ -530,7 +512,7 @@ class ProbabilityModelFactory:
 if __name__ == "__main__":
     factory = ProbabilityModelFactory()
     model = factory.select_probability_model(
-        "moderate",
+        "realistic",
     )
     print(model)
     model.visualize_success_probability()

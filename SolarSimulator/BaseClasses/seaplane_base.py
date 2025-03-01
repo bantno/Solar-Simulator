@@ -57,6 +57,7 @@ class Seaplane:
         self.e = 0.8
         self.k = 1.0 / (np.pi * self.AR * self.e)
         self.cdtot = cdtot
+        self.solar_panel_efficiency = 0.1
 
         self.calculate_pdc0()
         self.calculate_weight()

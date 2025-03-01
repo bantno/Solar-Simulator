@@ -171,7 +171,7 @@ class TestSingleCaseSimulation(unittest.TestCase):
             simulate_failure=True,
             transition_model_name=transition_model_name,
         )
-        num_runs = 2500
+        num_runs = 1000
         algos = ["Threshold","Optimal"]
         for algo in algos:
             threshold = 0.25
@@ -194,9 +194,9 @@ class TestSingleCaseSimulation(unittest.TestCase):
     def test_run_all_cases_in_folder(self):
         """Test running all cases in the target folder."""
         data_directory = r"SolarSimulator\Tests\test_data\sample_cases\sample_data"
-        transition_model_name = "realistic"
+        transition_model_name = "moderate"
         num_runs = 1
-        algos = ["Threshold"]#, "Optimal"]
+        algos = ["Threshold", "Optimal"]
         tz = pytz.timezone("Etc/GMT-6")  # UTC-6 timezone
 
         self.start_date = datetime(2025, 1, 1, tzinfo=tz)
@@ -225,7 +225,7 @@ class TestSingleCaseSimulation(unittest.TestCase):
                             threshold=threshold,
                             data_file=os.path.join(data_directory, data_file),
                             num_runs=num_runs,
-                            failure_penalty=10,
+                            failure_penalty=5,
                         )
                         filename = f"{algo}_Data_c{self.plane.capacity}_t{threshold}_{self.dt}min_{self.start_date.timetuple().tm_yday}-{self.end_date.timetuple().tm_yday}_{num_runs}_lat{self.lat}_{data_file}.pkl"
                         result.to_pickle(filename)

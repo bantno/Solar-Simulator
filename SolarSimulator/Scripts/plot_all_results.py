@@ -1,5 +1,6 @@
 from BaseClasses.plotting_base import DataProcessor
 
+# dire = r"Results\Analysis"
 dire = r"Results\Analysis"
 processor = DataProcessor(directory=dire)  # Use "." for the current directory
 processor.process_files()

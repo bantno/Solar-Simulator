@@ -82,13 +82,8 @@ class Autonomy:
                 solar_power_wpm2,
                 battery_capacity_J,
             )
-            reward += self.simulate_stochastic_reward(
-                current_state,
-                best_action,
-                k,
-                whale_prob,
-                use_expected_value=self.use_expected_reward,
-            )
+            reward += self.reward(current_state, best_action, wind_speed, whale_prob)
+            
 
             (
                 state_history_list[k + 1],
@@ -184,7 +179,7 @@ class Autonomy:
                 solar_power_wpm2,
                 battery_capacity_J,
             )
-            reward += self.simulate_stochastic_reward(current_state, best_action, k, whale_prob)
+            reward += self.reward(current_state, best_action, wind_speed, whale_prob)
 
             (
                 state_history_list[k + 1],
@@ -281,11 +276,11 @@ class Autonomy:
             - energy_history_list (np.ndarray): An array to store the energy history.
             - u_k_list (np.ndarray): An array to store control inputs.
         """
-        state_history_list = np.empty(max_stages, dtype=tuple)
+        state_history_list = np.empty((max_stages,2))
         energy_history_list = np.zeros(max_stages)
         u_k_list = np.zeros(max_stages)
         failure_prob_list = np.zeros(max_stages)
-        state_history_list[0] = initial_state
+        state_history_list[0,:] = np.array(initial_state)
         energy_history_list[0] = initial_state[0] / 100 * battery_capacity_J
         return state_history_list, energy_history_list, u_k_list, failure_prob_list
 
@@ -323,7 +318,7 @@ class Autonomy:
         is_wind_low = wind_speed < self.wind_threshold
         decide_flight = np.all([is_reward_sufficient, is_battery_sufficient, is_wind_low])
 
-        return decide_flight
+        return 1 if decide_flight else 0
 
     def _determine_charge_threshold_action(
         self,
@@ -360,7 +355,7 @@ class Autonomy:
         Calculate the reward for a given stage, state, action, and wind speed.
         """
         whale_reward = 0 if action==0 else whale_prob
-        failure_reward = -self.failure_penalty * (1-self.transition_model.compute_probability(wind_speed,action,state))
+        failure_reward = -self.failure_penalty * (1-self.transition_model.compute_probability(wind_speed,action,state)[0])
         reward_k = whale_reward + failure_reward
         return reward_k
 

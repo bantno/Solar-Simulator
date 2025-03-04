@@ -69,7 +69,7 @@ class AbstractSimulation(ABC):
         pass
 
     @abstractmethod
-    def _format_simulation_result(self, result, expected_data):
+    def _format_simulation_result(self, result, algo, expected_data):
         pass
 
     @abstractmethod
@@ -216,17 +216,12 @@ class Simulation(AbstractSimulation):
             mdp_model.generate_ev_table()
 
         for i in tqdm(range(num_runs), desc=f"{algo} Simulation", leave=False, mininterval=2):
-            if not self.use_expected:
-                actual_data = self._load_weather_data(
-                    dt, directory=loc, i=i, lat=self.lat, lon=self.lon
-                )
-                actual_data = actual_data.loc[start_date:end_date]
-                sim_solar_data = actual_data["shortwave_radiation"].values
-                sim_wind_data = actual_data["wind_speed_10m"].values
-
-            else:
-                sim_solar_data = expected_data["expected_solar_rad"].values
-                sim_wind_data = expected_data["expected_wind_speed"].values
+            actual_data = self._load_weather_data(
+                dt, directory=loc, i=i, lat=self.lat, lon=self.lon
+            )
+            actual_data = actual_data.loc[start_date:end_date]
+            sim_solar_data = actual_data["shortwave_radiation"].values
+            sim_wind_data = actual_data["wind_speed_10m"].values
 
             result = simulate_method(
                 initial_state=(100, 0),
@@ -238,11 +233,11 @@ class Simulation(AbstractSimulation):
                 threshold=threshold if algo == "Threshold" else None,
             )
 
-            data[i] = self._format_simulation_result(result, expected_data)
+            data[i] = self._format_simulation_result(result, algo, expected_data)
 
         return pd.DataFrame.from_dict(data)
 
-    def _format_simulation_result(self, result, expected_data):
+    def _format_simulation_result(self, result, algo, expected_data):
         if self.save_history:
             (
                 reward,
@@ -259,14 +254,16 @@ class Simulation(AbstractSimulation):
             return {
                 "Reward": reward,
                 "LastStep": last_step,
-                "ActionHistory": list(action_history),  # Convert NumPy array to list
-                "FailureProbHistory": list(failure_prob_history),
-                "StateHistory": list(state_history),
-                "SolarHistory": list(solar_list),
-                "ExpectedSolarHistory": list(expected_data["expected_solar_rad"].values),
-                "WindHistory": list(wind_history),
-                "ExpectedWindHistory": list(expected_data["expected_wind_speed"].values),
-                "WhaleHistory": list(whale_list),
+                "Algorithm": algo,
+                "Capacity": self.plane.capacity,
+                "ActionHistory": action_history,  # Convert NumPy array to list
+                "FailureProbHistory": failure_prob_history,
+                "StateHistory": state_history,
+                "SolarHistory": solar_list,
+                "ExpectedSolarHistory": expected_data["expected_solar_rad"].values,
+                "WindHistory": wind_history,
+                "ExpectedWindHistory": expected_data["expected_wind_speed"].values,
+                "WhaleHistory": whale_list,
                 "FlightHours": flight_minutes / 60,
                 "Failure": is_failure,
             }
@@ -274,6 +271,8 @@ class Simulation(AbstractSimulation):
             reward, last_step, flight_minutes, is_failure = result
             return {
                 "Reward": reward,
+                "Algorithm": algo,
+                "Capacity": self.plane.capacity,
                 "LastStep": last_step,
                 "FlightHours": flight_minutes / 60,
                 "Failure": is_failure,
@@ -505,7 +504,7 @@ class SingleCaseSimulation(Simulation):
             expected_solar_data,
             expected_wind_data,
             whale_observation_data,
-            soc_increment=1,
+            soc_increment=.1,
             timestep_min=dt,
             transition_model=self.transition_model,
             failure_penalty=failure_penalty

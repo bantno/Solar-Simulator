@@ -10,123 +10,6 @@ from scipy.integrate import simpson
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.transition_model_base import ActionSuccessProbabilityModel
 
-
-class AbstractValueFunction(ABC):
-    """Abstract base class for computing P(S=1 | w_k), the probability of action success given wind speed."""
-    def __init__(
-        self,
-        plane: Seaplane,
-        expected_solar_data: np.ndarray,
-        expected_wind_data: np.ndarray,
-        whale_observation_data: np.ndarray,
-        soc_increment: int,
-        timestep_min: int,
-        transition_model: ActionSuccessProbabilityModel,
-        failure_penalty: float = 0.0,
-    ):
-        self.plane = plane
-        self.battery_capacity_wh = self.plane.capacity * self.plane.voltage
-        self.max_collected_power = 1367 * self.plane.solar_panel_efficieny * plane.S
-        self.dt = timestep_min
-        self.soc_increment = soc_increment
-
-        self.expected_solar = expected_solar_data
-        self.expected_wind = expected_wind_data
-        self.expected_whale = whale_observation_data
-
-        self.states = self._create_states(soc_increment, [0, 1])
-        self.transition_model = transition_model
-        self.failure_penalty = failure_penalty
-
-        self.value_table = np.zeros(
-                (int(2 * (100 / soc_increment + 1) + 1), expected_solar_data.shape[0])
-            )
-        self.value_table[-1, :] = -self.failure_penalty
-
-
-    def _create_states(self, soc_increment: int, vehicle_states: list) -> np.ndarray:
-        """
-        Generate a 2D NumPy array representing all possible states of the system.
-
-        The states are defined as pairs of (state of charge, vehicle state) and 
-        are grouped by vehicle state. The state of charge (SoC) values range from 
-        0 to 100 in increments of `soc_increment`. An additional terminal state (-1, 2) 
-        is appended at the end.
-
-        Parameters:
-        -----------
-        soc_increment : int
-            The step size for discretizing the state of charge (SoC) from 0 to 100.
-        vehicle_states : list
-            A list of possible vehicle states.
-
-        Returns:
-        --------
-        np.ndarray
-            A 2D NumPy array where each row represents a state as [SoC, vehicle_state].
-            The states are grouped by vehicle state.
-        """
-        
-        soc_values = np.arange(0, 101, soc_increment)  # Generate SoC values
-        state_values = np.array(vehicle_states)[:, None]  # Convert to column vector
-
-        # Repeat SoC values for each vehicle state (grouped)
-        soc_repeated = np.tile(soc_values, (len(vehicle_states), 1)).T
-        state_repeated = np.repeat(state_values, len(soc_values), axis=1).T
-
-        # Stack the results into a 2D array
-        states = np.column_stack((soc_repeated.ravel(), state_repeated.ravel()))
-
-        # Append the additional (-1, 2) state
-        states = np.vstack([states, [-1, 2]])
-
-        return states
-
-
-
-    @abstractmethod
-    def _value_table_entry(self,full_state, stage)->float:
-        """
-        Calculate the entry in the value table for a specified state and stage.
-
-        Parameters:
-        - full_state (numpy array with two entries): first entry represents the state of charge of the vehicle, second entry represents the vehicle state, either 0 or 1
-        - stage (int): the stage of the simulation
-
-        Returns:
-        - value: float, value table entry for the specified parameters
-        """
-        
-    
-    def _value_table_column(self,stage)->np.ndarray:
-        """
-        Calculate all the entries in the column of the value table that corresponds to a given stage
-
-        Parameters:
-        - stage (int): the stage of the value table that should be calculated
-
-        Returns:
-        - column (np.ndarray): column array that represents the specified column of the value table
-        """
-        num_states = self.states.shape[0]  # Number of possible states
-        column = np.zeros(num_states)
-        
-        for i in range(num_states):
-            full_state = self.states
-            column[i] = self._value_table_entry(full_state, stage)
-        
-        return column
-
-    def _generate_value_table(self)->None:
-        """
-        Populate the value table.
-        """
-        for stage in reversed(range(self.value_table.shape[1])):
-            self.value_table[:,stage] = self._value_table_column(stage)
-
-        return
-
-
 class ValueFunction:
     """The ExpectedValueTable class for the Seaplane MDP."""
     def __init__(
@@ -148,27 +31,31 @@ class ValueFunction:
         self.soc_increment = soc_increment
         self.expected_solar = expected_solar_data
         self.expected_wind = expected_wind_data
+        self.gamma = 1.0
         self.states = self._create_states(soc_increment, [0, 1])
         self.transition_model = transition_model
         self.failure_penalty = failure_penalty
-
-        if 100 % soc_increment != 0:
-            raise ValueError("Given state of charge increment does not divide evenly into 100%.")
-        else:
-            self.ev_table = np.zeros(
-                (int(2 * (100 / soc_increment + 1) + 1), expected_solar_data.shape[0])
-            )
-            self.ev_table[-1, :] = -self.failure_penalty
+        self.ev_table = np.zeros(
+            (int(2 * (100 / soc_increment + 1) + 1), expected_solar_data.shape[0])
+        )
+        self.ev_table[-1, :] = -self.failure_penalty
 
         self.whale_probability_data = whale_observation_data
 
-    def _create_states(self, soc_increment: int, vehicle_states: list) -> list:
-        """
-        Generate a list of states based on state of charge (SoC) increments and vehicle states.
-        """
-        states = [(soc, state) for state in vehicle_states for soc in range(0, 101, soc_increment)]
-        states.append((-1, 2))
-        return states
+    def _create_states(self, soc_increment: float, vehicle_states: np.ndarray) -> list:
+        if 100 % soc_increment != 0:
+            raise ValueError("soc_increment must evenly divide 100.")
+        
+        soc_values = np.arange(0, 100 + soc_increment, soc_increment)
+        
+        grid = np.array(np.meshgrid(soc_values, vehicle_states)).T.reshape(-1, 2)
+        
+        # Sort first by vehicle state (column 1), then by soc_value (column 0)
+        grid = grid[np.lexsort((grid[:, 0], grid[:, 1]))]
+
+        grid = np.append(grid, [[-1, 2]], axis=0)
+        
+        return grid
 
     def generate_ev_table(self):
         """Fill in expected value table."""
@@ -225,8 +112,6 @@ class ValueFunction:
         p1 = p_sufficient_reward
 
         return (p0, p1), alpha_u_0, alpha_u_1
-    
-        
 
     def _calculate_sufficient_solar_probability(
         self, required_energy, current_energy, max_collected_energy, alpha, beta
@@ -406,8 +291,35 @@ class ValueFunction:
             - The result is returned as an integer.
         """
         joules = soc / 100 * self.battery_capacity_wh * 3600
-        return int(joules)
+        return round(joules)
     
+    def joules_to_soc(self, joules):
+        """
+        Convert energy in Joules to state of charge (SOC).
+
+        This method converts the energy stored in the battery (in Joules) into
+        the equivalent state of charge (SOC) percentage.
+
+        Args:
+            joules (int): The energy stored in the battery (in Joules).
+
+        Returns:
+            float: The equivalent state of charge as a percentage (0 to 100).
+
+        Notes:
+            - The conversion uses the battery capacity in watt-hours (`self.battery_capacity_wh`)
+            and converts it to Joules (1 watt-hour = 3600 Joules).
+            - The result is returned as a float.
+        """
+        soc = (joules / (self.battery_capacity_wh * 3600)) * 100
+        return self.round_to_precision(soc, self.soc_increment)
+    
+    def round_to_precision(self, value: float, precision: float) -> float:
+        """
+        Round a value to the nearest specified precision.
+        """
+        return round(value / precision) * precision
+
     def transition_function(self, stage:int, state:np.ndarray, action:int, solar_power_w:np.ndarray, wind_speed:np.ndarray):
         """
         Calculate the next state for a given stage, state, action, solar power, and wind speed.
@@ -511,7 +423,6 @@ class ValueFunction:
             np.ndarray: Array of SOC changes as percentages, rounded to the nearest SOC
             increment, shape (n,).
         """
-        # start_time = time.time()
         # Ensure solar_power is a numpy array with correct dimensions
         solar_power = np.atleast_2d(solar_power).flatten()  # Ensure 1D array
 
@@ -586,13 +497,11 @@ class ValueFunction:
         case_probs, alpha_u_0, alpha_u_1 = self._calculate_case_probabilities(
             k, state,reward_k_u_1)
 
-        # Removed probabilities from here because I think i was double counting them. Alpha already accounts for probability of failure
-        # Really before i fixed this i was tripple counting the probability of failure
-        case_0 = (1-case_probs[1])*(reward_k_u_0 + alpha_u_0)
-        case_1 = case_probs[1]*(reward_k_u_1 + alpha_u_1)
+        # case_0 = (1-case_probs[1])*(reward_k_u_0 + self.gamma*alpha_u_0)
+        # case_1 = case_probs[1]*(reward_k_u_1 + self.gamma*alpha_u_1)
+        # e_j_k =  case_0 + case_1
 
-        # Need to include the negative effect of penalty
-        e_j_k =  case_0 + case_1
+        e_j_k = max([reward_k_u_0 + self.gamma*alpha_u_0, reward_k_u_1 + self.gamma*alpha_u_1])
         return e_j_k
 
     def f_W_vectorized(self, w, c_k, scale_k):

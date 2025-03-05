@@ -654,14 +654,14 @@ class ValueFunction:
         # Add Moored State surface
         fig.add_trace(
             go.Surface(
-                z=moored_data, x=x, y=y, colorscale="Blues", opacity=0.7, name="Moored", showlegend=True
+                z=moored_data, x=x, y=y, colorscale=custom_blue, opacity=1.0, name="Moored", showlegend=True
             )
         )
 
         # Add Flying State surface
         fig.add_trace(
             go.Surface(
-                z=flying_data, x=x, y=y, colorscale="Reds", opacity=0.7, name="Flying", showlegend=True
+                z=flying_data, x=x, y=y, colorscale=custom_red, opacity=0.9, name="Flying", showlegend=True
             )
         )
 
@@ -725,5 +725,5 @@ class ValueFunction:
 
 
 if __name__ == "__main__":
-    data = np.loadtxt("Results\evTable_41_30_realistic.csv", delimiter=",")
-    ValueFunction.plot_surface_plotly(data, capacity=41, failure_penalty=2.0, filename="test")
+    data = np.loadtxt("Results\evTable_20_-30_moderate.csv", delimiter=",")
+    ValueFunction.plot_surface_plotly(data, capacity=20, failure_penalty=10.0, filename="test")

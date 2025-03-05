@@ -33,7 +33,7 @@ class Autonomy:
         # Ensure all data lists have the same length
         max_stages = self._validate_data_lengths(solar_data, wind_data, whale_data)
         battery_capacity_J, nightly_idle_soc, single_flight_soc = self._compute_energy_parameters()
-
+        failure_type = 0
         # Initialize history arrays
         state_history_list, energy_history_list, u_k_list, failure_prob_list = (
             self._initialize_state_history(initial_state, max_stages, battery_capacity_J)
@@ -96,11 +96,13 @@ class Autonomy:
                 state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
                 reward -= self.failure_penalty
                 is_failure = True
+                failure_type = 1
                 break
             elif new_state[0] < 0:
                 state_history_list[k:] = [(-30, 2)] * (len(state_history_list) - k)
                 reward -= self.failure_penalty
                 is_failure = True
+                failure_type = 2
                 break
 
         return self._finalize_simulation(
@@ -114,7 +116,8 @@ class Autonomy:
             wind_data,
             whale_data,
             flight_minutes,
-            is_failure
+            is_failure,
+            failure_type,
         )
 
     def simulate_optimal_mission(
@@ -130,7 +133,7 @@ class Autonomy:
 
         # Ensure all data lists have the same length
         max_stages = self._validate_data_lengths(solar_data, wind_data, whale_data)
-
+        failure_type = 0
         battery_capacity_J = self.plane.capacity * self.mdp_model.plane.voltage * 3600
         state_history_list, energy_history_list, u_k_list, failure_prob_list = (
             self._initialize_state_history(initial_state, max_stages, battery_capacity_J)
@@ -192,11 +195,13 @@ class Autonomy:
                 state_history_list[k:] = [(-10, 2)] * (len(state_history_list) - k)
                 reward -= self.failure_penalty
                 is_failure=True
+                failure_type = 1
                 break
             elif new_state[0] < 0:
                 state_history_list[k:] = [(-15, 2)] * (len(state_history_list) - k)
                 reward -= self.failure_penalty
                 is_failure=True
+                failure_type = 2
                 break
 
         return self._finalize_simulation(
@@ -210,7 +215,8 @@ class Autonomy:
             wind_data,
             whale_data,
             flight_minutes,
-            is_failure
+            is_failure,
+            failure_type,
         )
 
     def simulate_charge_threshold_mission(
@@ -398,6 +404,7 @@ class Autonomy:
         whale_data,
         flight_minutes,
         is_failure,
+        failure_type,
     ):
         """Finalize the simulation results."""
         k += 1
@@ -413,8 +420,9 @@ class Autonomy:
                 whale_data,
                 flight_minutes,
                 is_failure,
+                failure_type,
             )
-        return reward, k, flight_minutes, is_failure
+        return reward, k, flight_minutes, is_failure, failure_type
 
     def simulate_stochastic_reward(
         self, state, action, stage, whale_prob, use_expected_value=False

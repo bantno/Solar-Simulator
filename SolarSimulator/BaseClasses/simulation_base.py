@@ -250,6 +250,7 @@ class Simulation(AbstractSimulation):
                 whale_list,
                 flight_minutes,
                 is_failure,
+                failure_type,
             ) = result
             return {
                 "Reward": reward,
@@ -266,9 +267,10 @@ class Simulation(AbstractSimulation):
                 "WhaleHistory": whale_list,
                 "FlightHours": flight_minutes / 60,
                 "Failure": is_failure,
+                "FailureType": failure_type,
             }
         else:
-            reward, last_step, flight_minutes, is_failure = result
+            reward, last_step, flight_minutes, is_failure, failure_type = result
             return {
                 "Reward": reward,
                 "Algorithm": algo,
@@ -276,6 +278,7 @@ class Simulation(AbstractSimulation):
                 "LastStep": last_step,
                 "FlightHours": flight_minutes / 60,
                 "Failure": is_failure,
+                "FailureType": failure_type,
             }
 
     def get_expected_weather_data(

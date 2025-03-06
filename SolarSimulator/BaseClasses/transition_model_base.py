@@ -201,6 +201,58 @@ class OnlySuccessProbability(ActionSuccessProbabilityModel):
 
         return success_prob
 
+class WindIndependentSuccessProbability(ActionSuccessProbabilityModel):
+    """Probability model using where a valid vehicle state and action always leads to a successful transition."""
+
+    def __init__(self,name="nowind"):
+        """
+        Initialize the probability model with default parameters.
+        """
+        self.name=name
+
+    def compute_probability(self, wind_speed, action, state):
+        """
+        Compute P(S=1 | w_k) based on the vehicle's state and action.
+
+        Parameters:
+        - wind_speed (float or np.array): Current wind speed or an array of wind speeds.
+        - action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
+        - state (tuple or np.array): System state at the current stage, or an array of states.
+
+        Returns:
+        - np.array: Probabilities of success for each element.
+        """
+
+        wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
+        vehicle_mode = state[:, 1]
+
+        # Initialize probabilities assuming success
+        success_prob = np.ones_like(vehicle_mode, dtype=float)
+
+        # Handle the broken vehicle case
+        success_prob[vehicle_mode == 2] = 0
+
+        # Handle action-state combinations with vectorized indexing
+        # Takeoff (action == 1 and vehicle_mode == 0)
+        success_prob[(action == 1) & (vehicle_mode == 0)] = 0.99
+        # Floating (action == 0 and vehicle_mode == 0)
+        success_prob[(action == 0) & (vehicle_mode == 0)] = 0.9999
+        # Flying (action == 1 and vehicle_mode == 1)
+        success_prob[(action == 1) & (vehicle_mode == 1)] = 0.999
+        # Landing (action == 0 and vehicle_mode == 1)
+        success_prob[(action == 0) & (vehicle_mode == 1)] = 0.95
+
+        # Check for invalid combinations in a single step
+        invalid_combinations = (action == 1) & (
+            vehicle_mode == 2
+        )  # Invalid: action 1 and broken vehicle
+        invalid_combinations |= (action == 0) & (
+            vehicle_mode == 2
+        )  # Invalid: action 0 and broken vehicle
+        if np.any(invalid_combinations):
+            raise ValueError("Invalid combination of action and vehicle mode.")
+
+        return success_prob
 
 class TestSuccessProbability(ActionSuccessProbabilityModel):
     """Probability model using where a valid vehicle state and action always leads to a successful transition."""
@@ -520,6 +572,7 @@ class ProbabilityModelFactory:
         "test": TestSuccessProbability,
         "moderate": ModerateSuccessProbability,
         "some": SomeSuccessProbability,
+        "nowind": WindIndependentSuccessProbability,
         # Add more models here as needed
         # 'new_model': NewModelClass,
     }
@@ -568,7 +621,7 @@ class ProbabilityModelFactory:
 if __name__ == "__main__":
     factory = ProbabilityModelFactory()
     model = factory.select_probability_model(
-        "some",
+        "moderate",
     )
     print(model)
     model.visualize_success_probability()

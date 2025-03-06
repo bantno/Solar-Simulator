@@ -64,7 +64,7 @@ class ValueFunction:
                 self.ev_table[idx, k] = self._ev_entry(k, state)
 
         filename = f"evTable_{self.plane.capacity}_{self.plane.lat}_{self.transition_model.name}"
-        self.plot_surface_plotly(self.ev_table, self.plane.capacity, self.failure_penalty, filename)
+        # self.plot_surface_plotly(self.ev_table, self.plane.capacity, self.failure_penalty, filename)
         np.savetxt("Results\\" + filename + ".csv", self.ev_table, delimiter=",")
 
     def _calculate_case_probabilities(self, stage, state, reward_k_u_1):
@@ -151,10 +151,14 @@ class ValueFunction:
         """"
         Calculate the reward for a given stage, state, action, and wind speed.
         """
+        # TODO: Add wind speed sampling to this method and vectorize. Need to unify with future value calculation???
         whale_reward = 0 if action==0 else self.whale_probability_data[stage] * 1
         shape = self.expected_wind[stage, 0]
         scale = self.expected_wind[stage, 1]
-        failure_reward = -self.failure_penalty * (1-self._compute_success_probability(action,state,shape,scale))
+        transition_failure_prob = 1-self._compute_success_probability(action,state,shape,scale)
+        insufficient_solar_prob = 1-self._calculate_sufficient_solar_probability(
+            self._calculate_required_energy(state, action), self.soc_to_joules(state[0]), self.max_collected_power, self.expected_solar[stage, 0], self.expected_solar[stage, 1])
+        failure_reward = -self.failure_penalty * transition_failure_prob *(1-insufficient_solar_prob) - self.failure_penalty * insufficient_solar_prob
         reward_k = whale_reward + failure_reward
         return reward_k
 
@@ -485,7 +489,7 @@ class ValueFunction:
 
     def _ev_entry(self, k, state):
 
-        if state[0] == 0:
+        if state[0] < 3:
             return 0
         elif k == self.ev_table.shape[1] - 1:
             return self.last_entry(k,state)
@@ -725,5 +729,6 @@ class ValueFunction:
 
 
 if __name__ == "__main__":
-    data = np.loadtxt("Results\evTable_20_-30_moderate.csv", delimiter=",")
+    filename = r"Results\Analysis\Corrected Failure Penalty\1monthHigherfailurepenalty\evTable_30_-30_moderate.csv"
+    data = np.loadtxt(filename, delimiter=",")
     ValueFunction.plot_surface_plotly(data, capacity=20, failure_penalty=10.0, filename="test")

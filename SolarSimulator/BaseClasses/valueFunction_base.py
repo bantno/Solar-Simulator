@@ -155,12 +155,23 @@ class ValueFunction:
         whale_reward = 0 if action==0 else self.whale_probability_data[stage] * 1
         shape = self.expected_wind[stage, 0]
         scale = self.expected_wind[stage, 1]
-        transition_failure_prob = 1-self._compute_success_probability(action,state,shape,scale)
-        insufficient_solar_prob = 1-self._calculate_sufficient_solar_probability(
-            self._calculate_required_energy(state, action), self.soc_to_joules(state[0]), self.max_collected_power, self.expected_solar[stage, 0], self.expected_solar[stage, 1])
-        failure_reward = -self.failure_penalty * transition_failure_prob *(1-insufficient_solar_prob) - self.failure_penalty * insufficient_solar_prob
-        reward_k = whale_reward + failure_reward
-        return reward_k
+        alpha = self.expected_solar[stage, 0]
+        beta = self.expected_solar[stage, 1]
+
+        # transition_failure_prob = 1-self._compute_success_probability(action,state,shape,scale)
+        # insufficient_solar_prob = 1-self._calculate_sufficient_solar_probability(
+        #     self._calculate_required_energy(state, action), self.soc_to_joules(state[0]), self.max_collected_power, self.expected_solar[stage, 0], self.expected_solar[stage, 1])
+        # failure_reward = -self.failure_penalty * transition_failure_prob *(1-insufficient_solar_prob) - self.failure_penalty * insufficient_solar_prob
+        # reward_k_analytical = whale_reward + failure_reward
+        # return reward_k_analytical
+        
+        solar_samples = np.random.beta(alpha, beta, size=5000) * self.max_collected_power
+        wind_samples = np.random.weibull(shape, size=5000) * scale
+        failure_reward_k = np.mean(-self.failure_penalty * np.where(self.transition_function(stage, state, action, solar_samples, wind_samples)[:,1]==2,1,0))
+        
+        # print(failure_reward, failure_reward_k)
+        return whale_reward + failure_reward_k
+        
 
     def _calculate_sufficient_reward_probability(
         self, stage, state, reward_k, alpha_k, beta_k, shape, scale, n=5000

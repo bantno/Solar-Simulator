@@ -7,7 +7,7 @@ class ActionSuccessProbabilityModel(ABC):
     """Abstract base class for computing P(S=1 | w_k), the probability of action success given wind speed."""
 
     @abstractmethod
-    def compute_probability(self, wind_speed, action, state):
+    def compute_probability(self, wind_speed, action, state) -> np.ndarray:
         """
         Compute the probability of action success.
 
@@ -77,7 +77,6 @@ class ActionSuccessProbabilityModel(ABC):
         plt.grid(True)
         plt.show()
 
-
 class SigmoidSuccessProbability(ActionSuccessProbabilityModel):
     """Abstract base class for probability models using a sigmoid function."""
 
@@ -110,7 +109,6 @@ class SigmoidSuccessProbability(ActionSuccessProbabilityModel):
         - float: Computed sigmoid value.
         """
         pass
-
 
 class LinearSuccessProbability(ActionSuccessProbabilityModel):
     """Alternative probability model where failure probability increases linearly with wind speed."""
@@ -146,7 +144,6 @@ class LinearSuccessProbability(ActionSuccessProbabilityModel):
         success_prob = np.where(success_prob < 0, 0, success_prob)
 
         return success_prob
-
 
 class OnlySuccessProbability(ActionSuccessProbabilityModel):
     """Probability model using where a valid vehicle state and action always leads to a successful transition."""
@@ -293,18 +290,7 @@ class TestSuccessProbability(ActionSuccessProbabilityModel):
         # Landing (action == 0 and vehicle_mode == 1) -> probability 0.25
         success_prob[(action == 0) & (vehicle_mode == 1)] = 0.25
 
-        # Check for invalid combinations in a single step
-        invalid_combinations = (action == 1) & (
-            vehicle_mode == 2
-        )  # Invalid: action 1 and broken vehicle
-        invalid_combinations |= (action == 0) & (
-            vehicle_mode == 2
-        )  # Invalid: action 0 and broken vehicle
-        if np.any(invalid_combinations):
-            raise ValueError("Invalid combination of action and vehicle mode.")
-
         return success_prob
-
 
 class RealisticSuccessProbability(SigmoidSuccessProbability):
     """Sigmoid probability model using a logistic function for takeoff and landing failure probabilities."""
@@ -377,7 +363,6 @@ class RealisticSuccessProbability(SigmoidSuccessProbability):
 
     def sigmoid(self, x, a, b):
         return 1 / (1.1 + np.exp(a - b * x))
-
 
 class ModerateSuccessProbability(SigmoidSuccessProbability):
     """Sigmoid probability model using a logistic function for takeoff and landing failure probabilities."""
@@ -489,7 +474,6 @@ class SomeSuccessProbability(SigmoidSuccessProbability):
     def sigmoid(self, x, a, b):
         return 1 / (1.1 + np.exp(a - b * x))
 
-
 class OptimisticSuccessProbability(SigmoidSuccessProbability):
     """Sigmoid probability model using a logistic function for takeoff and landing failure probabilities."""
 
@@ -558,7 +542,6 @@ class OptimisticSuccessProbability(SigmoidSuccessProbability):
 
     def sigmoid(self, x, a, b):
         return 1 / (1 + np.exp(a - b * x))
-
 
 class ProbabilityModelFactory:
     """Factory class to select the appropriate action success probability model."""

@@ -600,6 +600,213 @@ class ProbabilityModelFactory:
         return model_name.lower() in ProbabilityModelFactory.list_models()
 
 
+class AbstractTransitionLogic(ABC):
+    """
+    Abstract base class for transition logic in an MDP simulation.
+    
+    This class defines the interface for computing state transitions
+    and provides helper methods for converting state-of-charge (SOC) to energy,
+    energy to SOC, and minutes to seconds. Concrete subclasses must implement the
+    `transition` method and provide the necessary attributes for the helper methods.
+    """
+
+    @property
+    @abstractmethod
+    def battery_capacity_joules(self) -> float:
+        """
+        Battery capacity in Joules.
+        
+        Concrete subclasses must provide this value.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def soc_increment(self) -> float:
+        """
+        Increment for state-of-charge (SOC) values.
+        
+        Concrete subclasses must provide this value.
+        """
+        pass
+
+    @abstractmethod
+    def transition(self, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
+        """
+        Compute and return the next states given the current states, actions, and time step t.
+        
+        Parameters:
+            states (np.ndarray): Array of current states (shape: [n, state_dim]).
+            actions (np.ndarray): Array of actions for each state (shape: [n,]).
+            t (int): The current time step index.
+        
+        Returns:
+            np.ndarray: Array of next states (shape: [n, state_dim]).
+        """
+        pass
+
+    def soc_to_energy(self, soc: np.ndarray) -> np.ndarray:
+        """
+        Convert state of charge (SOC) to energy in Joules.
+        
+        Parameters:
+            soc (np.ndarray): Array of SOC percentages.
+        
+        Returns:
+            np.ndarray: Energy values in Joules.
+        """
+        return (soc / 100.0) * self.battery_capacity_joules
+
+    def energy_to_soc(self, next_energy: np.ndarray) -> np.ndarray:
+        """
+        Convert energy in Joules to state of charge (SOC) percentage,
+        flooring the result to the nearest soc_increment.
+        
+        Parameters:
+            next_energy (np.ndarray): Array of energy values in Joules.
+        
+        Returns:
+            np.ndarray: SOC values floored to the nearest soc_increment.
+        """
+        raw_soc = (next_energy / self.battery_capacity_joules) * 100.0
+        floored_soc = np.floor(raw_soc / self.soc_increment) * self.soc_increment
+        return floored_soc
+
+    def min_to_seconds(self, minutes: float) -> float:
+        """
+        Convert minutes to seconds.
+        
+        Parameters:
+            minutes (float): Value in minutes.
+        
+        Returns:
+            float: Equivalent value in seconds.
+        """
+        return minutes * 60.
+
+class DeterministicTransitionLogic(AbstractTransitionLogic):
+    """
+    A concrete implementation of AbstractTransitionLogic using a deterministic model.
+    
+    This class computes the next state by applying energy conservation,
+    incorporating environmental inputs (solar and wind data), and a transition
+    probability model. It mirrors the logic originally embedded in the MDP's
+    transition method.
+    """
+    
+    def __init__(self, battery_capacity_joules: float, soc_increment: float,
+                 idle_power: float, cruise_power: float, takeoff_power: float,
+                 delta_t: float, solar_rate_series: np.ndarray, wind_series: np.ndarray,
+                 transition_model):
+        """
+        Initialize the deterministic transition logic with the necessary parameters.
+        
+        Parameters:
+            battery_capacity_joules (float): Battery capacity in Joules.
+            soc_increment (float): Increment for SOC percentages.
+            idle_power (float): Energy consumption when moored.
+            cruise_power (float): Energy consumption when flying.
+            takeoff_power (float): Additional energy consumption for takeoff.
+            delta_t (float): Time step duration in minutes.
+            solar_rate_series (np.ndarray): Time series data for solar power.
+            wind_series (np.ndarray): Time series data for wind speed.
+            transition_model: An instance that implements a compute_probability method.
+        """
+        self._battery_capacity_joules = battery_capacity_joules
+        self._soc_increment = soc_increment
+        self.idle_power = idle_power
+        self.cruise_power = cruise_power
+        self.takeoff_power = takeoff_power
+        self.delta_t = delta_t
+        self.solar_rate_series = solar_rate_series
+        self.wind_series = wind_series
+        self.transition_model = transition_model
+
+    @property
+    def battery_capacity_joules(self) -> float:
+        return self._battery_capacity_joules
+
+    @property
+    def soc_increment(self) -> float:
+        return self._soc_increment
+    
+    def sample_energy_gain(self,stage,n):
+        # Compute energy gain from solar input.
+        if stage >= len(self.solar_rate_series):
+            raise IndexError("Time index t exceeds the length of solar_rate_series.")
+        energy_gain = np.full((n,), self.solar_rate_series[stage] * self.delta_t)
+        return energy_gain
+    
+    def sample_wind_speeds(self,stage,n):
+        if stage >= len(self.wind_series):
+            raise IndexError("Time index t exceeds the length of wind_series.")
+        wind_speeds = np.full((n,), self.wind_series[stage])
+        return wind_speeds
+
+
+    def transition(self, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
+        """
+        Compute the next states given current states, actions, and time step t.
+        
+        This method replicates the MDP’s original transition logic:
+          - Compute energy consumption based on mode and action.
+          - Use solar data to calculate energy gain.
+          - Compute the next state-of-charge (SOC) and corresponding mode.
+          - Apply a transition probability based on wind speed to determine if the
+            transition is successful.
+        
+        Parameters:
+            states (np.ndarray): Array of current states (shape: [n, state_dim]).
+            actions (np.ndarray): Array of actions for each state (shape: [n,]).
+            t (int): The current time step index.
+            
+        Returns:
+            np.ndarray: Array of next states (shape: [n, state_dim]).
+        """
+        # Calculate energy consumption for different scenarios.
+        moored_float_energy = self.idle_power * self.min_to_seconds(self.delta_t)
+        takeoff_energy = (self.cruise_power + self.takeoff_power) * self.min_to_seconds(self.delta_t)
+        land_energy = self.cruise_power * self.min_to_seconds(self.delta_t) / 4
+        continue_flight_energy = self.cruise_power * self.min_to_seconds(self.delta_t)
+        
+        # Lookup table for energy consumption: rows correspond to modes (0: moored, 1: flying, 2: broken).
+        energy_lookup = np.array([
+            [moored_float_energy, takeoff_energy],
+            [land_energy, continue_flight_energy],
+            [0, 0]  # Dummy values for mode 2 (broken).
+        ])
+        
+        # Determine energy consumption for each state-action pair.
+        energy_consumption = energy_lookup[states[:, 1].astype(int), actions]
+
+        energy_gain = self.sample_energy_gain(t,states.shape[0])
+        
+        # Convert current SOC to energy, update energy, and convert back to SOC.
+        current_energy = self.soc_to_energy(states[:, 0])
+        next_energy = current_energy + energy_gain - energy_consumption
+        next_soc = np.clip(self.energy_to_soc(next_energy),-1.,100.)
+        
+        # Determine the next mode: if SOC is depleted then mode 2 (broken), otherwise 0 for moored if action 0, 1 for flying.
+        next_mode = np.where(next_soc <= 0, 2, np.where(actions == 0, 0, 1))
+        next_state = np.column_stack((next_soc, next_mode))
+        
+        # Compute wind speeds and determine the probability of a successful transition.
+        wind_speeds = self.sample_wind_speeds(t,states.shape[0])
+        success_probabilities = self.transition_model.compute_probability(wind_speeds, actions, states)
+        
+        # Randomly decide transition success; if failed, return a 'false' state.
+        false_states = np.tile(np.array([-1.0, 2]), (states.shape[0], 1))
+        random_vals = np.random.rand(states.shape[0])[:, np.newaxis]
+        next_states = np.where(random_vals < success_probabilities[:, np.newaxis],
+                                 next_state,
+                                 false_states)
+        # For failed transitions, ensure SOC is set to -1.
+        mode2_mask = next_states[:, 1] == 2
+        next_states[mode2_mask, 0] = -1.0
+        
+        return next_states
+
+
 # Example usage:
 if __name__ == "__main__":
     factory = ProbabilityModelFactory()

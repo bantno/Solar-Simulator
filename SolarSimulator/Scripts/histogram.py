@@ -6,7 +6,7 @@ import numpy as np
 
 
 # Directory containing the .pkl files
-directory = r"Results\Analysis\Corrected Failure Penalty\1month"
+directory = r"Results\Analysis"
 
 # List all .pkl files in the directory
 pkl_files = [f for f in os.listdir(directory) if f.endswith('.pkl')]

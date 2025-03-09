@@ -31,7 +31,7 @@ class AbstractSimulation(ABC):
         self.initial_state = initial_state
 
     @abstractmethod
-    def choose_action(self, state: np.ndarray, t: int) -> int:
+    def choose_action(self, **kwargs) -> int:
         """
         Select an action given the current state and time step.
 
@@ -44,9 +44,12 @@ class AbstractSimulation(ABC):
         Returns:
             int: The chosen action (e.g., 0 for mooring, 1 for flying).
         """
-        pass
 
-    def simulate_episode(self):
+    def simulate_episode(self,
+                         solar_samples_w:float,
+                         wind_samples_ms:float,
+                         whale_observations:float,
+                         ):
         """
         Simulate a single episode (trajectory) of the MDP using the policy determined by choose_action.
 
@@ -61,7 +64,15 @@ class AbstractSimulation(ABC):
         actions = []
         rewards = []
         for t in range(self.horizon):
-            action = self.choose_action(state, t)
+
+            # Get data for timestep
+            solar_sample = solar_samples_w[t]
+            wind_sample = wind_samples_ms[t]
+            whale_observation = whale_observations[t]
+            action = self.choose_action(state=state,
+                                        solar_sample_w=solar_sample,
+                                        wind_sample_ms=wind_sample,
+                                        whale_observation=whale_observation)
             actions.append(action)
             # Delegate to the MDP's step function to get the next state and reward.
             next_state, reward = self.mdp.step(np.array([state]), np.array([action]), t)
@@ -72,7 +83,7 @@ class AbstractSimulation(ABC):
                 break
         return trajectory, actions, rewards
 
-    def simulate_multiple_episodes(self, num_episodes: int):
+    def simulate_multiple_episodes(self, solar_data, wind_data, whale_data, num_episodes: int):
         """
         Simulate multiple episodes to evaluate policy performance.
 
@@ -85,11 +96,78 @@ class AbstractSimulation(ABC):
                 Each dictionary contains 'trajectory', 'actions', and 'rewards' for one episode.
         """
         episodes = []
-        for _ in range(num_episodes):
-            traj, acts, rews = self.simulate_episode()
+        if num_episodes > min([wind_data.shape[0],solar_data.shape[0],whale_data.shape[0]]):
+            raise IndexError("Number of requested episodes exceeds provided data.")
+
+        for i in range(num_episodes):
+            solar_samples_w = solar_data[i,:]
+            wind_samples_ms = wind_data[i,:]
+            whale_observations = whale_data[i,:]
+            traj, acts, rews = self.simulate_episode(solar_samples_w,wind_samples_ms,whale_observations)
             episodes.append({
                 'trajectory': traj,
                 'actions': acts,
                 'rewards': rews
             })
         return episodes
+
+
+class AlwaysFlySimulation(AbstractSimulation):
+    def choose_action(self,**kwargs) -> int:
+        # Always choose to fly (action 1)
+        return 1
+
+class AlwaysFloatSimulation(AbstractSimulation):
+    def choose_action(self,**kwargs) -> int:
+        # Always choose to float (action 0)
+        return 0
+    
+class ObservationThresholdSimulation(AbstractSimulation):
+    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, observation_threshold: float, wind_threshold: float):
+        # Initialize the base simulation attributes.
+        super().__init__(mdp, horizon, initial_state)
+        # Add the new wind_threshold attribute.
+        self.observation_threshold = observation_threshold
+        self.wind_threshold = wind_threshold
+        self.low_battery_threshold = 5. # Set this based on energy required to fly such that failure due to running out of battery will never occur
+
+    def choose_action(self,
+                      state,
+                      solar_sample_w,
+                      wind_sample_ms,
+                      whale_observation) -> int:
+        
+    
+        
+        action = 0
+        is_wind_acceptable = wind_sample_ms < self.wind_threshold
+        is_observation_sufficient = whale_observation > self.observation_threshold
+        is_battery_sufficient = state[0] > self.low_battery_threshold
+
+        if is_wind_acceptable and is_observation_sufficient and is_battery_sufficient:
+            action = 1
+
+        return action
+        
+class DeterministicOptimalSimulation(AbstractSimulation):
+    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray):
+        # Initialize the base simulation attributes.
+        super().__init__(mdp_solver.mdp, horizon, initial_state)
+        mdp_solver.solve()
+        self.mdp_solver = mdp_solver
+
+    def choose_action(self,
+                      state,solar_sample_w,
+                      wind_sample_ms,
+                      whale_observation,
+                      t,
+                      ) -> int:
+        
+        value_list = [-10000,-10000]
+        for action in [0,1]:
+            next_state, reward = self.mdp.step(state[np.newaxis,:],np.array(action),t)
+            value = self.mdp_solver.value_function(t,reward,next_state)
+            value_list[action] = value
+
+        action = np.argmax(value_list)
+        return action

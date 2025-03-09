@@ -1,18 +1,7 @@
 import unittest
 import numpy as np
 from BaseClasses.mdp_base import DeterministicMDP
-from BaseClasses.simulation_base import AbstractSimulation
-
-# Concrete simulation implementations based on your usage example.
-class AlwaysFlySimulation(AbstractSimulation):
-    def choose_action(self, state: np.ndarray, t: int) -> int:
-        # Always choose to fly (action 1)
-        return 1
-
-class AlwaysFloatSimulation(AbstractSimulation):
-    def choose_action(self, state: np.ndarray, t: int) -> int:
-        # Always choose to float (action 0)
-        return 0
+from BaseClasses.simulation_base import AbstractSimulation, AlwaysFloatSimulation, AlwaysFlySimulation, ObservationThresholdSimulation
 
 class TestSimulationSOCBounds(unittest.TestCase):
     def setUp(self):
@@ -51,30 +40,52 @@ class TestSimulationSOCBounds(unittest.TestCase):
     def test_always_fly_simulation_soc_bounds(self):
         # Use an initial state with full battery.
         initial_state = np.array([100, 0])
+        solar_data = np.tile(self.solar_rate_series,(3,1))
+        wind_data = np.tile(self.wind_series,(3,1))
+        whale_data = np.tile(self.whale_reward_series,(3,1))
+        initial_state = np.array([20, 0])
         sim = AlwaysFlySimulation(self.mdp, self.horizon, initial_state)
-        trajectory, actions, rewards = sim.simulate_episode()
+        trajectory, actions, rewards = sim.simulate_episode(solar_data[0,:],wind_data[0,:],whale_data[0,:])
         self.check_soc_bounds(trajectory)
 
     def test_always_float_simulation_soc_bounds(self):
         # Use an initial state with a lower SOC.
+        solar_data = np.tile(self.solar_rate_series,(3,1))
+        wind_data = np.tile(self.wind_series,(3,1))
+        whale_data = np.tile(self.whale_reward_series,(3,1))
         initial_state = np.array([20, 0])
         sim = AlwaysFloatSimulation(self.mdp, self.horizon, initial_state)
-        trajectory, actions, rewards = sim.simulate_episode()
+        trajectory, actions, rewards = sim.simulate_episode(solar_data[0,:],wind_data[0,:],whale_data[0,:])
+        self.check_soc_bounds(trajectory)
+
+    def test_observation_threshold_simulation_soc_bounds(self):
+        # Use an initial state with a lower SOC.
+        solar_data = np.tile(self.solar_rate_series,(3,1))
+        wind_data = np.tile(self.wind_series,(3,1))
+        whale_data = np.tile(self.whale_reward_series,(3,1))
+        initial_state = np.array([20, 0])
+        sim = ObservationThresholdSimulation(self.mdp, self.horizon, initial_state,0.5,10)
+        trajectory, actions, rewards = sim.simulate_episode(solar_data[0,:],wind_data[0,:],whale_data[0,:])
         self.check_soc_bounds(trajectory)
 
     def test_multiple_episodes_soc_bounds(self):
         # Test that in multiple episodes, the SOC remains within bounds.
         # For AlwaysFlySimulation.
         initial_state = np.array([100, 0])
+        solar_data = np.tile(self.solar_rate_series,(3,1))
+        wind_data = np.tile(self.wind_series,(3,1))
+        whale_data = np.tile(self.whale_reward_series,(3,1))
+
         sim = AlwaysFlySimulation(self.mdp, self.horizon, initial_state)
-        episodes = sim.simulate_multiple_episodes(3)
+
+        episodes = sim.simulate_multiple_episodes(solar_data,wind_data,whale_data,3)
         for ep in episodes:
             self.check_soc_bounds(ep['trajectory'])
         
         # For AlwaysFloatSimulation.
         initial_state = np.array([20, 0])
         sim = AlwaysFloatSimulation(self.mdp, self.horizon, initial_state)
-        episodes = sim.simulate_multiple_episodes(3)
+        episodes = sim.simulate_multiple_episodes(solar_data,wind_data,whale_data,3)
         for ep in episodes:
             self.check_soc_bounds(ep['trajectory'])
 

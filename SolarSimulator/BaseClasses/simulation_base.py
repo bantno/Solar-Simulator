@@ -1,173 +1,149 @@
 from abc import ABC, abstractmethod
 import numpy as np
+from BaseClasses.environment_provider_base import AbstractEnvironmentProvider
 
 class AbstractSimulation(ABC):
     """
     Abstract base class for simulating decision-making policies in an MDP.
 
-    This class ensures that all simulation algorithms:
-      - Use the same reward function defined in the MDP.
-      - Employ identical energy dynamics and state transitions as specified by the MDP.
-      
-    The simulation loop delegates state transitions and reward computation to the MDP's step function,
-    ensuring consistency. Subclasses must implement the abstract method `choose_action`, which defines
-    the decision-making process (e.g. optimal policy via backward induction or a future threshold-based algorithm).
+    The simulation loop now relies on an environment provider to supply environmental
+    data (solar, wind, whale observation) rather than passing these arrays explicitly.
     """
     
-    def __init__(self, mdp, horizon: int, initial_state: np.ndarray):
+    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, env_provider: AbstractEnvironmentProvider = None):
         """
-        Initialize the simulation.
-
         Parameters:
-            mdp : AbstractMDP
-                An instance of a class that implements the MDP (e.g., DeterministicMDP).
-            horizon : int
-                Total number of simulation time steps.
-            initial_state : np.ndarray
-                The starting state for the simulation (must match the MDP's state representation).
+            mdp: An instance of a class that implements the MDP.
+            horizon: Total number of simulation time steps.
+            initial_state: The starting state.
+            env_provider: Provides environmental samples. If not provided, the simulation
+                          will attempt to use the MDP’s own provider.
         """
         self.mdp = mdp
         self.horizon = horizon
         self.initial_state = initial_state
+        if env_provider is None and hasattr(mdp, 'env_provider'):
+            self.env_provider = mdp.env_provider
+        else:
+            self.env_provider = env_provider
 
     @abstractmethod
     def choose_action(self, **kwargs) -> int:
         """
         Select an action given the current state and time step.
-
-        Parameters:
-            state : np.ndarray
-                The current state.
-            t : int
-                The current time step.
-
-        Returns:
-            int: The chosen action (e.g., 0 for mooring, 1 for flying).
         """
+        pass
 
-    def simulate_episode(self,
-                         solar_samples_w:float,
-                         wind_samples_ms:float,
-                         whale_observations:float,
-                         ):
+    def simulate_episode(self):
         """
-        Simulate a single episode (trajectory) of the MDP using the policy determined by choose_action.
-
-        Returns:
-            tuple:
-                trajectory (list of np.ndarray): The list of states visited during the simulation.
-                actions (list of int): The actions taken at each time step.
-                rewards (list of float): The rewards obtained at each time step.
+        Simulate a single episode using the policy and environment provider.
         """
         state = self.initial_state
         trajectory = [state]
         actions = []
         rewards = []
         for t in range(self.horizon):
-
-            # Get data for timestep
-            solar_sample = solar_samples_w[t]
-            wind_sample = wind_samples_ms[t]
-            whale_observation = whale_observations[t]
+            # Sample environmental data
+            solar_sample = self.env_provider.sample_sunlight(t, 1)[0]
+            wind_sample = self.env_provider.sample_wind_speed(t, 1)[0]
+            whale_observation = self.env_provider.sample_whale_observation(t, 1)[0]
             action = self.choose_action(state=state,
                                         solar_sample_w=solar_sample,
                                         wind_sample_ms=wind_sample,
-                                        whale_observation=whale_observation)
+                                        whale_observation=whale_observation,
+                                        t=t)
             actions.append(action)
-            # Delegate to the MDP's step function to get the next state and reward.
             next_state, reward = self.mdp.step(np.array([state]), np.array([action]), t)
-            state = next_state[0]  # Extract the state from the returned array.
+            state = next_state[0]
             trajectory.append(state)
             rewards.append(reward[0])
-            if next_state[0,1] == 2:
+            if state[1] == 2:
                 break
         return trajectory, actions, rewards
 
-    def simulate_multiple_episodes(self, solar_data, wind_data, whale_data, num_episodes: int):
-        """
-        Simulate multiple episodes to evaluate policy performance.
-
-        Parameters:
-            num_episodes : int
-                The number of episodes to simulate.
-
-        Returns:
-            list of dict:
-                Each dictionary contains 'trajectory', 'actions', and 'rewards' for one episode.
-        """
+    def simulate_multiple_episodes(self, num_episodes: int):
         episodes = []
-        if num_episodes > min([wind_data.shape[0],solar_data.shape[0],whale_data.shape[0]]):
-            raise IndexError("Number of requested episodes exceeds provided data.")
-
-        for i in range(num_episodes):
-            solar_samples_w = solar_data[i,:]
-            wind_samples_ms = wind_data[i,:]
-            whale_observations = whale_data[i,:]
-            traj, acts, rews = self.simulate_episode(solar_samples_w,wind_samples_ms,whale_observations)
-            episodes.append({
-                'trajectory': traj,
-                'actions': acts,
-                'rewards': rews
-            })
+        for _ in range(num_episodes):
+            traj, acts, rews = self.simulate_episode()
+            episodes.append({'trajectory': traj, 'actions': acts, 'rewards': rews})
         return episodes
 
 
 class AlwaysFlySimulation(AbstractSimulation):
-    def choose_action(self,**kwargs) -> int:
-        # Always choose to fly (action 1)
+    def choose_action(self, **kwargs) -> int:
         return 1
 
 class AlwaysFloatSimulation(AbstractSimulation):
-    def choose_action(self,**kwargs) -> int:
-        # Always choose to float (action 0)
+    def choose_action(self, **kwargs) -> int:
         return 0
     
 class ObservationThresholdSimulation(AbstractSimulation):
-    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, observation_threshold: float, wind_threshold: float):
-        # Initialize the base simulation attributes.
-        super().__init__(mdp, horizon, initial_state)
-        # Add the new wind_threshold attribute.
+    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, observation_threshold: float, wind_threshold: float, env_provider=None):
+        super().__init__(mdp, horizon, initial_state, env_provider)
         self.observation_threshold = observation_threshold
         self.wind_threshold = wind_threshold
-        self.low_battery_threshold = 5. # Set this based on energy required to fly such that failure due to running out of battery will never occur
+        self.low_battery_threshold = 5.0
 
-    def choose_action(self,
-                      state,
-                      solar_sample_w,
-                      wind_sample_ms,
-                      whale_observation) -> int:
-        
-    
-        
+    def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
         action = 0
         is_wind_acceptable = wind_sample_ms < self.wind_threshold
         is_observation_sufficient = whale_observation > self.observation_threshold
         is_battery_sufficient = state[0] > self.low_battery_threshold
-
         if is_wind_acceptable and is_observation_sufficient and is_battery_sufficient:
             action = 1
-
         return action
         
 class DeterministicOptimalSimulation(AbstractSimulation):
-    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray):
-        # Initialize the base simulation attributes.
-        super().__init__(mdp_solver.mdp, horizon, initial_state)
+    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray, env_provider=None):
+        super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
         mdp_solver.solve()
         self.mdp_solver = mdp_solver
 
-    def choose_action(self,
-                      state,solar_sample_w,
-                      wind_sample_ms,
-                      whale_observation,
-                      t,
-                      ) -> int:
-        
-        value_list = [-10000,-10000]
-        for action in [0,1]:
-            next_state, reward = self.mdp.step(state[np.newaxis,:],np.array(action),t)
-            value = self.mdp_solver.value_function(t,reward,next_state)
+    def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
+        value_list = [-10000, -10000]
+        for action in [0, 1]:
+            next_state, reward = self.mdp.step(np.array([state]), np.array([action]), t)
+            value = self.mdp_solver.value_function(t, reward, next_state)
             value_list[action] = value
+        return int(np.argmax(value_list))
 
-        action = np.argmax(value_list)
-        return action
+class OptimalPolicySimulation(AbstractSimulation):
+    """
+    Simulation class that selects the optimal action by evaluating the Bellman value 
+    for each action (0 or 1) using a backward induction solver.
+    
+    This class fits into the same framework as AlwaysFlySimulation and AlwaysFloatSimulation.
+    """
+
+    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray, env_provider=None):
+        """
+        Parameters:
+            mdp_solver: A backward induction solver that has computed the value function.
+                        It must have attributes `mdp` and a method `value_function(t, reward, next_state)`.
+            horizon (int): Total number of simulation time steps.
+            initial_state (np.ndarray): Starting state (e.g. [SoC, mode]).
+            env_provider: (Optional) An environment provider to sample solar, wind, and whale data.
+        """
+        # Initialize the simulation using the MDP from the solver.
+        super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
+        # Pre-solve the MDP (compute the value function using backward induction).
+        mdp_solver.solve()
+        self.mdp_solver = mdp_solver
+
+    def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
+        """
+        For the current state and time t, simulate both possible actions (0 and 1)
+        using the MDP's step function, then evaluate the Bellman value (reward + γ * future value)
+        via the solver's value_function. The action with the highest value is returned.
+        """
+        # Initialize with very low values so that they get replaced.
+        value_list = [-np.inf, -np.inf]
+        for action in [0, 1]:
+            # Roll forward one time step with the candidate action.
+            next_state, reward = self.mdp.step(np.array([state]), np.array([action]), t)
+            # Compute the value using the backward induction solver's value function.
+            value = self.mdp_solver.value_function(t, reward, next_state)
+            value_list[action] = value
+        # Return the action that yields the highest value.
+        print(value_list)
+        return int(np.argmax(value_list))

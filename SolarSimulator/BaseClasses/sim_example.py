@@ -1,87 +1,50 @@
 import numpy as np
 from BaseClasses.mdp_base import DeterministicMDP
-# Import your AbstractSimulation from wherever you defined it.
-from BaseClasses.simulation_base import AbstractSimulation  
-
-# Define a concrete simulation subclass.
-class AlwaysFlySimulation(AbstractSimulation):
-    def choose_action(self, state: np.ndarray, t: int) -> int:
-        """
-        A simple policy that always chooses to fly (action 1).
-        """
-        return 1
-
-class AlwaysFloatSimulation(AbstractSimulation):
-    def choose_action(self, state: np.ndarray, t: int) -> int:
-        """
-        A simple policy that always chooses to fly (action 1).
-        """
-        return 0
+from BaseClasses.simulation_base import AlwaysFlySimulation, AlwaysFloatSimulation
+from BaseClasses.environment_provider_base import DeterministicEnvironmentProvider
 
 # ----- Setup dummy parameters for the MDP -----
+solar_rate_series = np.full(10, 50)      # Constant solar rate
+wind_series = np.full(10, 5.0)                 # Constant wind speed
+whale_reward_series = np.full(10, 1)           # Constant whale reward
 
-# Create simple time series arrays for solar and wind data (10 time steps each).
-solar_rate_series = np.full(10, 100000)       # Constant solar rate of 0.5
-wind_series = np.full(10, 5.0)               # Constant wind speed of 5.0
+battery_capacity_wh = 200 * 60 * 60 * 2 / 3600  # Battery capacity in watt-hours.
+idle_power = 0                                  # Consumption when moored.
+cruise_power = 200                              # Consumption while flying.
+takeoff_power = 200                             # Additional consumption for takeoff.
+failure_penalty = 1000                          # Penalty for failed transition.
+delta_t = 15                                    # Duration (minutes) per time step.
+gamma = 1.0                                   # Discount factor.
+transition_model_name = "moderate"              # Transition model name.
+soc_increment = 5.0                             # Increment for SoC.
 
-battery_capacity_wh = 200*60*60*5/3600        # Battery capacity in watt-hours.
-idle_power = 0                  # Power consumption (when moored) per time step.
-cruise_power = 200               # Power consumption while flying.
-takeoff_power = 200              # Additional power consumption for takeoff.
-whale_reward_series = np.full(10, 1)       # Constant whale reward of 100
-failure_penalty = 1000                       # Penalty for a failed transition
-delta_t = 15                                 # Duration of each time step in minutes
-gamma = 1.0                                  # Discount factor
-transition_model_name = "moderate"           # Name of the transition model to use
-soc_increment = 5.0                          # Increment for state-of-charge (SOC)
+# Create a deterministic environment provider.
+env_provider = DeterministicEnvironmentProvider(solar_rate_series, wind_series, whale_reward_series, delta_t)
 
-# ----- Instantiate the MDP -----
+# ----- Instantiate the MDP with the environment provider -----
 mdp = DeterministicMDP(
     battery_capacity_wh, idle_power, cruise_power, takeoff_power,
     solar_rate_series, wind_series, whale_reward_series,
-    failure_penalty, delta_t, gamma, transition_model_name, soc_increment
+    failure_penalty, delta_t, gamma, transition_model_name, soc_increment,
+    env_provider=env_provider
 )
 
-# Define an initial state for the simulation.
-# Here, the state is represented as [SoC, mode]: full battery (100%) and mode 0 (moored).
-initial_state = np.array([100, 0])
-
-# Set the simulation horizon (e.g., 10 time steps).
 horizon = 10
+initial_state = np.array([100, 0])  # [SoC, mode]
 
-# ----- Instantiate and run the simulation -----
-sim = AlwaysFlySimulation(mdp, horizon, initial_state)
-
-# Run a single simulation episode.
+# ----- Simulation with AlwaysFlySimulation -----
+sim = AlwaysFlySimulation(mdp, horizon, initial_state, env_provider=env_provider)
 trajectory, actions, rewards = sim.simulate_episode()
-print("Single Episode Simulation:")
+print("AlwaysFlySimulation Episode:")
 print("Trajectory:", trajectory)
 print("Actions:", actions)
 print("Rewards:", rewards)
 
-# Run multiple episodes (e.g., 3 episodes).
-episodes = sim.simulate_multiple_episodes(3)
-print("\nMultiple Episodes Simulation:")
-for idx, ep in enumerate(episodes):
-    print(f"Episode {idx + 1}:")
-    print("Trajectory:", ep['trajectory'])
-    print("Actions:", ep['actions'])
-    print("Rewards:", ep['rewards'])
-
+# ----- Simulation with AlwaysFloatSimulation -----
 initial_state = np.array([20, 0])
-sim = AlwaysFloatSimulation(mdp, horizon, initial_state)
-# Run a single simulation episode.
-trajectory, actions, rewards = sim.simulate_episode()
-print("Single Episode Simulation:")
+sim_float = AlwaysFloatSimulation(mdp, horizon, initial_state, env_provider=env_provider)
+trajectory, actions, rewards = sim_float.simulate_episode()
+print("\nAlwaysFloatSimulation Episode:")
 print("Trajectory:", trajectory)
 print("Actions:", actions)
 print("Rewards:", rewards)
-
-# Run multiple episodes (e.g., 3 episodes).
-episodes = sim.simulate_multiple_episodes(3)
-print("\nMultiple Episodes Simulation:")
-for idx, ep in enumerate(episodes):
-    print(f"Episode {idx + 1}:")
-    print("Trajectory:", ep['trajectory'])
-    print("Actions:", ep['actions'])
-    print("Rewards:", ep['rewards'])

@@ -5,7 +5,7 @@ from BaseClasses.environment_provider_base import DeterministicEnvironmentProvid
 from BaseClasses.simulation_base import OptimalPolicySimulation, ObservationThresholdSimulation
 
 # Assume SimulationStorage is defined in simulation_storage.py
-from BaseClasses.simulation_file_io_base import SimulationStorage
+from BaseClasses.simulation_storage import SimulationStorage
 
 # ----- Simulation and environment setup -----
 horizon = 150

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 from BaseClasses.environment_provider_base import AbstractEnvironmentProvider
+from tqdm import tqdm
 
 class AbstractSimulation(ABC):
     """
@@ -42,6 +43,9 @@ class AbstractSimulation(ABC):
         trajectory = [state]
         actions = []
         rewards = []
+        solar_samples = []
+        wind_samples = []
+        whale_samples = []
         for t in range(self.horizon):
             # Sample environmental data
             solar_sample = self.env_provider.sample_sunlight(t, 1)[0]
@@ -57,9 +61,12 @@ class AbstractSimulation(ABC):
             state = next_state[0]
             trajectory.append(state)
             rewards.append(reward[0])
+            solar_samples.append(solar_sample)
+            wind_samples.append(wind_sample)
+            whale_samples.append(whale_observation)
             if state[1] == 2:
                 break
-        return trajectory, actions, rewards
+        return trajectory, actions, rewards, solar_samples, wind_samples, whale_samples
 
     def simulate_multiple_episodes(self, num_episodes: int):
         """
@@ -67,12 +74,15 @@ class AbstractSimulation(ABC):
         Each episode is yielded as a dictionary containing its trajectory, actions, rewards,
         and a metadata dictionary with the episode index.
         """
-        for episode_index in range(num_episodes):
-            traj, acts, rews = self.simulate_episode()
+        for episode_index in tqdm(range(num_episodes)):
+            traj, acts, rews, solar, wind, whale = self.simulate_episode()
             episode_data = {
                 'trajectory': traj,
                 'actions': acts,
                 'rewards': rews,
+                'solar_series': solar,
+                'wind_series': wind,
+                'whale_series': whale,
                 'metadata': {'episode_index': episode_index},
                 'total_reward': sum(rews),
 
@@ -93,7 +103,7 @@ class ObservationThresholdSimulation(AbstractSimulation):
         super().__init__(mdp, horizon, initial_state, env_provider)
         self.observation_threshold = observation_threshold
         self.wind_threshold = wind_threshold
-        self.low_battery_threshold = 10.0
+        self.low_battery_threshold = 25.
 
     def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
         action = 0
@@ -106,6 +116,20 @@ class ObservationThresholdSimulation(AbstractSimulation):
         
 class DeterministicOptimalSimulation(AbstractSimulation):
     def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray, env_provider=None):
+        super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
+        mdp_solver.solve()
+        self.mdp_solver = mdp_solver
+
+    def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
+        value_list = [-10000, -10000]
+        for action in [0, 1]:
+            next_state, reward = self.mdp.step(np.array([state]), np.array([action]), t)
+            value = self.mdp_solver.value_function(t, reward, next_state)
+            value_list[action] = value
+        return int(np.argmax(value_list))
+    
+class OptimalSimulation(AbstractSimulation):
+    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray, env_provider):
         super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
         mdp_solver.solve()
         self.mdp_solver = mdp_solver

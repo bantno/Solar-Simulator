@@ -62,11 +62,22 @@ class AbstractSimulation(ABC):
         return trajectory, actions, rewards
 
     def simulate_multiple_episodes(self, num_episodes: int):
-        episodes = []
-        for _ in range(num_episodes):
+        """
+        Generate simulation episodes one-by-one.
+        Each episode is yielded as a dictionary containing its trajectory, actions, rewards,
+        and a metadata dictionary with the episode index.
+        """
+        for episode_index in range(num_episodes):
             traj, acts, rews = self.simulate_episode()
-            episodes.append({'trajectory': traj, 'actions': acts, 'rewards': rews})
-        return episodes
+            episode_data = {
+                'trajectory': traj,
+                'actions': acts,
+                'rewards': rews,
+                'metadata': {'episode_index': episode_index},
+                'total_reward': sum(rews),
+
+            }
+            yield episode_data
 
 
 class AlwaysFlySimulation(AbstractSimulation):
@@ -82,7 +93,7 @@ class ObservationThresholdSimulation(AbstractSimulation):
         super().__init__(mdp, horizon, initial_state, env_provider)
         self.observation_threshold = observation_threshold
         self.wind_threshold = wind_threshold
-        self.low_battery_threshold = 5.0
+        self.low_battery_threshold = 10.0
 
     def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
         action = 0
@@ -145,5 +156,4 @@ class OptimalPolicySimulation(AbstractSimulation):
             value = self.mdp_solver.value_function(t, reward, next_state)
             value_list[action] = value
         # Return the action that yields the highest value.
-        print(value_list)
         return int(np.argmax(value_list))

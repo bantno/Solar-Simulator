@@ -2,9 +2,9 @@ import numpy as np
 from BaseClasses.mdp_base import DeterministicMDP
 from BaseClasses.backward_induction_base import DeterministicMDPBackwardSolver
 from BaseClasses.environment_provider_base import DeterministicEnvironmentProvider
-from BaseClasses.simulation_base import OptimalPolicySimulation
+from BaseClasses.simulation_base import OptimalPolicySimulation, ObservationThresholdSimulation
 
-horizon = 30
+horizon = 100
 
 # ----- Setup dummy parameters for the MDP -----
 solar_rate_series = np.full(horizon, 4000)      # Constant solar rate for 10 time steps
@@ -14,7 +14,7 @@ x = np.linspace(0, np.pi, horizon)
 
 # Compute the sine values for x, which forms a half sine wave
 whale_reward_series = np.sin(x)
-print(whale_reward_series)
+# print(whale_reward_series)
 # whale_reward_series = np.full(horizon, 1)           # Constant whale reward
 
 battery_capacity_wh = 200 * 60 * 60 * 2 / 3600  # Battery capacity in watt-hours.
@@ -42,16 +42,70 @@ mdp = DeterministicMDP(
 
 initial_state = np.array([100, 0])  # full battery (SoC 100) and mode 0 (moored)
 
-# ----- Create and solve the backward induction solver -----
-solver = DeterministicMDPBackwardSolver(mdp, horizon)
+# # ----- Create and solve the backward induction solver -----
+# solver = DeterministicMDPBackwardSolver(mdp, horizon)
 
-# ----- Instantiate the OptimalPolicySimulation using the solver -----
-optimal_sim = OptimalPolicySimulation(solver, horizon, initial_state, env_provider=env_provider)
+# # ----- Instantiate the OptimalPolicySimulation using the solver -----
+# optimal_sim = OptimalPolicySimulation(solver, horizon, initial_state, env_provider=env_provider)
+
+# # ----- Run a simulation episode -----
+# trajectory, actions, rewards = optimal_sim.simulate_episode()
+
+# print("Optimal Policy Simulation Episode:")
+# print("Trajectory:", trajectory)
+# print("Actions:", actions)
+# print("Rewards:", rewards)
+# print("Total Reward:", sum(rewards))
+
+threshold_sim = ObservationThresholdSimulation(mdp,horizon,initial_state,0.5,10,env_provider)
 
 # ----- Run a simulation episode -----
-trajectory, actions, rewards = optimal_sim.simulate_episode()
+trajectory, actions, rewards = threshold_sim.simulate_episode()
 
-print("Optimal Policy Simulation Episode:")
+print("Threshold Policy Simulation Episode:")
+print("Trajectory:", trajectory)
+print("Actions:", actions)
+print("Rewards:", rewards)
+print("Total Reward:", sum(rewards))
+
+threshold_sim = ObservationThresholdSimulation(mdp,horizon,initial_state,0.0,10,env_provider)
+
+# ----- Run a simulation episode -----
+trajectory, actions, rewards = threshold_sim.simulate_episode()
+
+print("Threshold Policy Simulation Episode:")
+print("Trajectory:", trajectory)
+print("Actions:", actions)
+print("Rewards:", rewards)
+print("Total Reward:", sum(rewards))
+threshold_sim = ObservationThresholdSimulation(mdp,horizon,initial_state,0.5,10,env_provider)
+
+# ----- Run a simulation episode -----
+trajectory, actions, rewards = threshold_sim.simulate_episode()
+
+print("Threshold Policy Simulation Episode:")
+print("Trajectory:", trajectory)
+print("Actions:", actions)
+print("Rewards:", rewards)
+print("Total Reward:", sum(rewards))
+
+threshold_sim = ObservationThresholdSimulation(mdp,horizon,initial_state,0.9,10,env_provider)
+
+# ----- Run a simulation episode -----
+trajectory, actions, rewards = threshold_sim.simulate_episode()
+
+print("Threshold Policy Simulation Episode:")
+print("Trajectory:", trajectory)
+print("Actions:", actions)
+print("Rewards:", rewards)
+print("Total Reward:", sum(rewards))
+
+threshold_sim = ObservationThresholdSimulation(mdp,horizon,initial_state,0.99,10,env_provider)
+
+# ----- Run a simulation episode -----
+trajectory, actions, rewards = threshold_sim.simulate_episode()
+
+print("Threshold Policy Simulation Episode:")
 print("Trajectory:", trajectory)
 print("Actions:", actions)
 print("Rewards:", rewards)

@@ -687,6 +687,7 @@ class DeterministicTransitionLogic(AbstractTransitionLogic):
         mode2_mask = next_states[:, 1] == 2
         next_states[mode2_mask, 0] = -1.0
         return next_states
+    
 # Example usage:
 if __name__ == "__main__":
     factory = ProbabilityModelFactory()

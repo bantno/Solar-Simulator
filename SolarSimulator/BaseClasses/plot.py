@@ -168,9 +168,9 @@ def plot_multiple_episodes(episodes, episode_indices=None):
         axs[5].plot(range(len(whale)), whale, marker='o', label=label)
 
     
-    axs[0].legend()
-    axs[1].legend()
-    axs[2].legend()
+    # axs[0].legend()
+    # axs[1].legend()
+    # axs[2].legend()
     fig.suptitle("Comparing Episodes Across Simulations", fontsize=16)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
@@ -267,7 +267,8 @@ def compare_episodes_across_simulations(storage_dir, sims_and_episodes=None):
 #   - Simulation #1, episode #2
 #   - Simulation #2, all episodes (None)
 usage_example = {
-    5: [0],
-    10: [0]
+    0: [0],
+    6: [0],
+
 }
 compare_episodes_across_simulations(storage_dir="simulation_results", sims_and_episodes=usage_example)

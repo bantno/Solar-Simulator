@@ -5,60 +5,55 @@ from BaseClasses.simulation_base import ObservationThresholdSimulation, OptimalP
 from BaseClasses.simulation_run_manager import SimulationRunManager
 from BaseClasses.backward_induction_base import DeterministicMDPBackwardSolver
 
-# ----- Simulation and Environment Setup -----
-horizon = 100
-solar_rate_series = np.full(horizon, 4000)
-wind_series = np.full(horizon, 5.0)
-x = np.linspace(0, np.pi*12, horizon)
-whale_reward_series = np.sin(x)
-solar_rate_series = np.clip(np.sin(x)*4000,0,4000)
 
-battery_capacity_wh = 200 * 60 * 60 * 4 / 3600
-idle_power = 0
-cruise_power = 200
-takeoff_power = 200
-failure_penalty = 1
-delta_t = 15
-gamma = 1.0
-transition_model_name = "nofail"
-soc_increment = 1.0
+if __name__ == "__main__":
+    # ----- Simulation and Environment Setup -----
+    horizon = 200
+    solar_rate_series = np.full(horizon, 4000)
+    wind_series = np.full(horizon, 5.0)
+    x = np.linspace(0, np.pi*12, horizon)
+    whale_reward_series = np.sin(x)
+    solar_rate_series = np.clip(np.sin(x)*4000,0,4000)
 
-env_provider = DeterministicEnvironmentProvider(solar_rate_series, wind_series,
-                                                whale_reward_series, delta_t)
+    battery_capacity_wh = 200 * 60 * 60 * 4 / 3600
+    idle_power = 0
+    cruise_power = 200
+    takeoff_power = 200
+    failure_penalty = 15
+    delta_t = 15
+    gamma = 1.0
+    transition_model_name = "moderate"
+    soc_increment = 1.0
 
-mdp = DeterministicMDP(
-    battery_capacity_wh, idle_power, cruise_power, takeoff_power,
-    solar_rate_series, wind_series, whale_reward_series,
-    failure_penalty, delta_t, gamma, transition_model_name, soc_increment,
-    env_provider=env_provider
-)
+    env_provider = DeterministicEnvironmentProvider(solar_rate_series, wind_series,
+                                                    whale_reward_series, delta_t)
 
-initial_state = np.array([100, 0])
+    mdp = DeterministicMDP(
+        battery_capacity_wh, idle_power, cruise_power, takeoff_power,
+        solar_rate_series, wind_series, whale_reward_series,
+        failure_penalty, delta_t, gamma, transition_model_name, soc_increment,
+        env_provider=env_provider
+    )
 
-# ----- Create Simulation Instances -----
-# solver = DeterministicMDPBackwardSolver(mdp, horizon)
-# sim_opt = OptimalPolicySimulation(solver, horizon, initial_state, env_provider)
+    initial_state = np.array([100, 0])
 
-# A list of simulation instances (they can be of different types).
-# simulation_list = [sim_obs, sim_opt]
-# simulation_list = [sim_obs]
-simulation_list = [
-    ObservationThresholdSimulation(mdp, horizon, initial_state, 0.0, 10, env_provider),
-    ObservationThresholdSimulation(mdp, horizon, initial_state, 0.1, 10, env_provider),
-    ObservationThresholdSimulation(mdp, horizon, initial_state, 0.2, 10, env_provider),
-    ObservationThresholdSimulation(mdp, horizon, initial_state, 0.3, 10, env_provider),
-    ObservationThresholdSimulation(mdp, horizon, initial_state, 0.4, 10, env_provider),
-    ObservationThresholdSimulation(mdp, horizon, initial_state, 0.5, 10, env_provider),
-    ObservationThresholdSimulation(mdp, horizon, initial_state, 0.6, 10, env_provider),
-    ObservationThresholdSimulation(mdp, horizon, initial_state, 0.7, 10, env_provider),
-    ObservationThresholdSimulation(mdp, horizon, initial_state, 0.8, 10, env_provider),
-    ObservationThresholdSimulation(mdp, horizon, initial_state, 0.9, 10, env_provider),
-    # sim_opt
-]
+    # ----- Create Simulation Instances -----
+    solver = DeterministicMDPBackwardSolver(mdp, horizon)
+    sim_opt = OptimalPolicySimulation(solver, horizon, initial_state, env_provider)
 
-# ----- Set Up and Run the SimulationRunManager -----
-episodes_per_simulation = 1  # Number of episodes per simulation run
-run_manager = SimulationRunManager(episodes_per_simulation, storage_dir="simulation_results")
+    # A list of simulation instances (they can be of different types).
+    # simulation_list = [sim_obs, sim_opt]
+    # simulation_list = [sim_obs]
+    simulation_list = [
+        ObservationThresholdSimulation(mdp, horizon, initial_state, 0.0, 10, env_provider),
+        ObservationThresholdSimulation(mdp, horizon, initial_state, 0.5, 10, env_provider),
+        ObservationThresholdSimulation(mdp, horizon, initial_state, 0.9, 10, env_provider),
+        sim_opt
+    ]
 
-# Run all simulations provided in the list. Each simulation run is stored as a batch.
-run_manager.run_simulations(simulation_list)
+    # ----- Set Up and Run the SimulationRunManager -----
+    episodes_per_simulation = 10000  # Number of episodes per simulation run
+    run_manager = SimulationRunManager(episodes_per_simulation, storage_dir="simulation_results")
+
+    # Run all simulations provided in the list. Each simulation run is stored as a batch.
+    run_manager.run_simulations(simulation_list)

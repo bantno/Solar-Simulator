@@ -2,9 +2,9 @@ import matplotlib.pyplot as plt
 
 # Example data (labels & average rewards)
 simulation_labels = [
-    "Threshold (obs=0.0, wind=1.0)",
-    "Threshold (obs=0.5, wind=1.0)",
-    "Threshold (obs=1.0, wind=1.0)",
+    "Threshold (obs=0.0, wind=10.0)",
+    "Threshold (obs=0.5, wind=10.0)",
+    "Threshold (obs=1.0, wind=10.0)",
     "Optimal Policy"
 ]
 average_rewards = [9.467, 10.426, 12.704, 19.393]

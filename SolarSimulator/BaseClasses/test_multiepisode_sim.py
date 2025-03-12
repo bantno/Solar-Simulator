@@ -8,10 +8,10 @@ from BaseClasses.backward_induction_base import DeterministicMDPBackwardSolver
 
 if __name__ == "__main__":
     # ----- Simulation and Environment Setup -----
-    horizon = 200
+    horizon = 1000
     solar_rate_series = np.full(horizon, 4000)
     wind_series = np.full(horizon, 5.0)
-    x = np.linspace(0, np.pi*12, horizon)
+    x = np.linspace(0, np.pi*48, horizon)
     whale_reward_series = np.sin(x)
     solar_rate_series = np.clip(np.sin(x)*4000,0,4000)
 

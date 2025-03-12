@@ -11,7 +11,7 @@ class AbstractSimulation(ABC):
     data (solar, wind, whale observation) rather than passing these arrays explicitly.
     """
     
-    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, env_provider: AbstractEnvironmentProvider = None):
+    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, env_provider: AbstractEnvironmentProvider = None, save_history = False):
         """
         Parameters:
             mdp: An instance of a class that implements the MDP.
@@ -23,6 +23,7 @@ class AbstractSimulation(ABC):
         self.mdp = mdp
         self.horizon = horizon
         self.initial_state = initial_state
+        self.save_history = save_history
         if env_provider is None and hasattr(mdp, 'env_provider'):
             self.env_provider = mdp.env_provider
         else:
@@ -76,17 +77,22 @@ class AbstractSimulation(ABC):
         """
         for episode_index in tqdm(range(num_episodes)):
             traj, acts, rews, solar, wind, whale = self.simulate_episode()
-            episode_data = {
-                'trajectory': traj,
-                'actions': acts,
-                'rewards': rews,
-                'solar_series': solar,
-                'wind_series': wind,
-                'whale_series': whale,
-                'metadata': {'episode_index': episode_index},
-                'total_reward': sum(rews),
-
-            }
+            if self.save_history:
+                episode_data = {
+                    'trajectory': traj,
+                    'actions': acts,
+                    'rewards': rews,
+                    'solar_series': solar,
+                    'wind_series': wind,
+                    'whale_series': whale,
+                    'metadata': {'episode_index': episode_index},
+                    'total_reward': sum(rews),
+                }
+            else:
+                episode_data = {
+                    'metadata': {'episode_index': episode_index},
+                    'total_reward': sum(rews),
+                }
             yield episode_data
 
 

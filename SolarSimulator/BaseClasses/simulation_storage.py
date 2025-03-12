@@ -35,7 +35,7 @@ class SimulationStorage:
         """
         filename = self._get_simulation_filename(self.simulation_counter)
         print("Storing Simulation Data")
-        np.savez(filename, simulation_metadata=simulation_metadata, episodes=episodes)
+        np.savez_compressed(filename, simulation_metadata=simulation_metadata, episodes=episodes)
         self.simulation_counter += 1
     
     def load_simulation(self, simulation_id: int) -> dict:

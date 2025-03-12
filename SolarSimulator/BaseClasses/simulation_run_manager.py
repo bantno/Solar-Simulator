@@ -42,7 +42,7 @@ class SimulationRunManager:
                 # Update the episode's metadata (the generator already set an episode_index).
                 episode["metadata"].update(metadata)
                 # Compute and add the total reward.
-                episode["total_reward"] = sum(episode.get("rewards", []))
+                episode["total_reward"] = episode.get("total_reward",sum(episode.get("rewards", [])))
                 episodes.append(episode)
             
             # Create simulation-level metadata.

@@ -232,10 +232,10 @@ if __name__ == "__main__":
     )
     hourly_df = processor.process_hourly_data()
     hourly_df.to_pickle(rf"Data\HISTORICAL_DATA\data_{lat}_{lon}")
-    # resampled_df = processor.resample_data(timestep_min)
+    resampled_df = processor.resample_data(timestep_min)
 
-    # expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
-    # processor.fit_distributions(resampled_df, expected_data_filename)
+    expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
+    processor.fit_distributions(resampled_df, expected_data_filename)
 
     # synthetic_data_directory = rf"Data\SYNTHETIC_DATA\lat{lat}"
 

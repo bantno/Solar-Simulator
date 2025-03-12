@@ -104,3 +104,4 @@ class DeterministicMDP(AbstractMDP):
         failure_penalty = np.where(next_states[:, 1] == 2, self.failure_penalty, 0.0)
         rewards = whale_reward - failure_penalty
         return rewards
+

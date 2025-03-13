@@ -536,8 +536,8 @@ if __name__ == '__main__':
     # For demonstration, here is an example sim_results dictionary.
 
     plotter = SimulationPlotter(storage_dir="simulation_results")
-    plotter.load_and_plot_reward_violin(simulation_ids=[0,1,2,3])
-    # plotter.load_and_plot_reward_histogram_subplots(simulation_ids=[0,2,3])
+    # plotter.load_and_plot_reward_violin(simulation_ids=[0,1,2,3])
+    plotter.load_and_plot_reward_histogram_subplots(simulation_ids=[0,1,2,3])
     
     # Other methods can be used similarly:
     # plotter.plot_specific_episode(simulation_id=0, episode_index=0)

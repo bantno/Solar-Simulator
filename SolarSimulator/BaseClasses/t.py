@@ -67,7 +67,7 @@ if __name__ == '__main__':
 
     # solar_rate_series = np.full(horizon, 4000)
     wind_series = np.full(horizon, 5.0)
-    x = np.linspace(0, np.pi*48, horizon)
+    x = np.linspace(0, np.pi*10, horizon)
     whale_reward_series = np.sin(x)
     solar_rate_series_fake = np.clip(np.sin(x)*4000,0,4000)
     t_indices = np.arange(horizon)
@@ -82,7 +82,7 @@ if __name__ == '__main__':
 
     # ----- Instantiate the custom environment provider -----
     env_provider = StochasticWindEnvironmentProvider(
-        solar_rate_series=solar_rate_series,
+        solar_rate_series=solar_rate_series_fake,
         wind_distributions=wind_distributions,
         whale_reward_series=whale_reward_series,
         delta_t=delta_t

@@ -642,6 +642,7 @@ class DeterministicTransitionLogic(AbstractTransitionLogic):
         self.transition_model = transition_model
 
         if env_provider is None:
+            print("Fraud")
             env_provider = DeterministicEnvironmentProvider(solar_rate_series, wind_series, 
                                                             np.zeros_like(solar_rate_series), delta_t)
         self.env_provider = env_provider

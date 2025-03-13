@@ -13,8 +13,8 @@ if __name__ == "__main__":
     # For each time step t, the first value is the Weibull shape (k)
     # and the second value is the Weibull scale (λ), here varying with a diurnal pattern.
 
-    horizon = 1000
-    battery_capacity_wh = 200 * 60 * 60 * 10 / 3600
+    horizon = 100
+    battery_capacity_wh = 444
     idle_power = 0
     cruise_power = 200
     takeoff_power = 200
@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
     # solar_rate_series = np.full(horizon, 4000)
     wind_series = np.full(horizon, 5.0)
-    x = np.linspace(0, np.pi*48, horizon)
+    x = np.linspace(0, np.pi*10, horizon)
     whale_reward_series = np.sin(x)
     solar_rate_series_fake = np.clip(np.sin(x)*4000,0,4000)
     t_indices = np.arange(horizon)
@@ -39,6 +39,14 @@ if __name__ == "__main__":
     wind_scale = data['weibull_scale'].values[:horizon]
     wind_distributions = np.column_stack((wind_shape, wind_scale))
     solar_rate_series = data['expected_solar_rad'].values[:horizon]*0.1*delta_t*60
+
+    # solar_rate_series = np.full(horizon, 4000)
+    wind_series = np.full(horizon, 5.0)
+    x = np.linspace(np.pi, np.pi*4, horizon)
+    whale_reward_series = 0.5*np.sin(x)+0.5
+    solar_rate_series_fake = np.clip(np.sin(x)*4000,0,4000)
+    t_indices = np.arange(horizon)
+    
 
     # ----- Instantiate the custom environment provider -----
     env_provider = StochasticWindEnvironmentProvider(

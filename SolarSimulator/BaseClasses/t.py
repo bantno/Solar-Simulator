@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from BaseClasses.environment_provider_base import StochasticWindEnvironmentProvider, DeterministicEnvironmentProvider
 
 def plot_environment(env_provider, time_steps, n=1):
     """
@@ -33,7 +34,7 @@ def plot_environment(env_provider, time_steps, n=1):
     plt.subplot(3, 1, 1)
     plt.plot(time_steps, solar_vals, marker='o')
     plt.title('Solar Energy over Time')
-    plt.ylabel('Solar Rate')
+    plt.ylabel('Solar Energy [J]')
 
     plt.subplot(3, 1, 2)
     plt.plot(time_steps, wind_vals, marker='o')
@@ -52,7 +53,7 @@ def plot_environment(env_provider, time_steps, n=1):
 # Example usage:
 if __name__ == '__main__':
     # Instantiate the stochastic environment provider.
-    from environment_provider_base import StochasticWindEnvironmentProvider
+    
     horizon = 100
     battery_capacity_wh = 200 * 60 * 60 * 10 / 3600
     idle_power = 0
@@ -87,6 +88,26 @@ if __name__ == '__main__':
         whale_reward_series=whale_reward_series,
         delta_t=delta_t
     )
+
+    horizon = 100
+    solar_rate_series = np.full(horizon, 4000)
+    wind_series = np.full(horizon, 5.0)
+    x = np.linspace(0, np.pi*4, horizon)
+    whale_reward_series = np.sin(x)
+    solar_rate_series = np.clip(np.sin(x)*4000,0,4000)
+
+    battery_capacity_wh = 200 * 60 * 60 * 4 / 3600
+    idle_power = 0
+    cruise_power = 200
+    takeoff_power = 200
+    failure_penalty = 15
+    delta_t = 15
+    gamma = 1.0
+    transition_model_name = "moderate"
+    soc_increment = 1.0
+
+    env_provider = DeterministicEnvironmentProvider(solar_rate_series, wind_series,
+                                                whale_reward_series, delta_t)
     # Define a range of time steps.
     time_steps = np.arange(horizon)
 

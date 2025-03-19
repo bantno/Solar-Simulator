@@ -629,22 +629,64 @@ class AbstractTransitionLogic(ABC):
 class DeterministicTransitionLogic(AbstractTransitionLogic):
     def __init__(self, battery_capacity_joules: float, soc_increment: float,
                  idle_power: float, cruise_power: float, takeoff_power: float,
-                 delta_t: float, solar_rate_series: np.ndarray, wind_series: np.ndarray,
-                 transition_model, env_provider: AbstractEnvironmentProvider = None):
+                 delta_t: float, transition_model, env_provider: AbstractEnvironmentProvider):
         self._battery_capacity_joules = battery_capacity_joules
         self._soc_increment = soc_increment
         self.idle_power = idle_power
         self.cruise_power = cruise_power
         self.takeoff_power = takeoff_power
         self.delta_t = delta_t
-        self.solar_rate_series = solar_rate_series
-        self.wind_series = wind_series
         self.transition_model = transition_model
+        self.env_provider = env_provider
 
-        if env_provider is None:
-            print("Fraud")
-            env_provider = DeterministicEnvironmentProvider(solar_rate_series, wind_series, 
-                                                            np.zeros_like(solar_rate_series), delta_t)
+    @property
+    def battery_capacity_joules(self) -> float:
+        return self._battery_capacity_joules
+
+    @property
+    def soc_increment(self) -> float:
+        return self._soc_increment
+
+    def sample_energy_gain(self, stage, n):
+        return self.env_provider.sample_sunlight(stage, n)
+
+    def sample_wind_speeds(self, stage, n):
+        return self.env_provider.sample_wind_speed(stage, n)
+
+    def transition(self, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
+        moored_float_energy = self.idle_power * self.min_to_seconds(self.delta_t)
+        takeoff_energy = (self.cruise_power + self.takeoff_power) * self.min_to_seconds(self.delta_t)
+        land_energy = self.cruise_power * self.min_to_seconds(self.delta_t) / 4
+        continue_flight_energy = self.cruise_power * self.min_to_seconds(self.delta_t)
+        energy_lookup = np.array([
+            [moored_float_energy, takeoff_energy],
+            [land_energy, continue_flight_energy],
+            [0, 0]
+        ])
+        energy_consumption = energy_lookup[states[:, 1].astype(int), actions]
+        energy_gain = self.sample_energy_gain(t, states.shape[0])
+        current_energy = self.soc_to_energy(states[:, 0])
+        next_energy = current_energy + energy_gain - energy_consumption
+        next_soc = np.clip(self.energy_to_soc(next_energy), -1., 100.)
+        next_mode = np.where(next_soc <= 0, 2, np.where(actions == 0, 0, 1))
+        next_state = np.column_stack((next_soc, next_mode))
+        mode2_mask = next_state[:, 1] == 2
+        next_state[mode2_mask, 0] = -1.0
+        return next_state
+
+
+class StochasticTransitionLogic(AbstractTransitionLogic):
+    def __init__(self, battery_capacity_joules: float, soc_increment: float,
+                 idle_power: float, cruise_power: float, takeoff_power: float,
+                 delta_t: float,
+                 transition_model, env_provider):
+        self._battery_capacity_joules = battery_capacity_joules
+        self._soc_increment = soc_increment
+        self.idle_power = idle_power
+        self.cruise_power = cruise_power
+        self.takeoff_power = takeoff_power
+        self.delta_t = delta_t
+        self.transition_model = transition_model
         self.env_provider = env_provider
 
     @property
@@ -688,7 +730,7 @@ class DeterministicTransitionLogic(AbstractTransitionLogic):
         mode2_mask = next_states[:, 1] == 2
         next_states[mode2_mask, 0] = -1.0
         return next_states
-    
+
 # Example usage:
 if __name__ == "__main__":
     factory = ProbabilityModelFactory()

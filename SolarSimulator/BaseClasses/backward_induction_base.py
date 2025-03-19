@@ -2,7 +2,7 @@ import numpy as np
 from tqdm import tqdm
 from BaseClasses.mdp_base import AbstractMDP
 
-class DeterministicMDPBackwardSolver:
+class mdpBackwardSolver:
     def __init__(self, mdp: AbstractMDP, horizon):
         self.mdp = mdp
         self.horizon = horizon

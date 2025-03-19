@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from BaseClasses.mdp_base import DeterministicMDP
+from BaseClasses.mdp_base import MDP
 from BaseClasses.transition_model_base import ProbabilityModelFactory
 
 # A fake probability model that always succeeds.

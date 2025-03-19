@@ -13,7 +13,7 @@ if __name__ == "__main__":
     # For each time step t, the first value is the Weibull shape (k)
     # and the second value is the Weibull scale (λ), here varying with a diurnal pattern.
 
-    horizon = 3000
+    horizon = 10
     battery_capacity_wh = 844
     idle_power = 0
     cruise_power = 200
@@ -104,4 +104,4 @@ if __name__ == "__main__":
     run_manager = SimulationRunManager(episodes_per_simulation, storage_dir="simulation_results")
 
     # Run all simulations provided in the list. Each simulation run is stored as a batch.
-    run_manager.run_simulations(simulation_list)
+    run_manager.run_simulations(simulation_list,True,4)

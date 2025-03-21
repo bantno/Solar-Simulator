@@ -530,14 +530,152 @@ class SimulationPlotter:
 
         self.plot_reward_violin(sim_results)
 
+    def plot_reward_stats_by_battery_capacity(self, simulation_ids, storage_dir=None):
+        """
+        Load simulation data for each simulation ID provided, compute the mean and median total reward for each simulation,
+        and plot these values segmented by battery capacity (in watt-hours). The results are grouped by the simulation's
+        algorithm/parameters as follows:
+        
+            - If simulation_type is 'ObservationThresholdSimulation', group name is:
+            "Threshold (obs,wind): {observation_threshold},{wind_threshold}"
+            - If simulation_type is 'OptimalSimulation', group name is "OptimalSimulation"
+            - Otherwise, the group name defaults to the simulation_type value.
+        
+        Parameters:
+            simulation_ids (list): List of simulation IDs to load.
+            storage_dir (str): Directory where simulation files are stored. If not provided, self.storage_dir is used.
+        """
+        if storage_dir is None:
+            if self.storage_dir is None:
+                print("Storage directory must be provided either in constructor or as argument.")
+                return
+            else:
+                storage_dir = self.storage_dir
+
+        storage = SimulationStorage(storage_dir)
+        
+        # Dictionary to group data by the computed group name.
+        # Each key will map to a list of tuples: (battery_capacity, mean_reward, median_reward)
+        groups = {}
+
+        for sim_id in simulation_ids:
+            sim_data = storage.load_simulation_by_id(storage_dir, sim_id)
+            episodes = sim_data.get('episodes', [])
+            if not episodes:
+                print(f"No episodes found for simulation {sim_id}. Skipping.")
+                continue
+
+            # Compute total rewards for each episode.
+            total_rewards = []
+            for ep in episodes:
+                if 'total_reward' in ep:
+                    total_rewards.append(ep['total_reward'])
+                else:
+                    total_rewards.append(sum(ep.get('rewards', [])))
+            if not total_rewards:
+                print(f"No rewards computed for simulation {sim_id}. Skipping.")
+                continue
+
+            mean_reward = np.mean(total_rewards)
+            median_reward = np.median(total_rewards)
+
+            # Retrieve simulation metadata.
+            # Expected metadata structure:
+            # {
+            #    "simulation_type": ...,
+            #    "battery_capacity": ...,
+            #    "observation_threshold": ...,
+            #    "wind_threshold": ...,
+            #    ...
+            # }
+            sim_metadata = sim_data.get('simulation_metadata', {})
+            if not sim_metadata and episodes:
+                sim_metadata = episodes[0].get('metadata', {})
+
+            battery_capacity = sim_metadata.get('battery_capacity', None)
+            if battery_capacity is None:
+                print(f"No battery capacity found for simulation {sim_id}. Using 'Unknown'.")
+                battery_capacity = "Unknown"
+
+            # Compute the group name based on simulation_type.
+            simulation_type = sim_metadata.get('simulation_type', 'Unknown')
+            if simulation_type == 'ObservationThresholdSimulation':
+                group_name = f"Threshold (obs,wind): {sim_metadata.get('observation_threshold')},{sim_metadata.get('wind_threshold')}"
+            elif simulation_type == 'OptimalSimulation':
+                group_name = "OptimalSimulation"
+            else:
+                group_name = simulation_type
+
+            # Append the tuple to the corresponding group.
+            groups.setdefault(group_name, []).append((battery_capacity, mean_reward, median_reward))
+
+        if not groups:
+            print("No valid simulation data found to plot.")
+            return
+
+        # Determine if battery capacity values are numeric.
+        all_battery_numeric = True
+        for group in groups.values():
+            for bc, _, _ in group:
+                if not isinstance(bc, (int, float)):
+                    all_battery_numeric = False
+                    break
+            if not all_battery_numeric:
+                break
+
+        # Create the plot.
+        fig, ax = plt.subplots(figsize=(10, 6))
+        # Assign a distinct color to each group.
+        colors = plt.cm.tab10(np.linspace(0, 1, len(groups)))
+
+        for i, (group_name, data) in enumerate(groups.items()):
+            # Unpack group data: battery capacities, mean rewards, median rewards.
+            if all_battery_numeric:
+                # Sort by battery capacity if numeric.
+                data = sorted(data, key=lambda x: x[0])
+                x_vals = [item[0] for item in data]
+            else:
+                # For categorical battery capacities.
+                x_vals = [str(item[0]) for item in data]
+
+            mean_rewards = [item[1] for item in data]
+            median_rewards = [item[2] for item in data]
+
+            if all_battery_numeric:
+                ax.scatter(x_vals, mean_rewards, marker='o', color=colors[i],
+                        label=f"{group_name} - Mean")
+                ax.scatter(x_vals, median_rewards, marker='s', color=colors[i],
+                        label=f"{group_name} - Median")
+            else:
+                # Map categorical battery capacities to indices.
+                categories = sorted(set(x_vals))
+                category_to_x = {cat: idx for idx, cat in enumerate(categories)}
+                x_mean = [category_to_x[x] for x in x_vals]
+                x_median = [category_to_x[x] for x in x_vals]
+                ax.scatter(x_mean, mean_rewards, marker='o', color=colors[i],
+                        label=f"{group_name} - Mean")
+                ax.scatter(x_median, median_rewards, marker='s', color=colors[i],
+                        label=f"{group_name} - Median")
+                ax.set_xticks(range(len(categories)))
+                ax.set_xticklabels(categories)
+
+        xlabel = "Battery Capacity (Watt-hours)" if all_battery_numeric else "Battery Capacity"
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel("Total Reward")
+        ax.set_title("Mean and Median Total Reward by Battery Capacity\nGrouped by Simulation Type")
+        ax.legend()
+        plt.show()
+
+
 
 # --------------------- EXAMPLE USAGE ---------------------
 if __name__ == '__main__':
     # For demonstration, here is an example sim_results dictionary.
 
     plotter = SimulationPlotter(storage_dir="simulation_results")
-    # plotter.load_and_plot_reward_violin(simulation_ids=[4,5,6,7])
-    plotter.load_and_plot_reward_histogram_subplots(simulation_ids=[4,5,6,7])
+    plotter.load_and_plot_reward_violin(simulation_ids=range(4))
+    # plotter.plot_reward_stats_by_battery_capacity(simulation_ids=range(24))
+    # plotter.load_and_plot_reward_histogram_subplots(simulation_ids=range(4))
     
     # Other methods can be used similarly:
     # plotter.plot_specific_episode(simulation_id=0, episode_index=0)

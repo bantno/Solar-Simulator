@@ -673,8 +673,8 @@ if __name__ == '__main__':
     # For demonstration, here is an example sim_results dictionary.
 
     plotter = SimulationPlotter(storage_dir="simulation_results")
-    plotter.load_and_plot_reward_violin(simulation_ids=range(4))
-    # plotter.plot_reward_stats_by_battery_capacity(simulation_ids=range(24))
+    # plotter.load_and_plot_reward_violin(simulation_ids=range(4))
+    plotter.plot_reward_stats_by_battery_capacity(simulation_ids=range(6))
     # plotter.load_and_plot_reward_histogram_subplots(simulation_ids=range(4))
     
     # Other methods can be used similarly:

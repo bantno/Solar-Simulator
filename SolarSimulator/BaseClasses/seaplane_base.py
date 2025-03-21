@@ -16,10 +16,6 @@ class Seaplane:
         lat,
         lon,
         tz,
-        pdc0,
-        gamma,
-        tracking: bool = False,
-        cs: bool = False,
         cd0=0.01,
         cdtot=0.06,
         n_tot=0.75,
@@ -33,12 +29,7 @@ class Seaplane:
         self.lat = lat
         self.lon = lon
         self.tz = tz
-        self.tracking = tracking
-        self.location = location.Location(lat, lon, tz=tz)
-
-        self.gamma = gamma
         self.collected_energy = 0  # kWh
-        self.cs = cs
         self.idle_power = 0.0  # W
 
         # Define airframe and motion parameters
@@ -53,7 +44,7 @@ class Seaplane:
         self.capacity = capacity
         self.Rt = 1.0
         self.n = 1.3
-        self.AR = 6.0  # remove hardcode
+        self.AR = 8.0  # remove hardcode
         self.e = 0.8
         self.k = 1.0 / (np.pi * self.AR * self.e)
         self.cdtot = cdtot
@@ -169,11 +160,26 @@ class Seaplane:
         seconds_to_takeoff = 60.0 * takeoff_time_min
         required_takeoff_energy_j = required_power_w * seconds_to_takeoff
         return required_takeoff_energy_j
+    
+    @property
+    def cruise_power(self) -> float:
+        # Compute cruise power dynamically, using the same parameters as before.
+        return self.get_required_power(20, 1.2)
 
-    def soc_to_joules(self, timestep_min) -> int:
-        """Convert battery energy level from state of charge [% of total capacity] to Joules"""
-        return NotImplementedError()
+    @property
+    def takeoff_power(self) -> float:
+        # Compute takeoff energy dynamically.
+        # return self.get_required_takeoff_energy(1)
+        return 2*self.get_required_power(20,1.2)
 
-    def joules_to_soc(self, timestep_min) -> int:
-        """Convert battery energy level from Joules to state of charge [% of total capacity]"""
-        return NotImplementedError()
+    def get_mdp_power_params(self) -> dict:
+        """
+        Adapter method to package the power parameters for the MDP.
+        Note: Ensure that units match what your MDP expects. If the MDP expects power
+        and you’re providing energy (or vice versa), perform the necessary conversion.
+        """
+        return {
+            "idle_power": self.idle_power,
+            "cruise_power": self.cruise_power,
+            "takeoff_power": self.takeoff_power  # or convert energy to power if needed
+        }

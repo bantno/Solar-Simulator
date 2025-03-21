@@ -6,6 +6,7 @@ from BaseClasses.mdp_base import stochasticMDP
 from BaseClasses.simulation_base import ObservationThresholdSimulation, OptimalSimulation
 from BaseClasses.backward_induction_base import mdpBackwardSolver
 from BaseClasses.simulation_run_manager import SimulationRunManager
+from BaseClasses.seaplane_base import Seaplane
 
 def create_simulation(sim_type, battery_capacity, threshold, horizon, data_path):
     """
@@ -32,14 +33,22 @@ def create_simulation(sim_type, battery_capacity, threshold, horizon, data_path)
         delta_t=15
     )
     
-    # TODO: Implement seaplane calculation of required and cruise power
+    # Create seaplane instance
+    seaplane = Seaplane(30,
+                        -90,
+                        "none",
+                        capacity=battery_capacity/22.2)
+
+    # Get power parameters for the MDP
+    power_params = seaplane.get_mdp_power_params()
+    print(power_params)
 
     # Create the MDP
     mdp = stochasticMDP(
         battery_capacity_wh=battery_capacity,
-        idle_power=0,
-        cruise_power=200,
-        takeoff_power=200,
+        idle_power=power_params["idle_power"],
+        cruise_power=power_params["cruise_power"],
+        takeoff_power=power_params["takeoff_power"],
         failure_penalty=5,
         delta_t=15,
         gamma=1.0,
@@ -89,8 +98,8 @@ def build_param_list(battery_capacities, threshold_values, horizon, data_path):
 
 if __name__ == "__main__":
     # Define the parameter ranges and common values
-    battery_capacities = [400, 600, 800, 1000]
-    threshold_values = [0.0, 0.25, 0.5, 0.75, 0.9]
+    battery_capacities = [400,600,800,1000,1200,1400]
+    threshold_values = [0.0, 0.5, 0.9]
     horizon = 3000
     data_path = r"Data\EXPECTED_DATA\data_expected_lat0_lon-90_15min.pkl"
 

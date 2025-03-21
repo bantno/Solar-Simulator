@@ -62,7 +62,7 @@ class SimulationRunManager:
         and stores all episodes for that simulation. Optionally parallelized.
         """
         if use_multiprocessing and (num_workers is None):
-            num_workers = multiprocessing.cpu_count()
+            num_workers = multiprocessing.cpu_count()-1
 
         # --- SERIAL path (no multiprocessing) ---
         if not use_multiprocessing:

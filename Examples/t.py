@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from BaseClasses.environment_provider_base import StochasticWindEnvironmentProvider, DeterministicEnvironmentProvider
+from BaseClasses.environment_provider_base import StochasticWindSolarEnvironmentProvider as EnvProv
 
 def plot_environment(env_provider, time_steps, n=1):
     """
@@ -32,17 +32,17 @@ def plot_environment(env_provider, time_steps, n=1):
     plt.figure(figsize=(12, 8))
 
     plt.subplot(3, 1, 1)
-    plt.plot(time_steps, solar_vals, marker='o')
+    plt.plot(time_steps, solar_vals, marker='.',alpha=0.7)
     plt.title('Solar Energy over Time')
     plt.ylabel('Solar Energy [J]')
 
     plt.subplot(3, 1, 2)
-    plt.plot(time_steps, wind_vals, marker='o')
+    plt.plot(time_steps, wind_vals, marker='.',alpha=0.5)
     plt.title('Wind Speed over Time')
     plt.ylabel('Wind Speed')
 
     plt.subplot(3, 1, 3)
-    plt.plot(time_steps, whale_vals, marker='o')
+    plt.plot(time_steps, whale_vals, marker='.')
     plt.title('Whale Observations over Time')
     plt.xlabel('Time Step')
     plt.ylabel('Whale Observation')
@@ -54,7 +54,7 @@ def plot_environment(env_provider, time_steps, n=1):
 if __name__ == '__main__':
     # Instantiate the stochastic environment provider.
     
-    horizon = 100
+    horizon = 3000
     battery_capacity_wh = 200 * 60 * 60 * 10 / 3600
     idle_power = 0
     cruise_power = 200
@@ -66,48 +66,67 @@ if __name__ == '__main__':
     soc_increment = 1.0
 
 
-    # solar_rate_series = np.full(horizon, 4000)
-    wind_series = np.full(horizon, 5.0)
-    x = np.linspace(0, np.pi*10, horizon)
-    whale_reward_series = np.sin(x)
-    solar_rate_series_fake = np.clip(np.sin(x)*4000,0,4000)
-    t_indices = np.arange(horizon)
+    # # solar_rate_series = np.full(horizon, 4000)
+    # wind_series = np.full(horizon, 5.0)
+    # x = np.linspace(0, np.pi*10, horizon)
+    # whale_reward_series = np.sin(x)
+    # solar_rate_series_fake = np.clip(np.sin(x)*4000,0,4000)
+    # t_indices = np.arange(horizon)
 
-    data = pd.read_pickle(rf"Data\EXPECTED_DATA\data_expected_lat0_lon-90_15min.pkl")
-    # wind_shape = np.full(horizon, 2.0)  # Constant shape parameter
+    # data = pd.read_pickle(rf"Data\EXPECTED_DATA\data_expected_lat0_lon-90_15min.pkl")
+    # # wind_shape = np.full(horizon, 2.0)  # Constant shape parameter
+    # wind_shape = data['weibull_k'].values[:horizon]
+    # # wind_scale = 4.0 + 3.0 * np.sin(2 * np.pi * t_indices / 24)  # Scale varies with time
+    # wind_scale = data['weibull_scale'].values[:horizon]
+    # wind_distributions = np.column_stack((wind_shape, wind_scale))
+    # solar_rate_series = data['expected_solar_rad'].values[:horizon]*0.1*delta_t*60
+
+    # # ----- Instantiate the custom environment provider -----
+    # env_provider = StochasticWindEnvironmentProvider(
+    #     solar_rate_series=solar_rate_series_fake,
+    #     wind_distributions=wind_distributions,
+    #     whale_reward_series=whale_reward_series,
+    #     delta_t=delta_t
+    # )
+    data_path = r"Data\EXPECTED_DATA\data_expected_lat0_lon-90_15min.pkl"
+    # Load data for environment distributions
+    data = pd.read_pickle(data_path)
     wind_shape = data['weibull_k'].values[:horizon]
-    # wind_scale = 4.0 + 3.0 * np.sin(2 * np.pi * t_indices / 24)  # Scale varies with time
     wind_scale = data['weibull_scale'].values[:horizon]
     wind_distributions = np.column_stack((wind_shape, wind_scale))
-    solar_rate_series = data['expected_solar_rad'].values[:horizon]*0.1*delta_t*60
+    solar_alpha = data['beta_alpha'].values[:horizon]
+    solar_beta = data['beta_beta'].values[:horizon]
+    solar_distributions = np.column_stack((solar_alpha, solar_beta))
+    x = np.linspace(np.pi, np.pi * 30, horizon)
+    whale_reward_series = 0.5 * np.sin(x) + 0.5
 
-    # ----- Instantiate the custom environment provider -----
-    env_provider = StochasticWindEnvironmentProvider(
-        solar_rate_series=solar_rate_series_fake,
+    # Create environment provider
+    env_provider = EnvProv(
+        solar_distributions=solar_distributions,
         wind_distributions=wind_distributions,
         whale_reward_series=whale_reward_series,
-        delta_t=delta_t
+        delta_t=15
     )
 
-    horizon = 100
-    solar_rate_series = np.full(horizon, 4000)
-    wind_series = np.full(horizon, 5.0)
-    x = np.linspace(0, np.pi*4, horizon)
-    whale_reward_series = np.sin(x)
-    solar_rate_series = np.clip(np.sin(x)*4000,0,4000)
+    # horizon = 100
+    # solar_rate_series = np.full(horizon, 4000)
+    # wind_series = np.full(horizon, 5.0)
+    # x = np.linspace(0, np.pi*4, horizon)
+    # whale_reward_series = np.sin(x)
+    # solar_rate_series = np.clip(np.sin(x)*4000,0,4000)
 
-    battery_capacity_wh = 200 * 60 * 60 * 4 / 3600
-    idle_power = 0
-    cruise_power = 200
-    takeoff_power = 200
-    failure_penalty = 15
-    delta_t = 15
-    gamma = 1.0
-    transition_model_name = "moderate"
-    soc_increment = 1.0
+    # battery_capacity_wh = 200 * 60 * 60 * 4 / 3600
+    # idle_power = 0
+    # cruise_power = 200
+    # takeoff_power = 200
+    # failure_penalty = 15
+    # delta_t = 15
+    # gamma = 1.0
+    # transition_model_name = "moderate"
+    # soc_increment = 1.0
 
-    env_provider = DeterministicEnvironmentProvider(solar_rate_series, wind_series,
-                                                whale_reward_series, delta_t)
+    # env_provider = DeterministicEnvironmentProvider(solar_rate_series, wind_series,
+    #                                             whale_reward_series, delta_t)
     # Define a range of time steps.
     time_steps = np.arange(horizon)
 

@@ -21,7 +21,7 @@ def create_simulation(sim_type, battery_capacity, threshold, horizon, data_path)
     solar_alpha = data['beta_alpha'].values[:horizon]
     solar_beta = data['beta_beta'].values[:horizon]
     solar_distributions = np.column_stack((solar_alpha, solar_beta))
-    x = np.linspace(np.pi, np.pi * 30, horizon)
+    x = np.linspace(np.pi, np.pi * 60, horizon)
     whale_reward_series = 0.5 * np.sin(x) + 0.5
 
     # Create environment provider
@@ -32,6 +32,8 @@ def create_simulation(sim_type, battery_capacity, threshold, horizon, data_path)
         delta_t=15
     )
     
+    # TODO: Implement seaplane calculation of required and cruise power
+
     # Create the MDP
     mdp = stochasticMDP(
         battery_capacity_wh=battery_capacity,
@@ -88,7 +90,7 @@ def build_param_list(battery_capacities, threshold_values, horizon, data_path):
 if __name__ == "__main__":
     # Define the parameter ranges and common values
     battery_capacities = [400, 600, 800, 1000]
-    threshold_values = [0.0, 0.5, 0.9]
+    threshold_values = [0.0, 0.25, 0.5, 0.75, 0.9]
     horizon = 3000
     data_path = r"Data\EXPECTED_DATA\data_expected_lat0_lon-90_15min.pkl"
 
@@ -96,12 +98,12 @@ if __name__ == "__main__":
     param_list = build_param_list(battery_capacities, threshold_values, horizon, data_path)
 
     # Create the simulations in parallel using starmap
-    with multiprocessing.Pool(processes=4) as pool:
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()-1) as pool:
         simulations = pool.starmap(create_simulation, param_list)
     
     print(f"Created {len(simulations)} simulation objects.")
 
     # Use the SimulationRunManager to run these simulations
-    run_manager = SimulationRunManager(episodes_per_simulation=1000, storage_dir="simulation_results")
+    run_manager = SimulationRunManager(episodes_per_simulation=5000, storage_dir="simulation_results")
     # Optionally use multiprocessing again for running simulations
     run_manager.run_simulations(simulations, use_multiprocessing=True, num_workers=4)

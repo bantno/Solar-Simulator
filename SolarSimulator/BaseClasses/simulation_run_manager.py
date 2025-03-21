@@ -28,7 +28,8 @@ def _run_one_sim(args):
     # Create overall simulation-level metadata
     simulation_metadata = {
         "simulation_type": sim.__class__.__name__,
-        "episodes_count": len(episodes)
+        "episodes_count": len(episodes),
+        "battery_capacity": sim.mdp.battery_capacity_wh,
     }
     if hasattr(sim, "observation_threshold"):
         simulation_metadata["observation_threshold"] = sim.observation_threshold
@@ -61,7 +62,7 @@ class SimulationRunManager:
         and stores all episodes for that simulation. Optionally parallelized.
         """
         if use_multiprocessing and (num_workers is None):
-            num_workers = multiprocessing.cpu_count()
+            num_workers = multiprocessing.cpu_count()-1
 
         # --- SERIAL path (no multiprocessing) ---
         if not use_multiprocessing:

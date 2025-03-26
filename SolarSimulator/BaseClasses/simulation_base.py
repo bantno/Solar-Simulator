@@ -155,7 +155,7 @@ class AbstractContinuousEnergySimulation(ABC):
                                         whale_observation=whale_observation,
                                         t=t)
             actions.append(action)
-            next_state, reward, next_energy = self.step(energy, state[np.newaxis, :], [action], t)
+            next_state, reward, next_energy = self.step(energy, state[np.newaxis, :], np.array([action]), t)
             state = next_state[0]
             energy = next_energy
             trajectory.append(state)
@@ -229,7 +229,7 @@ class ObservationThresholdContinuousSimulation(AbstractContinuousEnergySimulatio
         super().__init__(mdp, horizon, initial_state, env_provider)
         self.observation_threshold = observation_threshold
         self.wind_threshold = wind_threshold
-        self.low_battery_threshold = 25.
+        self.low_battery_threshold = 30.
 
     def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
         action = 0

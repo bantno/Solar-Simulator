@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
     # A list of simulation instances (they can be of different types).
     simulation_list = [
-        ObservationThresholdContinuousSimulation(mdp, horizon, initial_state, 0.0, 5, env_provider),
+        ObservationThresholdContinuousSimulation(mdp, horizon, initial_state, 0.5, 10, env_provider),
     ]
 
     # ----- Set Up and Run the SimulationRunManager -----

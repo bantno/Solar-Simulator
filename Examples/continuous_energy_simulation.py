@@ -68,6 +68,14 @@ if __name__ == "__main__":
     # ----- Instantiate the Backward Induction Solver -----
     mdp_solver = mdpBackwardSolver(mdp, horizon)
 
+    # ----- Instantiate the Optimal Simulation -----
+    optimal_simulation = OptimalSimulation(
+        mdp_solver=mdp_solver,
+        horizon=horizon,
+        initial_state=initial_state,
+        env_provider=env_provider
+    )
+
     # # ----- Run a Simulation Episode -----
     # trajectory, actions, rewards, solar_samples, wind_samples, whale_samples = optimal_simulation.simulate_episode()
 

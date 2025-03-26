@@ -88,7 +88,7 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         self.delta_t = delta_t
 
     def sample_sunlight(self, t: int, n: int) -> np.ndarray:
-        return self.beta_solar_energy_dist(t,n)
+        return self.beta_solar_energy_dist(t,n)*1367*self.delta_t*60*0.1
 
     def sample_wind_speed(self, t: int, n: int) -> np.ndarray:
         return self.weibull_wind_speed_dist(t,n)

@@ -334,7 +334,7 @@ from scipy.stats import beta, weibull_min
 #   X ~ Beta(alpha=2, beta=5), for example
 #   Y ~ Weibull(k=2, lambda=1)
 distX = beta(a=2.0, b=5.0)
-distY = weibull_min(c=2.0, scale=1.0)
+distY = weibull_min(c=2.0, scale=5.0)
 
 # -------------------------------------------------
 # 2) Piecewise Z(y,m,a)
@@ -355,9 +355,9 @@ def Z(y, m, a):
     elif m == 0 and a == 1:
         return np.minimum(2.0/(y+0.001), 1.0)
     elif m == 1 and a == 0:
-        return 1.0 - np.exp(-2*y)
+        return np.exp(-.3*y)
     elif m == 1 and a == 1:
-        return 1.0 - np.exp(-y)
+        return np.exp(-.25*y)
     # Fallback
     return 0.0
 
@@ -371,14 +371,14 @@ C = -2.0  # Failure leads to a constant negative state
 
 def E_func(x):
     """Compute E = s - e_r + x."""
-    return s - e_r + x
+    return s - e_r + x*10.
 
 # -------------------------------------------------
 # 4) Value function V(s')
 #    Negative -> 0, else floor
 # -------------------------------------------------
 def V(state):
-    return 0 if state < 0 else int(np.floor(state))*10
+    return 0 if state < 0 else int(np.floor(state))
 
 # -------------------------------------------------
 # 5) Numerical Integration
@@ -394,7 +394,7 @@ dx = x_vals[1] - x_vals[0]
 fX_vals = distX.pdf(x_vals)
 
 # For Y ~ Weibull(2,1), domain is [0,∞), but we truncate:
-y_max = 30.0
+y_max = 100.0
 y_vals = np.linspace(0, y_max, num_points_y)
 dy = y_vals[1] - y_vals[0]
 fY_vals = distY.pdf(y_vals)
@@ -402,7 +402,7 @@ fY_vals = distY.pdf(y_vals)
 # -------------------------------------------------
 # 6) Monte Carlo Setup
 # -------------------------------------------------
-N = 30000000  # number of samples
+N = 3000000  # number of samples
 
 # We'll evaluate for m,a ∈ {0,1}×{0,1}.
 m_values = [0, 1]

@@ -10,7 +10,7 @@ class AbstractSimulation(ABC):
     The simulation loop now relies on an environment provider to supply environmental
     data (solar, wind, whale observation) rather than passing these arrays explicitly.
     """
-    
+    # TODO: Add way to save simulation environment data when save_history is set to True.
     def __init__(self, mdp, horizon: int, initial_state: np.ndarray, env_provider: AbstractEnvironmentProvider = None, save_history = True):
         """
         Parameters:
@@ -224,24 +224,9 @@ class ObservationThresholdSimulation(AbstractSimulation):
         if is_wind_acceptable and is_observation_sufficient and is_battery_sufficient:
             action = 1
         return action
-    
-        
+
 class DeterministicOptimalSimulation(AbstractSimulation):
     def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray, env_provider=None):
-        super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
-        mdp_solver.solve()
-        self.mdp_solver = mdp_solver
-
-    def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
-        value_list = [-10000, -10000]
-        for action in [0, 1]:
-            next_state, reward = self.mdp.step(np.array([state]), np.array([action]), t)
-            value = self.mdp_solver.value_function(t, reward, next_state)
-            value_list[action] = value
-        return int(np.argmax(value_list))
-    
-class OptimalSimulation(AbstractSimulation):
-    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray, env_provider):
         super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
         mdp_solver.solve()
         self.mdp_solver = mdp_solver
@@ -283,13 +268,21 @@ class OptimalPolicySimulation(AbstractSimulation):
         using the MDP's step function, then evaluate the Bellman value (reward + γ * future value)
         via the solver's value_function. The action with the highest value is returned.
         """
+        # TODO: Make sure this function adequately determines future value of each action in action space.
         # Initialize with very low values so that they get replaced.
         value_list = [-np.inf, -np.inf]
+        N=10000
+        states = np.full((N,2),state)
+        
         for action in [0, 1]:
             # Roll forward one time step with the candidate action.
-            next_state, reward = self.mdp.step(np.array([state]), np.array([action]), t)
+            actions = np.full((N,),action)
+            next_states = self.mdp.transition_logic.transition(
+                states, actions, t)
+            
+            rewards = self.mdp.reward(states, actions, next_states, t)
             # Compute the value using the backward induction solver's value function.
-            value = self.mdp_solver.value_function(t, reward, next_state)
+            value = self.mdp_solver.value_function(t, rewards, next_states)
             value_list[action] = value
         # Return the action that yields the highest value.
         return int(np.argmax(value_list))

@@ -78,6 +78,7 @@ class SimulationPlotter:
             episode_index (int): The index of the episode within that simulation to plot.
             storage_dir (str): Directory where simulation files are stored. If not provided, self.storage_dir is used.
         """
+        # TODO: Add visualization of environment data to resultant plot.
         if storage_dir is None:
             if self.storage_dir is None:
                 print("Storage directory must be provided either in constructor or as argument.")
@@ -673,11 +674,11 @@ if __name__ == '__main__':
     # For demonstration, here is an example sim_results dictionary.
 
     plotter = SimulationPlotter(storage_dir="simulation_results")
-    # plotter.load_and_plot_reward_violin(simulation_ids=range(4))
+    # plotter.load_and_plot_reward_violin(simulation_ids=range(1))
     # plotter.plot_reward_stats_by_battery_capacity(simulation_ids=[0])
     # plotter.load_and_plot_reward_histogram_subplots(simulation_ids=range(4))
     
     # Other methods can be used similarly:
-    plotter.plot_specific_episode(simulation_id=0, episode_index=0)
+    plotter.plot_specific_episode(simulation_id=2, episode_index=0)
     # plotter.plot_multiple_episodes_from_simulation(simulation_id=0, episode_indices=[0, 1, 2])
     # plotter.compare_episodes_across_simulations({0: [0], 1: [2], 2: None})

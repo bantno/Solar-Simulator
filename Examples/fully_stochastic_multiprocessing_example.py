@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from BaseClasses.environment_provider_base import StochasticWindSolarEnvironmentProvider as EnvProv
 from BaseClasses.mdp_base import stochasticMDP
-from BaseClasses.simulation_base import ObservationThresholdSimulation, OptimalSimulation
+from BaseClasses.simulation_base import ObservationThresholdSimulation, OptimalPolicySimulation
 from BaseClasses.backward_induction_base import mdpBackwardSolver
 from BaseClasses.simulation_run_manager import SimulationRunManager
 from BaseClasses.seaplane_base import Seaplane
@@ -71,7 +71,7 @@ def create_simulation(sim_type, battery_capacity, threshold, horizon, data_path)
     elif sim_type == "optimal":
         # Build an optimal simulation
         solver = mdpBackwardSolver(mdp, horizon)
-        sim = OptimalSimulation(
+        sim = OptimalPolicySimulation(
             mdp_solver=solver,
             horizon=horizon,
             initial_state=initial_state,
@@ -98,9 +98,11 @@ def build_param_list(battery_capacities, threshold_values, horizon, data_path):
 
 if __name__ == "__main__":
     # Define the parameter ranges and common values
-    battery_capacities = [400,600,800,1000,1200,1400]
-    threshold_values = [0.0, 0.5, 0.9]
-    horizon = 3000
+    # battery_capacities = [400,600,800,1000,1200,1400]
+    # threshold_values = [0.0, 0.5, 0.9]
+    battery_capacities = [640]
+    threshold_values = []
+    horizon = 300
     data_path = r"Data\EXPECTED_DATA\data_expected_lat0_lon-90_15min.pkl"
 
     # Build a list of parameter tuples
@@ -113,6 +115,6 @@ if __name__ == "__main__":
     print(f"Created {len(simulations)} simulation objects.")
 
     # Use the SimulationRunManager to run these simulations
-    run_manager = SimulationRunManager(episodes_per_simulation=5000, storage_dir="simulation_results")
+    run_manager = SimulationRunManager(episodes_per_simulation=10, storage_dir="simulation_results")
     # Optionally use multiprocessing again for running simulations
-    run_manager.run_simulations(simulations, use_multiprocessing=True, num_workers=4)
+    run_manager.run_simulations(simulations, use_multiprocessing=False, num_workers=4)

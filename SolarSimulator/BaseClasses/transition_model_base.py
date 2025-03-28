@@ -703,7 +703,36 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
     def sample_wind_speeds(self, stage, n):
         return self.env_provider.sample_wind_speed(stage, n)
 
-    def transition(self, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
+    # def transition(self, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
+    #     moored_float_energy = self.idle_power * self.min_to_seconds(self.delta_t)
+    #     takeoff_energy = (self.cruise_power + self.takeoff_power) * self.min_to_seconds(self.delta_t)
+    #     land_energy = self.cruise_power * self.min_to_seconds(self.delta_t) / 4
+    #     continue_flight_energy = self.cruise_power * self.min_to_seconds(self.delta_t)
+    #     energy_lookup = np.array([
+    #         [moored_float_energy, takeoff_energy],
+    #         [land_energy, continue_flight_energy],
+    #         [0, 0]
+    #     ])
+    #     energy_consumption = energy_lookup[states[:, 1].astype(int), actions]
+    #     energy_gain = self.sample_energy_gain(t, states.shape[0])
+    #     current_energy = self.soc_to_energy(states[:, 0])
+    #     next_energy = current_energy + energy_gain - energy_consumption
+    #     next_soc = np.clip(self.energy_to_soc(next_energy), -1., 100.)
+    #     next_mode = np.where(next_soc <= 0, 2, np.where(actions == 0, 0, 1))
+    #     next_state = np.column_stack((next_soc, next_mode))
+    #     wind_speeds = self.sample_wind_speeds(t, states.shape[0])
+    #     success_probabilities = self.transition_model.compute_probability(wind_speeds, actions, states)
+    #     false_states = np.tile(np.array([-1.0, 2]), (states.shape[0], 1))
+    #     random_vals = np.random.rand(states.shape[0])[:, np.newaxis]
+    #     next_states = np.where(random_vals < success_probabilities[:, np.newaxis],
+    #                              next_state,
+    #                              false_states)
+    #     mode2_mask = next_states[:, 1] == 2
+    #     next_states[mode2_mask, 0] = -1.0
+    #     return next_states
+
+    def _calculate_energy_consumption(self, states: np.ndarray, actions: np.ndarray) -> np.ndarray:
+        # Calculate energy consumption based on the state mode and the action taken
         moored_float_energy = self.idle_power * self.min_to_seconds(self.delta_t)
         takeoff_energy = (self.cruise_power + self.takeoff_power) * self.min_to_seconds(self.delta_t)
         land_energy = self.cruise_power * self.min_to_seconds(self.delta_t) / 4
@@ -713,50 +742,171 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
             [land_energy, continue_flight_energy],
             [0, 0]
         ])
-        energy_consumption = energy_lookup[states[:, 1].astype(int), actions]
-        energy_gain = self.sample_energy_gain(t, states.shape[0])
+        return energy_lookup[states[:, 1].astype(int), actions]
+
+    def _update_energy_and_state(self, states: np.ndarray, energy_gain: np.ndarray, 
+                                energy_consumption: np.ndarray, actions: np.ndarray) -> np.ndarray:
+        # Compute next energy based on current energy, energy gain, and consumption
         current_energy = self.soc_to_energy(states[:, 0])
+        next_energy = current_energy + energy_gain - energy_consumption
+        next_soc = np.clip(self.energy_to_soc(next_energy), -1., 100.)
+        # Determine next mode: if state-of-charge is <= 0 then mode 2, else use action to determine mode
+        next_mode = np.where(next_soc <= 0, 2, np.where(actions == 0, 0, 1))
+        return np.column_stack((next_soc, next_mode))
+
+    def _apply_transition_probability(self, states: np.ndarray, next_state: np.ndarray, 
+                                    actions: np.ndarray, wind_speeds: np.ndarray) -> np.ndarray:
+        # Compute the probability of a successful transition
+        success_probabilities = self.transition_model.compute_probability(wind_speeds, actions, states)
+        false_states = np.tile(np.array([-1.0, 2]), (states.shape[0], 1))
+        random_vals = np.random.rand(states.shape[0])[:, np.newaxis]
+        # If the random value is less than the success probability, the transition succeeds
+        next_states = np.where(random_vals < success_probabilities[:, np.newaxis],
+                                next_state,
+                                false_states)
+        # For mode 2 states, ensure the SOC is -1
+        mode2_mask = next_states[:, 1] == 2
+        next_states[mode2_mask, 0] = -1.0
+        return next_states
+
+    def transition(self, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
+        """
+        Default transition: both energy gain and wind speeds are sampled.
+        """
+        energy_consumption = self._calculate_energy_consumption(states, actions)
+        energy_gain = self.sample_energy_gain(t, states.shape[0])
+        next_state = self._update_energy_and_state(states, energy_gain, energy_consumption, actions)
+        wind_speeds = self.sample_wind_speeds(t, states.shape[0])
+        return self._apply_transition_probability(states, next_state, actions, wind_speeds)
+    
+    def transition_with_wind_and_energy(self, states: np.ndarray, actions: np.ndarray, t: int,
+                                      wind_speeds: np.ndarray, energy_gain: np.ndarray) -> np.ndarray:
+        """
+        Transition method that uses externally provided wind speeds and solar (energy) gain.
+        """
+        # Calculate the energy consumption based on current states and actions.
+        energy_consumption = self._calculate_energy_consumption(states, actions)
+        
+        # Update the energy and state using the provided energy_gain.
+        next_state = self._update_energy_and_state(states, energy_gain, energy_consumption, actions)
+        
+        # Apply the transition probability using the externally provided wind speeds.
+        return self._apply_transition_probability(states, next_state, actions, wind_speeds)
+
+    
+    # def transition_continuous_energy(self,current_energy, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
+    #     moored_float_energy = self.idle_power * self.min_to_seconds(self.delta_t)
+    #     takeoff_energy = (self.cruise_power + self.takeoff_power) * self.min_to_seconds(self.delta_t)
+    #     land_energy = self.cruise_power * self.min_to_seconds(self.delta_t) / 4
+    #     continue_flight_energy = self.cruise_power * self.min_to_seconds(self.delta_t)
+    #     energy_lookup = np.array([
+    #         [moored_float_energy, takeoff_energy],
+    #         [land_energy, continue_flight_energy],
+    #         [0, 0]
+    #     ])
+    #     energy_consumption = energy_lookup[states[:, 1].astype(int), actions]
+    #     energy_gain = self.sample_energy_gain(t, states.shape[0])
+    #     next_energy = current_energy + energy_gain - energy_consumption
+    #     next_soc = np.clip(self.energy_to_soc(next_energy), -1., 100.)
+    #     next_mode = np.where(next_soc <= 0, 2, np.where(actions == 0, 0, 1))
+    #     next_state = np.column_stack((next_soc, next_mode))
+    #     wind_speeds = self.sample_wind_speeds(t, states.shape[0])
+    #     success_probabilities = self.transition_model.compute_probability(wind_speeds, actions, states)
+    #     false_states = np.tile(np.array([-1.0, 2]), (states.shape[0], 1))
+    #     random_vals = np.random.rand(states.shape[0])[:, np.newaxis]
+    #     next_states = np.where(random_vals < success_probabilities[:, np.newaxis],
+    #                              next_state,
+    #                              false_states)
+    #     mode2_mask = next_states[:, 1] == 2
+    #     next_states[mode2_mask, 0] = -1.0
+    #     return next_states, next_energy
+    
+    def transition_continuous_energy(self, current_energy: np.ndarray, states: np.ndarray, 
+                                   actions: np.ndarray, t: int):
+        """
+        Transition method using a continuous energy value (provided externally) and internally
+        sampled energy gain and wind speeds.
+        
+        Returns:
+        - next_states: the resulting state array after applying the transition.
+        - next_energy: the updated continuous energy values.
+        """
+        # Calculate energy consumption based on current states and actions.
+        energy_consumption = self._calculate_energy_consumption(states, actions)
+        
+        # Sample the energy gain (e.g., from solar) internally.
+        energy_gain = self.sample_energy_gain(t, states.shape[0])
+        
+        # Update the energy and state using the current energy, energy gain, and consumption.
+        next_state, next_energy = self._update_energy_and_state_continuous(current_energy,
+                                                                        energy_gain,
+                                                                        energy_consumption,
+                                                                        actions)
+        # Sample wind speeds internally.
+        wind_speeds = self.sample_wind_speeds(t, states.shape[0])
+        
+        # Apply the probabilistic transition using the sampled wind speeds.
+        next_states = self._apply_transition_probability(states, next_state, actions, wind_speeds)
+        
+        return next_states, next_energy
+
+
+    def _calculate_energy_consumption(self, states: np.ndarray, actions: np.ndarray) -> np.ndarray:
+        # Calculate energy consumption based on the current state mode and the chosen action.
+        moored_float_energy = self.idle_power * self.min_to_seconds(self.delta_t)
+        takeoff_energy = (self.cruise_power + self.takeoff_power) * self.min_to_seconds(self.delta_t)
+        land_energy = self.cruise_power * self.min_to_seconds(self.delta_t) / 4
+        continue_flight_energy = self.cruise_power * self.min_to_seconds(self.delta_t)
+        energy_lookup = np.array([
+            [moored_float_energy, takeoff_energy],
+            [land_energy, continue_flight_energy],
+            [0, 0]
+        ])
+        return energy_lookup[states[:, 1].astype(int), actions]
+
+    def _update_energy_and_state_continuous(self, current_energy: np.ndarray, energy_gain: np.ndarray,
+                                            energy_consumption: np.ndarray, actions: np.ndarray):
+        """
+        Updates energy and state given the externally provided current energy.
+        Returns:
+        - next_state: an array with [soc, mode] per row
+        - next_energy: updated energy levels
+        """
         next_energy = current_energy + energy_gain - energy_consumption
         next_soc = np.clip(self.energy_to_soc(next_energy), -1., 100.)
         next_mode = np.where(next_soc <= 0, 2, np.where(actions == 0, 0, 1))
         next_state = np.column_stack((next_soc, next_mode))
-        wind_speeds = self.sample_wind_speeds(t, states.shape[0])
+        return next_state, next_energy
+
+    def _apply_transition_probability(self, states: np.ndarray, next_state: np.ndarray, 
+                                    actions: np.ndarray, wind_speeds: np.ndarray) -> np.ndarray:
+        # Compute success probabilities based on wind speeds and current state
         success_probabilities = self.transition_model.compute_probability(wind_speeds, actions, states)
         false_states = np.tile(np.array([-1.0, 2]), (states.shape[0], 1))
         random_vals = np.random.rand(states.shape[0])[:, np.newaxis]
         next_states = np.where(random_vals < success_probabilities[:, np.newaxis],
-                                 next_state,
-                                 false_states)
+                                next_state,
+                                false_states)
         mode2_mask = next_states[:, 1] == 2
         next_states[mode2_mask, 0] = -1.0
         return next_states
     
-    def transition_continuous_energy(self,current_energy, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
-        moored_float_energy = self.idle_power * self.min_to_seconds(self.delta_t)
-        takeoff_energy = (self.cruise_power + self.takeoff_power) * self.min_to_seconds(self.delta_t)
-        land_energy = self.cruise_power * self.min_to_seconds(self.delta_t) / 4
-        continue_flight_energy = self.cruise_power * self.min_to_seconds(self.delta_t)
-        energy_lookup = np.array([
-            [moored_float_energy, takeoff_energy],
-            [land_energy, continue_flight_energy],
-            [0, 0]
-        ])
-        energy_consumption = energy_lookup[states[:, 1].astype(int), actions]
-        energy_gain = self.sample_energy_gain(t, states.shape[0])
-        next_energy = current_energy + energy_gain - energy_consumption
-        next_soc = np.clip(self.energy_to_soc(next_energy), -1., 100.)
-        next_mode = np.where(next_soc <= 0, 2, np.where(actions == 0, 0, 1))
-        next_state = np.column_stack((next_soc, next_mode))
-        wind_speeds = self.sample_wind_speeds(t, states.shape[0])
-        success_probabilities = self.transition_model.compute_probability(wind_speeds, actions, states)
-        false_states = np.tile(np.array([-1.0, 2]), (states.shape[0], 1))
-        random_vals = np.random.rand(states.shape[0])[:, np.newaxis]
-        next_states = np.where(random_vals < success_probabilities[:, np.newaxis],
-                                 next_state,
-                                 false_states)
-        mode2_mask = next_states[:, 1] == 2
-        next_states[mode2_mask, 0] = -1.0
+    def transition_continuous_energy_with_wind_and_energy(self, current_energy: np.ndarray, states: np.ndarray,
+                                                        actions: np.ndarray, t: int, wind_speeds: np.ndarray,
+                                                        energy_gain: np.ndarray):
+        """
+        Transition using both externally provided wind speeds and energy gain.
+        Returns:
+        - next_states: the new states after transition
+        - next_energy: the updated continuous energy values
+        """
+        energy_consumption = self._calculate_energy_consumption(states, actions)
+        next_state, next_energy = self._update_energy_and_state_continuous(current_energy, energy_gain,
+                                                                        energy_consumption, actions)
+        next_states = self._apply_transition_probability(states, next_state, actions, wind_speeds)
         return next_states, next_energy
+
+
 
 # Example usage:
 if __name__ == "__main__":

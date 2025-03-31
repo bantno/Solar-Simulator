@@ -8,7 +8,7 @@ from BaseClasses.backward_induction_base import mdpBackwardSolver
 from BaseClasses.simulation_run_manager import SimulationRunManager
 from BaseClasses.seaplane_base import Seaplane
 
-def create_simulation(sim_type, battery_capacity, threshold, horizon, data_path):
+def create_simulation(sim_type, battery_capacity, threshold, wind_threshold, horizon, data_path):
     """
     Create a simulation based on sim_type:
       - "threshold" creates an ObservationThresholdSimulation with a given threshold.
@@ -49,7 +49,7 @@ def create_simulation(sim_type, battery_capacity, threshold, horizon, data_path)
         idle_power=power_params["idle_power"],
         cruise_power=power_params["cruise_power"],
         takeoff_power=power_params["takeoff_power"],
-        failure_penalty=5,
+        failure_penalty=15,
         delta_t=15,
         gamma=1.0,
         transition_model_name="moderate",
@@ -65,7 +65,7 @@ def create_simulation(sim_type, battery_capacity, threshold, horizon, data_path)
             horizon=horizon,
             initial_state=initial_state,
             observation_threshold=threshold,
-            wind_threshold=5,
+            wind_threshold=wind_threshold,
             env_provider=env_provider
         )
     elif sim_type == "optimal":
@@ -82,7 +82,7 @@ def create_simulation(sim_type, battery_capacity, threshold, horizon, data_path)
     
     return sim
 
-def build_param_list(battery_capacities, threshold_values, horizon, data_path):
+def build_param_list(battery_capacities, threshold_values, wind_thresholds, horizon, data_path):
     """
     Return a list of parameter tuples for all battery capacities.
     For each battery capacity, create simulations for each threshold and one optimal simulation.
@@ -91,22 +91,25 @@ def build_param_list(battery_capacities, threshold_values, horizon, data_path):
     for bc in battery_capacities:
         # Create threshold simulations
         for th in threshold_values:
-            params.append(("threshold", bc, th, horizon, data_path))
+            for w_th in wind_thresholds:
+                # Append a tuple for each threshold and wind threshold combination
+                params.append(("threshold", bc, th, w_th, horizon, data_path))
         # Create one optimal simulation for each battery capacity
-        params.append(("optimal", bc, None, horizon, data_path))
+        params.append(("optimal", bc, None, None, horizon, data_path))
     return params
 
 if __name__ == "__main__":
     # Define the parameter ranges and common values
-    # battery_capacities = [400,600,800,1000,1200,1400]
-    # threshold_values = [0.0, 0.5, 0.9]
-    battery_capacities = [640]
-    threshold_values = []
-    horizon = 300
+    battery_capacities = [200, 400,600,800,1000]
+    threshold_values = [0.0,0.1,0.2,0.3,0.4 0.5,0.6,0.7,0.8, 0.9]
+    wind_thresholds = [8]  
+    # battery_capacities = [640]
+    # threshold_values = []
+    horizon = 3000
     data_path = r"Data\EXPECTED_DATA\data_expected_lat0_lon-90_15min.pkl"
 
     # Build a list of parameter tuples
-    param_list = build_param_list(battery_capacities, threshold_values, horizon, data_path)
+    param_list = build_param_list(battery_capacities, threshold_values, wind_thresholds, horizon, data_path)
 
     # Create the simulations in parallel using starmap
     with multiprocessing.Pool(processes=multiprocessing.cpu_count()-1) as pool:
@@ -115,6 +118,6 @@ if __name__ == "__main__":
     print(f"Created {len(simulations)} simulation objects.")
 
     # Use the SimulationRunManager to run these simulations
-    run_manager = SimulationRunManager(episodes_per_simulation=10, storage_dir="simulation_results")
+    run_manager = SimulationRunManager(episodes_per_simulation=3000, storage_dir="simulation_results")
     # Optionally use multiprocessing again for running simulations
-    run_manager.run_simulations(simulations, use_multiprocessing=False, num_workers=4)
+    run_manager.run_simulations(simulations, use_multiprocessing=True)

@@ -11,7 +11,7 @@ class AbstractSimulation(ABC):
     data (solar, wind, whale observation) rather than passing these arrays explicitly.
     """
     # TODO: Add way to save simulation environment data when save_history is set to True.
-    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, env_provider: AbstractEnvironmentProvider = None, save_history = True):
+    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, env_provider: AbstractEnvironmentProvider = None, save_history = False):
         """
         Parameters:
             mdp: An instance of a class that implements the MDP.

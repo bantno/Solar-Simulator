@@ -1,3 +1,5 @@
+import argparse
+import yaml
 import multiprocessing
 import numpy as np
 import pandas as pd
@@ -9,11 +11,6 @@ from BaseClasses.simulation_run_manager import SimulationRunManager
 from BaseClasses.seaplane_base import Seaplane
 
 def create_simulation(sim_type, battery_capacity, threshold, wind_threshold, horizon, data_path):
-    """
-    Create a simulation based on sim_type:
-      - "threshold" creates an ObservationThresholdSimulation with a given threshold.
-      - "optimal" creates an OptimalSimulation.
-    """
     # Load data for environment distributions
     data = pd.read_pickle(data_path)
     wind_shape = data['weibull_k'].values[:horizon]
@@ -34,12 +31,7 @@ def create_simulation(sim_type, battery_capacity, threshold, wind_threshold, hor
     )
     
     # Create seaplane instance
-    seaplane = Seaplane(30,
-                        -90,
-                        "none",
-                        capacity=battery_capacity/22.2)
-
-    # Get power parameters for the MDP
+    seaplane = Seaplane(30, -90, "none", capacity=battery_capacity/22.2)
     power_params = seaplane.get_mdp_power_params()
     print(power_params)
 
@@ -59,7 +51,6 @@ def create_simulation(sim_type, battery_capacity, threshold, wind_threshold, hor
     
     initial_state = np.array([100.0, 0])
     if sim_type == "threshold":
-        # Build a threshold simulation
         sim = ObservationThresholdSimulation(
             mdp=mdp,
             horizon=horizon,
@@ -69,7 +60,6 @@ def create_simulation(sim_type, battery_capacity, threshold, wind_threshold, hor
             env_provider=env_provider
         )
     elif sim_type == "optimal":
-        # Build an optimal simulation
         solver = mdpBackwardSolver(mdp, horizon)
         sim = OptimalPolicySimulation(
             mdp_solver=solver,
@@ -83,41 +73,47 @@ def create_simulation(sim_type, battery_capacity, threshold, wind_threshold, hor
     return sim
 
 def build_param_list(battery_capacities, threshold_values, wind_thresholds, horizon, data_path):
-    """
-    Return a list of parameter tuples for all battery capacities.
-    For each battery capacity, create simulations for each threshold and one optimal simulation.
-    """
     params = []
     for bc in battery_capacities:
-        # Create threshold simulations
         for th in threshold_values:
             for w_th in wind_thresholds:
-                # Append a tuple for each threshold and wind threshold combination
                 params.append(("threshold", bc, th, w_th, horizon, data_path))
-        # Create one optimal simulation for each battery capacity
         params.append(("optimal", bc, None, None, horizon, data_path))
     return params
 
-if __name__ == "__main__":
-    # Define the parameter ranges and common values
-    battery_capacities = [200, 400,600,800,1000]
-    threshold_values = [0.0,0.1,0.2,0.3,0.4 0.5,0.6,0.7,0.8, 0.9]
-    wind_thresholds = [8]  
-    # battery_capacities = [640]
-    # threshold_values = []
-    horizon = 3000
-    data_path = r"Data\EXPECTED_DATA\data_expected_lat0_lon-90_15min.pkl"
+def main(config_file):
+    # Load configuration from YAML file
+    with open(config_file, 'r') as file:
+        config = yaml.safe_load(file)
 
-    # Build a list of parameter tuples
+    # Extract parameters from the configuration
+    battery_capacities = config["battery_capacities"]
+    threshold_values = config["threshold_values"]
+    wind_thresholds = config["wind_thresholds"]
+    horizon = config["horizon"]
+    data_path = config["data_path"]
+    episodes = config.get("episodes", 3000)  # Default to 3000 if not provided
+
+    # Build the parameter list
     param_list = build_param_list(battery_capacities, threshold_values, wind_thresholds, horizon, data_path)
 
-    # Create the simulations in parallel using starmap
+    # Create simulations in parallel
     with multiprocessing.Pool(processes=multiprocessing.cpu_count()-1) as pool:
         simulations = pool.starmap(create_simulation, param_list)
     
     print(f"Created {len(simulations)} simulation objects.")
 
-    # Use the SimulationRunManager to run these simulations
-    run_manager = SimulationRunManager(episodes_per_simulation=3000, storage_dir="simulation_results")
-    # Optionally use multiprocessing again for running simulations
+    # Run the simulations using the episodes parameter from YAML
+    run_manager = SimulationRunManager(episodes_per_simulation=episodes, storage_dir="simulation_results")
     run_manager.run_simulations(simulations, use_multiprocessing=True)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run simulations using configuration from a YAML file")
+    parser.add_argument(
+        "-c", "--config", 
+        type=str, 
+        default="config.yaml", 
+        help="Path to the YAML configuration file (default: config.yaml)"
+    )
+    args = parser.parse_args()
+    main(args.config)

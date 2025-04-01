@@ -342,7 +342,7 @@ class SimulationPlotter:
                 else:
                     total_rewards.append(sum(ep.get('rewards', [])))
             ax.hist(total_rewards, bins=bins, alpha=alpha, label=f"Sim {sim_id}")
-            ax.set_ylim([0,5000])
+            ax.set_ylim([0,1000])
             ax.set_title(f"Histogram of Total Rewards - Simulation {sim_id}")
             ax.set_ylabel("Frequency")
             ax.legend()
@@ -385,48 +385,6 @@ class SimulationPlotter:
 
         self.plot_reward_histogram_subplots(sim_results, alpha=alpha, bins=bins)
 
-    
-    # def plot_reward_violin(self, sim_results):
-    #     """
-    #     Create a violin plot of the total rewards for each simulation using Plotly.
-    #     """
-    #     import plotly.graph_objects as go
-        
-    #     # Sort simulation ids for consistent x-axis ordering
-    #     sim_ids = sorted(sim_results.keys())
-        
-    #     # Create the figure
-    #     fig = go.Figure()
-        
-    #     # Iterate over simulation IDs and add a violin trace for each
-    #     for sim_id in sim_ids:
-    #         total_rewards = []
-    #         for ep in sim_results[sim_id]:
-    #             if 'total_reward' in ep:
-    #                 total_rewards.append(ep['total_reward'])
-    #             else:
-    #                 total_rewards.append(sum(ep.get('rewards', [])))
-            
-    #         # Add the trace for this simulation
-    #         fig.add_trace(go.Violin(
-    #             y=total_rewards,
-    #             name=str(sim_id),
-    #             box_visible=True,        # Show box plot inside the violin
-    #             meanline_visible=True,   # Show mean line inside the violin
-    #             points="all",            # Display all individual data points
-    #             opacity=0.7              # Set transparency
-    #         ))
-        
-    #     # Update layout with titles and labels
-    #     fig.update_layout(
-    #         title="Violin Plot of Total Rewards per Simulation",
-    #         xaxis_title="Simulation ID",
-    #         yaxis_title="Total Reward",
-    #         violingap=0.2,     # Gap between violins
-    #         violinmode='overlay'  # Overlay violins; you can also use "group" for side-by-side
-    #     )
-        
-    #     fig.show()
     def plot_reward_violin(self, sim_results):
         """
         Create a violin plot of the total rewards for each simulation using Plotly.
@@ -497,7 +455,6 @@ class SimulationPlotter:
         )
 
         fig.show()
-
 
     def load_and_plot_reward_violin(self, simulation_ids, storage_dir=None):
         """
@@ -667,18 +624,129 @@ class SimulationPlotter:
         ax.legend()
         plt.show()
 
+    def load_and_plot_threshold_sweep(self, simulation_ids,storage_dir=None):
+
+        if storage_dir is None:
+            if self.storage_dir is None:
+                print("Storage directory must be provided either in constructor or as argument.")
+                return
+            else:
+                storage_dir = self.storage_dir
+
+        storage = SimulationStorage(storage_dir)
+        sim_results = {}
+        for sim_id in simulation_ids:
+            sim_data = storage.load_simulation_by_id(storage_dir, sim_id)
+            episodes = sim_data.get('episodes', [])
+            if episodes:
+                sim_results[sim_id] = episodes
+            else:
+                print(f"No episodes found for simulation {sim_id}.")
+        
+        if not sim_results:
+            print("No valid simulation results loaded.")
+            return
+
+        self.plot_threshold_sweep(sim_results)
+
+    def plot_threshold_sweep(self, sim_results):
+        """
+        Plots the average annual energy generated (MWh) versus the threshold w*_th (kW)
+        for the threshold-based approach, along with horizontal lines for the 
+        greedy and optimal approaches.
+
+        Parameters:
+            sim_results (dict): A dictionary where keys are simulation IDs (or names) and 
+                                values are lists of episodes. Each episode is expected 
+                                to be a dictionary with a 'total_reward' key (or a 'rewards' list)
+                                and a 'metadata' dictionary that contains the simulation type
+                                and threshold value (under 'observation_threshold').
+        """
+
+        # Initialize lists to hold threshold values and rewards for threshold-based simulations.
+        thresholds = []
+        threshold_rewards = []
+
+        # Lists to collect average rewards for greedy and optimal approaches.
+        greedy_rewards_list = []
+        optimal_rewards_list = []
+
+        # Iterate through each simulation result.
+        for sim_id, episodes in sim_results.items():
+            if not episodes:
+                continue
+
+            # Use the metadata from the first episode to determine simulation type.
+            metadata = episodes[0].get('metadata', {})
+            sim_type = metadata.get('simulation_type', None)
+
+            # Compute the average reward for this simulation over its episodes.
+            rewards = []
+            for ep in episodes:
+                if 'total_reward' in ep:
+                    rewards.append(ep['total_reward'])
+                else:
+                    rewards.append(sum(ep.get('rewards', [])))
+            if not rewards:
+                continue
+            avg_reward = np.mean(rewards)
+
+            # Group by simulation type.
+            if sim_type == 'ObservationThresholdSimulation':
+                # Use observation_threshold as the swept threshold value.
+                threshold_value = metadata.get('observation_threshold', None)
+                if threshold_value is not None:
+                    thresholds.append(threshold_value)
+                    threshold_rewards.append(avg_reward)
+            elif sim_type == 'GreedySimulation':
+                greedy_rewards_list.append(avg_reward)
+            elif sim_type == 'OptimalSimulation':
+                optimal_rewards_list.append(avg_reward)
+            else:
+                # Ignore simulations that do not match the expected types.
+                pass
+
+        # Compute overall greedy and optimal rewards (mean if more than one run exists).
+        greedy_rewards = np.mean(greedy_rewards_list) if greedy_rewards_list else None
+        optimal_rewards = np.mean(optimal_rewards_list) if optimal_rewards_list else None
+
+        # Ensure we have threshold-based data to plot.
+        if not thresholds:
+            print("No ObservationThresholdSimulation data found.")
+            return
+
+        # Sort the threshold data by threshold value.
+        thresholds, threshold_rewards = zip(*sorted(zip(thresholds, threshold_rewards)))
+
+        # Create the plot.
+        plt.figure(figsize=(8, 6))
+        plt.plot(thresholds, threshold_rewards, '-ok', label='Threshold')  # black line with circle markers
+
+        # Add horizontal lines for greedy and optimal approaches if data is available.
+        if greedy_rewards is not None:
+            plt.axhline(y=greedy_rewards, color='blue', label='Greedy', linewidth=2)
+        if optimal_rewards is not None:
+            plt.axhline(y=optimal_rewards, color='red', label='Optimal', linewidth=2)
+
+        plt.xlabel('Threshold $w^*_{th}$ (kW)')
+        plt.ylabel('Energy Generated (MWh)')
+        plt.title('Comparison of Threshold, Greedy, and Optimal Curtailment Strategies')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
 
 # --------------------- EXAMPLE USAGE ---------------------
 if __name__ == '__main__':
     # For demonstration, here is an example sim_results dictionary.
 
-    plotter = SimulationPlotter(storage_dir="simulation_results")
+
+    plotter = SimulationPlotter(storage_dir="simulation_results\Long Results")
     # plotter.load_and_plot_reward_violin(simulation_ids=range(1))
-    # plotter.plot_reward_stats_by_battery_capacity(simulation_ids=[0])
-    # plotter.load_and_plot_reward_histogram_subplots(simulation_ids=range(4))
-    
+    # plotter.plot_reward_stats_by_battery_capacity(simulation_ids=range(93),storage_dir=r"simulation_results\Long Results")
+    # plotter.load_and_plot_reward_histogram_subplots(simulation_ids=range(15))
+    plotter.load_and_plot_threshold_sweep(simulation_ids=range(95))
     # Other methods can be used similarly:
-    plotter.plot_specific_episode(simulation_id=2, episode_index=0)
+    # plotter.plot_specific_episode(simulation_id=2, episode_index=0)
     # plotter.plot_multiple_episodes_from_simulation(simulation_id=0, episode_indices=[0, 1, 2])
     # plotter.compare_episodes_across_simulations({0: [0], 1: [2], 2: None})

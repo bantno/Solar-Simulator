@@ -779,11 +779,12 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
         wind_speeds = self.sample_wind_speeds(t, states.shape[0])
         return self._apply_transition_probability(states, next_state, actions, wind_speeds)
     
-    def transition_with_wind_and_energy(self, states: np.ndarray, actions: np.ndarray, t: int,
-                                      wind_speeds: np.ndarray, energy_gain: np.ndarray) -> np.ndarray:
+    def transition_with_wind_and_energy(self, states: np.ndarray, actions: np.ndarray,
+                                      energy_gain: np.ndarray, wind_speeds: np.ndarray) -> np.ndarray:
         """
         Transition method that uses externally provided wind speeds and solar (energy) gain.
         """
+        
         # Calculate the energy consumption based on current states and actions.
         energy_consumption = self._calculate_energy_consumption(states, actions)
         
@@ -874,7 +875,7 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
         """
         next_energy = current_energy + energy_gain - energy_consumption
         next_soc = np.clip(self.energy_to_soc(next_energy), -1., 100.)
-        next_mode = np.where(next_soc <= 0, 2, np.where(actions == 0, 0, 1))
+        next_mode = np.where(next_soc < 0, 2, np.where(actions == 0, 0, 1))
         next_state = np.column_stack((next_soc, next_mode))
         return next_state, next_energy
 
@@ -892,7 +893,7 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
         return next_states
     
     def transition_continuous_energy_with_wind_and_energy(self, current_energy: np.ndarray, states: np.ndarray,
-                                                        actions: np.ndarray, t: int, wind_speeds: np.ndarray,
+                                                        actions: np.ndarray, wind_speeds: np.ndarray,
                                                         energy_gain: np.ndarray):
         """
         Transition using both externally provided wind speeds and energy gain.

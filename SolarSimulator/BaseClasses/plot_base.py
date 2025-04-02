@@ -38,20 +38,20 @@ class SimulationPlotter:
         # --- Trajectory Plot ---
         num_dims = trajectory.shape[1]
         for dim in range(num_dims):
-            axs[0].plot(trajectory[:, dim], label=f"State dim {dim}")
+            axs[0].plot(trajectory[:, dim], label=f"State dim {dim}",marker='.')
         axs[0].set_title("Trajectory")
         axs[0].set_xlabel("Time Step")
         axs[0].set_ylabel("State Value")
         axs[0].legend()
         
         # --- Actions Plot ---
-        axs[1].step(range(len(actions)), actions, where='mid')
+        axs[1].step(range(len(actions)), actions, marker='.')
         axs[1].set_title("Actions")
         axs[1].set_xlabel("Time Step")
         axs[1].set_ylabel("Action")
         
         # --- Rewards Plot ---
-        axs[2].plot(range(len(rewards)), rewards, marker='o')
+        axs[2].plot(range(len(rewards)), rewards, marker='.')
         axs[2].set_title("Rewards")
         axs[2].set_xlabel("Time Step")
         axs[2].set_ylabel("Reward")
@@ -651,36 +651,36 @@ class SimulationPlotter:
 
     def plot_threshold_sweep(self, sim_results):
         """
-        Plots the average annual energy generated (MWh) versus the threshold w*_th (kW)
-        for the threshold-based approach, along with horizontal lines for the 
+        Plots the average reward versus the observation threshold for the threshold-based approach,
+        segmented into series based on wind_threshold values. Also adds horizontal lines for the
         greedy and optimal approaches.
 
         Parameters:
-            sim_results (dict): A dictionary where keys are simulation IDs (or names) and 
-                                values are lists of episodes. Each episode is expected 
-                                to be a dictionary with a 'total_reward' key (or a 'rewards' list)
-                                and a 'metadata' dictionary that contains the simulation type
-                                and threshold value (under 'observation_threshold').
+            sim_results (dict): A dictionary where keys are simulation IDs (or names) and values
+                                are lists of episodes. Each episode is expected to be a dictionary
+                                with a 'total_reward' key (or a 'rewards' list) and a 'metadata'
+                                dictionary that contains the simulation type and threshold values:
+                                'observation_threshold' and 'wind_threshold'.
         """
-
-        # Initialize lists to hold threshold values and rewards for threshold-based simulations.
-        thresholds = []
-        threshold_rewards = []
 
         # Lists to collect average rewards for greedy and optimal approaches.
         greedy_rewards_list = []
         optimal_rewards_list = []
+
+        # Dictionary to group ObservationThresholdSimulation data by wind_threshold.
+        # Each key maps to a list of (observation_threshold, avg_reward) tuples.
+        obs_groups = {}
 
         # Iterate through each simulation result.
         for sim_id, episodes in sim_results.items():
             if not episodes:
                 continue
 
-            # Use the metadata from the first episode to determine simulation type.
+            # Get metadata from the first episode.
             metadata = episodes[0].get('metadata', {})
             sim_type = metadata.get('simulation_type', None)
 
-            # Compute the average reward for this simulation over its episodes.
+            # Compute the average reward for this simulation.
             rewards = []
             for ep in episodes:
                 if 'total_reward' in ep:
@@ -693,44 +693,46 @@ class SimulationPlotter:
 
             # Group by simulation type.
             if sim_type == 'ObservationThresholdSimulation':
-                # Use observation_threshold as the swept threshold value.
-                threshold_value = metadata.get('observation_threshold', None)
-                if threshold_value is not None:
-                    thresholds.append(threshold_value)
-                    threshold_rewards.append(avg_reward)
+                obs_thr = metadata.get('observation_threshold', None)
+                wind_thr = metadata.get('wind_threshold', None)
+                if obs_thr is not None and wind_thr is not None:
+                    obs_groups.setdefault(wind_thr, []).append((obs_thr, avg_reward))
             elif sim_type == 'GreedySimulation':
                 greedy_rewards_list.append(avg_reward)
-            elif sim_type == 'OptimalSimulation':
+            elif sim_type and 'Optimal' in sim_type:
                 optimal_rewards_list.append(avg_reward)
             else:
-                # Ignore simulations that do not match the expected types.
+                # Ignore other simulation types.
                 pass
 
         # Compute overall greedy and optimal rewards (mean if more than one run exists).
         greedy_rewards = np.mean(greedy_rewards_list) if greedy_rewards_list else None
         optimal_rewards = np.mean(optimal_rewards_list) if optimal_rewards_list else None
 
-        # Ensure we have threshold-based data to plot.
-        if not thresholds:
+        if not obs_groups:
             print("No ObservationThresholdSimulation data found.")
             return
 
-        # Sort the threshold data by threshold value.
-        thresholds, threshold_rewards = zip(*sorted(zip(thresholds, threshold_rewards)))
-
         # Create the plot.
         plt.figure(figsize=(8, 6))
-        plt.plot(thresholds, threshold_rewards, '-ok', label='Threshold')  # black line with circle markers
 
-        # Add horizontal lines for greedy and optimal approaches if data is available.
+        # For each unique wind_threshold, sort the series by observation_threshold and plot.
+        for wind_thr, data in obs_groups.items():
+            # Sort the data by observation threshold.
+            data = sorted(data, key=lambda x: x[0])
+            obs_thr_values = [item[0] for item in data]
+            rewards_values = [item[1] for item in data]
+            plt.plot(obs_thr_values, rewards_values, '-o', label=f'Wind Thr: {wind_thr}')
+
+        # Add horizontal lines for greedy and optimal approaches if available.
         if greedy_rewards is not None:
             plt.axhline(y=greedy_rewards, color='blue', label='Greedy', linewidth=2)
         if optimal_rewards is not None:
             plt.axhline(y=optimal_rewards, color='red', label='Optimal', linewidth=2)
 
-        plt.xlabel('Threshold $w^*_{th}$ (kW)')
-        plt.ylabel('Energy Generated (MWh)')
-        plt.title('Comparison of Threshold, Greedy, and Optimal Curtailment Strategies')
+        plt.xlabel('Observation Threshold')
+        plt.ylabel('Average Reward')
+        plt.title('Threshold Sweep: Average Reward vs Observation Threshold\nSegmented by Wind Threshold')
         plt.legend()
         plt.grid(True)
         plt.show()
@@ -741,12 +743,12 @@ if __name__ == '__main__':
     # For demonstration, here is an example sim_results dictionary.
 
 
-    plotter = SimulationPlotter(storage_dir="simulation_results\Long Results")
+    plotter = SimulationPlotter(storage_dir="simulation_results/threshold_sweep")
     # plotter.load_and_plot_reward_violin(simulation_ids=range(1))
-    # plotter.plot_reward_stats_by_battery_capacity(simulation_ids=range(93),storage_dir=r"simulation_results\Long Results")
+    # plotter.plot_reward_stats_by_battery_capacity(simulation_ids=range(11),storage_dir=r"simulation_results\threshold_sweep")
     # plotter.load_and_plot_reward_histogram_subplots(simulation_ids=range(15))
-    plotter.load_and_plot_threshold_sweep(simulation_ids=range(95))
+    plotter.load_and_plot_threshold_sweep(simulation_ids=range(61))
     # Other methods can be used similarly:
-    # plotter.plot_specific_episode(simulation_id=2, episode_index=0)
+    # plotter.plot_specific_episode(simulation_id=0, episode_index=0)
     # plotter.plot_multiple_episodes_from_simulation(simulation_id=0, episode_indices=[0, 1, 2])
     # plotter.compare_episodes_across_simulations({0: [0], 1: [2], 2: None})

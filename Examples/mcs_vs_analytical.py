@@ -6,6 +6,7 @@ from BaseClasses.mdp_base import stochasticMDP
 from BaseClasses.backward_induction_base import mdpBackwardSolver
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.simulation_base import OptimalPolicySimulation, OptimalAnalyticalPolicySimulation
+from BaseClasses.whale_base import WhaleRewardSeriesFactory
 
 def main():
     # -------------------------------
@@ -28,7 +29,7 @@ def main():
     solar_beta = data['beta_beta'].values[:horizon]
     solar_distributions = np.column_stack((solar_alpha, solar_beta))
     x = np.linspace(np.pi, np.pi * 5, horizon)
-    whale_reward_series = 0.5 * -1*np.cos(x) + 0.5
+    whale_reward_series = WhaleRewardSeriesFactory.create_series("real", horizon)
 
 
     # -------------------------------

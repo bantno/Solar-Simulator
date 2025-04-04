@@ -247,6 +247,10 @@ class AbstractContinuousEnergySimulation(ABC):
                 }
             yield episode_data
 
+####################################################################################
+# Simple Simulation Classes
+####################################################################################
+
 class AlwaysFlySimulation(AbstractSimulation):
     def choose_action(self, **kwargs) -> int:
         return 1
@@ -255,6 +259,11 @@ class AlwaysFloatSimulation(AbstractSimulation):
     def choose_action(self, **kwargs) -> int:
         return 0
     
+
+####################################################################################
+# State based transition simulation classes
+####################################################################################
+
 class ObservationThresholdSimulation(AbstractSimulation):
     def __init__(self, mdp, horizon: int, initial_state: np.ndarray, observation_threshold: float, wind_threshold: float, env_provider=None):
         super().__init__(mdp, horizon, initial_state, env_provider)
@@ -407,7 +416,10 @@ class OptimalAnalyticalPolicySimulation(AbstractSimulation):
         # Return the action with the highest expected value.
         return int(np.argmax(value_list))
 
-class OptimalContinuousAnalyticalPolicySimulation(AbstractSimulation):
+####################################################################################
+# Continuous Energy Simulation Classes
+####################################################################################
+class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimulation):
     """
     Simulation class that selects the optimal action by evaluating the Bellman value 
     for each action (0 or 1) using a backward induction solver.
@@ -476,7 +488,6 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractSimulation):
         # Return the action with the highest expected value.
         return int(np.argmax(value_list))
 
-
 class ObservationThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
     def __init__(self, mdp, horizon: int, initial_state: np.ndarray, observation_threshold: float, wind_threshold: float, env_provider=None):
         super().__init__(mdp, horizon, initial_state, env_provider)
@@ -492,17 +503,3 @@ class ObservationThresholdContinuousSimulation(AbstractContinuousEnergySimulatio
         if is_wind_acceptable and is_observation_sufficient and is_battery_sufficient:
             action = 1
         return action
-    
-class OptimalContinuousSimulation(AbstractContinuousEnergySimulation):
-    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray, env_provider):
-        super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
-        mdp_solver.solve()
-        self.mdp_solver = mdp_solver
-
-    def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
-        value_list = [-10000, -10000]
-        for action in [0, 1]:
-            next_state, reward = self.mdp.step(np.array([state]), np.array([action]), t)
-            value = self.mdp_solver.value_function(t, reward, next_state)
-            value_list[action] = value
-        return int(np.argmax(value_list))

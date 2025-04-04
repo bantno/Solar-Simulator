@@ -12,8 +12,8 @@ def main():
     # -------------------------------
     # Configuration parameters
     # -------------------------------
-    battery_capacity = 300.0  # in Wh (adjust as needed)
-    horizon = 100              # number of time steps in each episode
+    battery_capacity = 400.0  # in Wh (adjust as needed)
+    horizon = 1000              # number of time steps in each episode
     initial_state = np.array([100.0, 0])  # [SoC, mode] with mode 0 = safe, mode 2 = failure
 
     # -------------------------------
@@ -80,12 +80,12 @@ def main():
         env_provider=env_provider
     )
     # Simulation using numerical integration (the revised policy simulation).
-    # analytical_sim = OptimalAnalyticalPolicySimulation(
-    #     mdp_solver=solver,
-    #     horizon=horizon,
-    #     initial_state=initial_state,
-    #     env_provider=env_provider
-    # )
+    analytical_sim = OptimalAnalyticalPolicySimulation(
+        mdp_solver=solver,
+        horizon=horizon,
+        initial_state=initial_state,
+        env_provider=env_provider
+    )
 
     # -------------------------------
     # Run a set number of episodes and compare outcomes.
@@ -100,8 +100,8 @@ def main():
         mcs_rewards.append(sum(rews))
 
         # # Run one episode with the numerical integration method.
-        # traj, acts, rews, solar, wind, whale = analytical_sim.simulate_episode()
-        # analytical_rewards.append(sum(rews))
+        traj, acts, rews, solar, wind, whale = analytical_sim.simulate_episode()
+        analytical_rewards.append(sum(rews))
 
     print("Monte Carlo Simulation (MCS) average total reward:", np.mean(mcs_rewards))
     print("Numerical Integration Simulation average total reward:", np.mean(analytical_rewards))

@@ -251,6 +251,77 @@ class WindIndependentSuccessProbability(ActionSuccessProbabilityModel):
             raise ValueError("Invalid combination of action and vehicle mode.")
 
         return success_prob
+    
+import numpy as np
+
+class DiscreteSuccessProbability(ActionSuccessProbabilityModel):
+    def __init__(self, name="wind_based", wind_bins=None, wind_success_factors=None):
+        """
+        Initialize the probability model with wind speed based adjustments.
+        
+        Parameters:
+        - name (str): Identifier for the model.
+        - wind_bins (list): List of bin edges for wind speeds.
+          Defaults to [0, 5, 10, 15, np.inf], representing no, low, medium, and high wind speeds.
+        - wind_success_factors (list): Multiplicative factors for success probability corresponding to each bin.
+          Defaults to [1.0, 0.98, 0.95, 0.90] for the respective wind speed bins.
+        """
+        self.name = name
+        # Define wind speed bins: no wind, low, medium, high
+        self.wind_bins = wind_bins if wind_bins is not None else [0, 1, 5, 10, np.inf]
+        # Define multiplicative success factors for each wind speed bin
+        self.wind_success_factors = wind_success_factors if wind_success_factors is not None else [1.0, 0.98, 0.95, 0.90]
+    
+    def compute_probability(self, wind_speed, action, state):
+        """
+        Compute the success probability P(S=1 | wind_speed) for a given wind speed,
+        vehicle action, and state. The computation first determines a base probability
+        based on the vehicle mode and action, and then applies a wind speed adjustment
+        based on discrete bins.
+        
+        Parameters:
+        - wind_speed (float or np.array): Current wind speed(s).
+        - action (int or np.array): Control action (1 for active, 0 for passive).
+        - state (tuple or np.array): System state(s); expected to be indexable so that state[:, 1] 
+          yields the vehicle mode.
+        
+        Returns:
+        - np.array: Adjusted probabilities of success for each element.
+        """
+        # Broadcast inputs to ensure matching dimensions
+        wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
+        vehicle_mode = state[:, 1]
+
+        # Start with a default probability of 1 for all elements
+        success_prob = np.ones_like(vehicle_mode, dtype=float)
+
+        # For a broken vehicle (mode == 2), set base success probability to 0
+        success_prob[vehicle_mode == 2] = 0
+
+        # Compute base probabilities for valid state-action pairs:
+        # Takeoff: action 1 and vehicle mode 0
+        success_prob[(action == 1) & (vehicle_mode == 0)] = 0.999
+        # Floating: action 0 and vehicle mode 0
+        success_prob[(action == 0) & (vehicle_mode == 0)] = 1.0
+        # Flying: action 1 and vehicle mode 1
+        success_prob[(action == 1) & (vehicle_mode == 1)] = 0.9999
+        # Landing: action 0 and vehicle mode 1
+        success_prob[(action == 0) & (vehicle_mode == 1)] = 0.995
+
+        # Check for invalid combinations: any action with a broken vehicle (mode == 2)
+        if np.any((action == 1) & (vehicle_mode == 2)) or np.any((action == 0) & (vehicle_mode == 2)):
+            raise ValueError("Invalid combination of action and vehicle mode.")
+
+        # Determine wind speed bin indices for each element.
+        # np.digitize returns indices starting at 1, so we subtract 1 to match our factor list.
+        bin_indices = np.digitize(wind_speed, self.wind_bins) - 1
+        wind_factors = np.array(self.wind_success_factors)[bin_indices]
+
+        # Adjust the base success probabilities by the wind speed factor
+        success_prob = success_prob * wind_factors
+
+        return success_prob
+
 
 class TestSuccessProbability(ActionSuccessProbabilityModel):
     """Probability model using where a valid vehicle state and action always leads to a successful transition."""
@@ -625,6 +696,11 @@ class AbstractTransitionLogic(ABC):
 
     def min_to_seconds(self, minutes: float) -> float:
         return minutes * 60.
+
+#################################################################################################
+# Transition Logic Classes
+#################################################################################################
+
 
 class DeterministicTransitionLogic(AbstractTransitionLogic):
     def __init__(self, battery_capacity_joules: float, soc_increment: float,

@@ -125,7 +125,6 @@ class SimulationGUI:
         self.sim_listbox = tk.Listbox(sim_frame, selectmode=tk.MULTIPLE, height=6, exportselection=False, font=("Helvetica", 10))
         simulation_type_options = [
             "Optimal Continuous Analytical", "Optimal Analytical",
-            "Always Fly", "Always Float",
             "Observation Threshold", "Deterministic Optimal"
         ]
         for option in simulation_type_options:

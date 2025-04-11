@@ -5,7 +5,7 @@ from BaseClasses.environment_provider_base import StochasticWindSolarEnvironment
 from BaseClasses.mdp_base import stochasticMDP
 from BaseClasses.backward_induction_base import mdpBackwardSolver
 from BaseClasses.seaplane_base import Seaplane
-from BaseClasses.simulation_base import OptimalPolicySimulation, OptimalAnalyticalPolicySimulation
+from BaseClasses.simulation_base import OptimalAnalyticalPolicySimulation, OptimalContinuousAnalyticalPolicySimulation
 from BaseClasses.whale_base import WhaleRewardSeriesFactory
 
 def main():
@@ -13,7 +13,7 @@ def main():
     # Configuration parameters
     # -------------------------------
     battery_capacity = 400.0  # in Wh
-    horizon = 1000            # number of time steps per episode
+    horizon = 20000          # number of time steps per episode
     initial_state = np.array([100.0, 0])  # [SoC, mode] where mode 0 = safe, mode 2 = failure
 
     # -------------------------------
@@ -55,7 +55,7 @@ def main():
         idle_power=power_params["idle_power"],
         cruise_power=power_params["cruise_power"],
         takeoff_power=power_params["takeoff_power"],
-        failure_penalty=15,
+        failure_penalty=3,
         delta_t=15,
         gamma=1.0,
         transition_model_name="moderate",
@@ -67,63 +67,7 @@ def main():
     # Set up the backward induction solver
     # -------------------------------
     solver = mdpBackwardSolver(mdp, horizon)
-
-    # -------------------------------
-    # Create simulation objects
-    # -------------------------------
-    optimal_policy_sim = OptimalPolicySimulation(
-        mdp_solver=solver,
-        horizon=horizon,
-        initial_state=initial_state,
-        env_provider=env_provider
-    )
-    optimal_analytical_sim = OptimalAnalyticalPolicySimulation(
-        mdp_solver=solver,
-        horizon=horizon,
-        initial_state=initial_state,
-        env_provider=env_provider
-    )
-
-    # -------------------------------
-    # Run episodes and collect results.
-    # -------------------------------
-    episodes = 5000
-    results = []
-
-    for episode in tqdm(range(episodes)):
-        # Run OptimalPolicySimulation episode.
-        traj_policy, acts_policy, rews_policy, solar_policy, wind_policy, whale_policy = optimal_policy_sim.simulate_episode()
-        total_reward_policy = sum(rews_policy)
-
-        # Run OptimalAnalyticalPolicySimulation episode.
-        traj_analytical, acts_analytical, rews_analytical, solar_analytical, wind_analytical, whale_analytical = optimal_analytical_sim.simulate_episode()
-        total_reward_analytical = sum(rews_analytical)
-
-        # Save all episode data in a dictionary.
-        results.append({
-            "Episode": episode + 1,
-            # "OptimalPolicy_Trajectory": traj_policy,
-            # "OptimalPolicy_Actions": acts_policy,
-            # "OptimalPolicy_Rewards": rews_policy,
-            # "OptimalPolicy_Solar": solar_policy,
-            # "OptimalPolicy_Wind": wind_policy,
-            # "OptimalPolicy_Whale": whale_policy,
-            "OptimalPolicy_TotalReward": total_reward_policy,
-            # "OptimalAnalytical_Trajectory": traj_analytical,
-            # "OptimalAnalytical_Actions": acts_analytical,
-            # "OptimalAnalytical_Rewards": rews_analytical,
-            # "OptimalAnalytical_Solar": solar_analytical,
-            # "OptimalAnalytical_Wind": wind_analytical,
-            # "OptimalAnalytical_Whale": whale_analytical,
-            "OptimalAnalytical_TotalReward": total_reward_analytical
-        })
-
-    # Create a DataFrame from the results.
-    results_df = pd.DataFrame(results)
-
-    # Save the DataFrame as a pickle file.
-    results_df.to_pickle("simulation_results.pkl")
-    print("Results saved to simulation_results.pkl")
+    solver.solve()
 
 if __name__ == "__main__":
     main()

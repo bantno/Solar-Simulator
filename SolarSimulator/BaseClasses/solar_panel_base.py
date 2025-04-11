@@ -8,6 +8,7 @@ from typing import Type, Dict
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # Adjust the logging level as needed.
 
+
 ###############################################################################
 # Metaclass for Automatic Registration
 ###############################################################################
@@ -59,6 +60,53 @@ class SolarPanel(ABC, metaclass=SolarPanelMeta):
 
 
 ###############################################################################
+# Solar Panel Factory
+###############################################################################
+class SolarPanelFactory:
+    """
+    Factory class to instantiate solar panel models.
+    
+    Solar panel models are automatically registered via the SolarPanelMeta metaclass.
+    """
+    _registry: Dict[str, Type[SolarPanel]] = {}
+
+    @classmethod
+    def register_panel(cls, model_name: str, panel_class: Type[SolarPanel]) -> None:
+        """
+        Registers a new solar panel model by its unique name.
+
+        Args:
+            model_name (str): The unique identifier for the solar panel model.
+            panel_class (Type[SolarPanel]): The class implementing the model.
+        """
+        if model_name in cls._registry:
+            logger.warning(f"Solar panel model '{model_name}' is already registered. Overwriting registration.")
+        cls._registry[model_name] = panel_class
+        logger.debug(f"Registered solar panel model '{model_name}': {panel_class}")
+
+    @classmethod
+    def create_solar_panel(cls, model_name: str, **kwargs) -> SolarPanel:
+        """
+        Instantiates and returns a solar panel model based on the model name.
+
+        Args:
+            model_name (str): The registered name of the solar panel model.
+            **kwargs: Additional keyword arguments passed to the model's constructor.
+
+        Returns:
+            SolarPanel: An instance of the requested solar panel model.
+
+        Raises:
+            ValueError: If the model_name is not found in the registry.
+        """
+        if model_name not in cls._registry:
+            raise ValueError(f"Unknown solar panel model '{model_name}'")
+        panel_class = cls._registry[model_name]
+        logger.debug(f"Creating solar panel model '{model_name}' with parameters {kwargs}")
+        return panel_class(**kwargs)
+
+
+###############################################################################
 # Concrete Solar Panel Models
 ###############################################################################
 class ConstantSolarPanel(SolarPanel):
@@ -106,48 +154,3 @@ class VariableEfficiencySolarPanel(SolarPanel):
         return current_efficiency
 
 
-###############################################################################
-# Solar Panel Factory
-###############################################################################
-class SolarPanelFactory:
-    """
-    Factory class to instantiate solar panel models.
-    
-    Solar panel models are automatically registered via the SolarPanelMeta metaclass.
-    """
-    _registry: Dict[str, Type[SolarPanel]] = {}
-
-    @classmethod
-    def register_panel(cls, model_name: str, panel_class: Type[SolarPanel]) -> None:
-        """
-        Registers a new solar panel model by its unique name.
-
-        Args:
-            model_name (str): The unique identifier for the solar panel model.
-            panel_class (Type[SolarPanel]): The class implementing the model.
-        """
-        if model_name in cls._registry:
-            logger.warning(f"Solar panel model '{model_name}' is already registered. Overwriting registration.")
-        cls._registry[model_name] = panel_class
-        logger.debug(f"Registered solar panel model '{model_name}': {panel_class}")
-
-    @classmethod
-    def create_solar_panel(cls, model_name: str, **kwargs) -> SolarPanel:
-        """
-        Instantiates and returns a solar panel model based on the model name.
-
-        Args:
-            model_name (str): The registered name of the solar panel model.
-            **kwargs: Additional keyword arguments passed to the model's constructor.
-
-        Returns:
-            SolarPanel: An instance of the requested solar panel model.
-
-        Raises:
-            ValueError: If the model_name is not found in the registry.
-        """
-        if model_name not in cls._registry:
-            raise ValueError(f"Unknown solar panel model '{model_name}'")
-        panel_class = cls._registry[model_name]
-        logger.debug(f"Creating solar panel model '{model_name}' with parameters {kwargs}")
-        return panel_class(**kwargs)

@@ -129,6 +129,7 @@ class AbstractSimulation(ABC):
         and a metadata dictionary with the episode index.
         """
         for episode_index in tqdm(range(num_episodes)):
+            self.env_provider.reset(episode_index)
             traj, acts, rews, solar, wind, whale = self.simulate_episode()
             if self.save_history:
                 episode_data = {
@@ -231,6 +232,7 @@ class AbstractContinuousEnergySimulation(ABC):
         and a metadata dictionary with the episode index.
         """
         for episode_index in tqdm(range(num_episodes)):
+            self.env_provider.reset(episode_index)
             traj, acts, rews, solar, wind, whale, energies = self.simulate_episode()
             if self.save_history:
                 episode_data = {
@@ -244,7 +246,7 @@ class AbstractContinuousEnergySimulation(ABC):
                     'metadata': {'episode_index': episode_index},
                     'total_reward': sum(rews),
                 }
-                print(episode_data['energy_series'])
+                # print(episode_data['energy_series'])
             else:
                 episode_data = {
                     'metadata': {'episode_index': episode_index},
@@ -434,7 +436,7 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
         # Initialize the simulation using the MDP from the solver.
         super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
         # Pre-solve the MDP (compute the value function using backward induction).
-        mdp_solver.solve()
+        # mdp_solver.solve()
         self.mdp_solver = mdp_solver
 
     def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:

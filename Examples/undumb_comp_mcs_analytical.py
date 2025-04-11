@@ -1,12 +1,18 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import multiprocessing
+
+# Import the necessary classes from your base modules.
 from BaseClasses.environment_provider_base import StochasticWindSolarEnvironmentProvider as EnvProv
 from BaseClasses.mdp_base import stochasticMDP
 from BaseClasses.backward_induction_base import mdpBackwardSolver
 from BaseClasses.seaplane_base import Seaplane
-from BaseClasses.simulation_base import OptimalPolicySimulation, OptimalAnalyticalPolicySimulation
+from BaseClasses.simulation_base import OptimalContinuousAnalyticalPolicySimulation, ObservationThresholdContinuousSimulation
 from BaseClasses.whale_base import WhaleRewardSeriesFactory
+
+# Import the SimulationRunManager from the simulation_run_manager module.
+from BaseClasses.simulation_run_manager import SimulationRunManager
 
 def main():
     # -------------------------------
@@ -48,7 +54,7 @@ def main():
     power_params = seaplane.get_mdp_power_params()
 
     # -------------------------------
-    # Instantiate the MDP
+    # Instantiate the MDP and backward solver
     # -------------------------------
     mdp = stochasticMDP(
         battery_capacity_wh=battery_capacity,
@@ -62,68 +68,55 @@ def main():
         soc_increment=1.0,
         env_provider=env_provider
     )
-
-    # -------------------------------
-    # Set up the backward induction solver
-    # -------------------------------
     solver = mdpBackwardSolver(mdp, horizon)
+    solver.solve()
 
     # -------------------------------
-    # Create simulation objects
+    # Create the simulation objects
     # -------------------------------
-    optimal_policy_sim = OptimalPolicySimulation(
+    # Both simulation objects should implement simulate_multiple_episodes(num_episodes).
+    # optimal_policy_sim = OptimalPolicySimulation(
+    #     mdp_solver=solver,
+    #     horizon=horizon,
+    #     initial_state=initial_state,
+    #     env_provider=env_provider
+    # )
+    optimal_analytical_sim = OptimalContinuousAnalyticalPolicySimulation(
         mdp_solver=solver,
         horizon=horizon,
         initial_state=initial_state,
         env_provider=env_provider
     )
-    optimal_analytical_sim = OptimalAnalyticalPolicySimulation(
-        mdp_solver=solver,
-        horizon=horizon,
-        initial_state=initial_state,
-        env_provider=env_provider
-    )
-
+    simulation_list = [optimal_analytical_sim]
+    for i in range(5):
+        for j in range(5):
+            i=i+1
+            j=j+1
+            simulation_list.append(
+                ObservationThresholdContinuousSimulation(
+                mdp=mdp,
+                horizon=horizon,
+                initial_state=initial_state,
+                observation_threshold=0.3/j,
+                wind_threshold=i*2.,
+                env_provider=env_provider
+            ))
+        
     # -------------------------------
-    # Run episodes and collect results.
+    # Set up the SimulationRunManager to run and store episodes
     # -------------------------------
-    episodes = 5000
-    results = []
-
-    for episode in tqdm(range(episodes)):
-        # Run OptimalPolicySimulation episode.
-        traj_policy, acts_policy, rews_policy, solar_policy, wind_policy, whale_policy = optimal_policy_sim.simulate_episode()
-        total_reward_policy = sum(rews_policy)
-
-        # Run OptimalAnalyticalPolicySimulation episode.
-        traj_analytical, acts_analytical, rews_analytical, solar_analytical, wind_analytical, whale_analytical = optimal_analytical_sim.simulate_episode()
-        total_reward_analytical = sum(rews_analytical)
-
-        # Save all episode data in a dictionary.
-        results.append({
-            "Episode": episode + 1,
-            # "OptimalPolicy_Trajectory": traj_policy,
-            # "OptimalPolicy_Actions": acts_policy,
-            # "OptimalPolicy_Rewards": rews_policy,
-            # "OptimalPolicy_Solar": solar_policy,
-            # "OptimalPolicy_Wind": wind_policy,
-            # "OptimalPolicy_Whale": whale_policy,
-            "OptimalPolicy_TotalReward": total_reward_policy,
-            # "OptimalAnalytical_Trajectory": traj_analytical,
-            # "OptimalAnalytical_Actions": acts_analytical,
-            # "OptimalAnalytical_Rewards": rews_analytical,
-            # "OptimalAnalytical_Solar": solar_analytical,
-            # "OptimalAnalytical_Wind": wind_analytical,
-            # "OptimalAnalytical_Whale": whale_analytical,
-            "OptimalAnalytical_TotalReward": total_reward_analytical
-        })
-
-    # Create a DataFrame from the results.
-    results_df = pd.DataFrame(results)
-
-    # Save the DataFrame as a pickle file.
-    results_df.to_pickle("simulation_results.pkl")
-    print("Results saved to simulation_results.pkl")
+    
+    # Here we choose to run 5000 episodes per simulation.
+    # The storage_dir will be used to save simulation data (handled by SimulationStorage within the manager).
+    episodes_per_simulation = 5000
+    storage_dir = "simulation_results_testing_penal3"
+    sim_manager = SimulationRunManager(episodes_per_simulation, storage_dir)
+    
+    # Optionally, you can enable multiprocessing by setting use_multiprocessing=True.
+    # If you do not wish to use multiprocessing, leave it as False.
+    sim_manager.run_simulations(simulation_list, use_multiprocessing=True)
+    
+    print(f"Simulations complete. Results stored in directory: {storage_dir}")
 
 if __name__ == "__main__":
     main()

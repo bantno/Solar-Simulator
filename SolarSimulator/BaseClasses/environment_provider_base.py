@@ -85,6 +85,18 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         # Use a provided generator or default to np.random.default_rng()
         self.rng = rng if rng is not None else np.random.default_rng()
 
+    def get_wind_shape(self, stage):
+        return self.wind_shape[stage]
+
+    def get_wind_scale(self, stage):
+        return self.wind_scale[stage]
+    
+    def get_solar_alpha(self, stage):
+        return self.solar_alpha[stage]
+    
+    def get_solar_beta(self, stage):
+        return self.solar_beta[stage]
+
     def set_seed(self, seed: int) -> None:
         """
         Set the random seed for reproducibility.
@@ -99,6 +111,14 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
 
     def sample_sunlight(self, t: int, n: int) -> np.ndarray:
         w_p_m2 = self.beta_solar_energy_dist(t, n) * 1367.0  # W/m^2
+        j_p_m2 = w_p_m2 * self.DELTA_T_SEC  # J/m^2
+        a_m2 = self.panel.area
+        return j_p_m2 * a_m2 * self.panel.efficiency
+    
+    def _energy_gain_from_solar(self, solar_vals: np.ndarray) -> np.ndarray:
+        """Calculate energy gain from solar values."""
+        # Solar vals ranges from 0 to 1, representing the fraction of solar energy available
+        w_p_m2 = solar_vals * 1367.0  # W/m^2
         j_p_m2 = w_p_m2 * self.DELTA_T_SEC  # J/m^2
         a_m2 = self.panel.area
         return j_p_m2 * a_m2 * self.panel.efficiency

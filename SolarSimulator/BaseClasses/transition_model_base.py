@@ -800,7 +800,10 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
         next_soc = np.clip(self.energy_to_soc(next_energy), -1., 100.)
         # Determine next mode: if state-of-charge is <= 0 then mode 2, else use action to determine mode
         next_mode = np.where(next_soc < 0, 2, np.where(actions == 0, 0, 1))
-        return np.column_stack((next_soc, next_mode))
+        flattened_soc = next_soc.flatten()
+        flattened_mode = next_mode.flatten()
+        full_states = np.column_stack((flattened_soc, flattened_mode))
+        return full_states
 
     def _apply_transition_probability(self, states: np.ndarray, next_state: np.ndarray, 
                                     actions: np.ndarray, wind_speeds: np.ndarray) -> np.ndarray:
@@ -815,6 +818,15 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
         # For mode 2 states, ensure the SOC is -1
         mode2_mask = next_states[:, 1] == 2
         next_states[mode2_mask, 0] = -1.0
+        return next_states
+
+    def nofail_transition(self, states: np.ndarray, actions: np.ndarray, solar_vals) -> np.ndarray:
+        """
+        Default transition: both energy gain and wind speeds are sampled.
+        """
+        energy_consumption = self._calculate_energy_consumption(states, actions)
+        energy_gain = self.env_provider._energy_gain_from_solar(solar_vals.flatten())
+        next_states = self._update_energy_and_state(states, energy_gain, energy_consumption, actions)
         return next_states
 
     def transition(self, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
@@ -882,7 +894,7 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
             [land_energy, continue_flight_energy],
             [0, 0]
         ])
-        return energy_lookup[states[:, 1].astype(int), actions]
+        return energy_lookup[states[:, 1].astype(int), actions.astype(int)]
 
     def _update_energy_and_state_continuous(self, current_energy: np.ndarray, energy_gain: np.ndarray,
                                             energy_consumption: np.ndarray, actions: np.ndarray):

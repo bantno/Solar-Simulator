@@ -1,10 +1,12 @@
 import sys
 import os
+import yaml
 import multiprocessing
 from functools import partial
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
-    QVBoxLayout, QHBoxLayout, QFileDialog, QComboBox, QMessageBox, QCheckBox
+    QVBoxLayout, QHBoxLayout, QFileDialog, QComboBox, QMessageBox,
+    QCheckBox, QTabWidget, QTextEdit, QListWidget, QListWidgetItem, QSpinBox
 )
 from PyQt5.QtCore import Qt
 from BaseClasses.run_sim import YAMLSimulationRunner, SimulationFactory
@@ -22,9 +24,18 @@ class SimulationGUI(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._build_run_tab(), "Run Simulation")
+        self.tabs.addTab(self._build_config_tab(), "Create Config")
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.tabs)
+        self.setLayout(layout)
+
+    def _build_run_tab(self):
+        run_tab = QWidget()
         layout = QVBoxLayout()
 
-        # Config file selection
         config_layout = QHBoxLayout()
         self.config_label = QLabel("YAML Config File:")
         self.config_input = QLineEdit()
@@ -34,23 +45,62 @@ class SimulationGUI(QWidget):
         config_layout.addWidget(self.config_input)
         config_layout.addWidget(self.browse_button)
 
-        # Multiprocessing option
         self.multiproc_checkbox = QCheckBox("Use Multiprocessing")
 
-        # Run button
         self.run_button = QPushButton("Run Simulation")
         self.run_button.clicked.connect(self.run_simulation)
 
         layout.addLayout(config_layout)
         layout.addWidget(self.multiproc_checkbox)
         layout.addWidget(self.run_button)
+        run_tab.setLayout(layout)
+        return run_tab
 
-        self.setLayout(layout)
+    def _build_config_tab(self):
+        config_tab = QWidget()
+        layout = QVBoxLayout()
+
+        self.output_path_input = QLineEdit()
+        browse_out_button = QPushButton("Select Output Path")
+        browse_out_button.clicked.connect(self.browse_output)
+
+        self.battery_input = QLineEdit("100, 200, 300")
+        self.threshold_input = QLineEdit("0.2, 0.4, 0.6")
+        self.wind_input = QLineEdit("5, 10, 15")
+        self.episodes_input = QSpinBox()
+        self.episodes_input.setRange(1, 100000)
+        self.episodes_input.setValue(3000)
+
+        form_layout = QVBoxLayout()
+        form_layout.addWidget(QLabel("Battery Capacities (Wh):"))
+        form_layout.addWidget(self.battery_input)
+        form_layout.addWidget(QLabel("Observation Thresholds:"))
+        form_layout.addWidget(self.threshold_input)
+        form_layout.addWidget(QLabel("Wind Thresholds (m/s):"))
+        form_layout.addWidget(self.wind_input)
+        form_layout.addWidget(QLabel("Episodes per Simulation:"))
+        form_layout.addWidget(self.episodes_input)
+        form_layout.addWidget(QLabel("Output YAML File Path:"))
+        form_layout.addWidget(self.output_path_input)
+        form_layout.addWidget(browse_out_button)
+
+        export_button = QPushButton("Export Config File")
+        export_button.clicked.connect(self.export_config)
+
+        layout.addLayout(form_layout)
+        layout.addWidget(export_button)
+        config_tab.setLayout(layout)
+        return config_tab
 
     def browse_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select YAML Config File", "", "YAML Files (*.yaml *.yml)")
         if file_path:
             self.config_input.setText(file_path)
+
+    def browse_output(self):
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Config File", "config.yaml", "YAML Files (*.yaml *.yml)")
+        if file_path:
+            self.output_path_input.setText(file_path)
 
     def run_simulation(self):
         config_path = self.config_input.text().strip()
@@ -82,6 +132,32 @@ class SimulationGUI(QWidget):
             QMessageBox.information(self, "Success", "Simulations completed successfully.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Simulation failed with error:\n{str(e)}")
+
+    def export_config(self):
+        try:
+            batteries = [float(b.strip()) for b in self.battery_input.text().split(",") if b.strip()]
+            thresholds = [float(t.strip()) for t in self.threshold_input.text().split(",") if t.strip()]
+            winds = [float(w.strip()) for w in self.wind_input.text().split(",") if w.strip()]
+            episodes = int(self.episodes_input.value())
+            out_path = self.output_path_input.text().strip()
+
+            config = {
+                "battery_capacities": batteries,
+                "threshold_values": thresholds,
+                "wind_thresholds": winds,
+                "episodes": episodes,
+                "transition_model": "moderate",
+                "solar_panel_model": "constant",
+                "data_path": "Data/EXPECTED_DATA/data_expected_lat30_lon-90_15min.pkl"
+            }
+
+            with open(out_path, 'w') as f:
+                yaml.dump(config, f)
+
+            QMessageBox.information(self, "Success", f"Config file saved to: {out_path}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export config:\n{str(e)}")
 
 
 def main():

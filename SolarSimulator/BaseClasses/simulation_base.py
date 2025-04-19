@@ -181,42 +181,126 @@ class AbstractContinuousEnergySimulation(ABC):
         Select an action given the current state and time step.
         """
 
+    # def simulate_episode(self):
+    #     """
+    #     Simulate a single episode using the policy and environment provider.
+    #     """
+    #     state = self.initial_state
+    #     energy = self.mdp.transition_logic.soc_to_energy(state[0])
+    #     energies = [energy]
+    #     trajectory = [state]
+    #     actions = []
+    #     rewards = []
+    #     solar_samples = []
+    #     wind_samples = []
+    #     whale_samples = []
+    #     for t in range(self.horizon):
+    #         # Sample environmental data
+    #         solar_sample = self.env_provider.sample_sunlight(t, 1)[0]
+    #         wind_sample = self.env_provider.sample_wind_speed(t, 1)[0]
+    #         whale_observation = self.env_provider.sample_whale_observation(t, 1)[0]
+    #         action = self.choose_action(state=state,
+    #                                     solar_sample_w=solar_sample,
+    #                                     wind_sample_ms=wind_sample,
+    #                                     whale_observation=whale_observation,
+    #                                     t=t)
+    #         actions.append(action)
+    #         next_state, reward, next_energy = self.step(energy, state[np.newaxis, :], np.full((1,),action), solar_sample, wind_sample,t)
+    #         state = next_state[0]
+    #         energy = next_energy
+    #         trajectory.append(state)
+    #         rewards.append(reward[0])
+    #         energies.append(energy)
+    #         solar_samples.append(solar_sample)
+    #         wind_samples.append(wind_sample)
+    #         whale_samples.append(whale_observation)
+    #         if state[1] == 2:
+    #             break
+    #     return trajectory, actions, rewards, solar_samples, wind_samples, whale_samples, energies
+
     def simulate_episode(self):
         """
         Simulate a single episode using the policy and environment provider.
+        Pre-allocates fixed-size arrays and truncates them at the first failure.
         """
+        max_steps = self.horizon
+        # assume state is a 1D array of length S
         state = self.initial_state
+        S = state.shape[0]
+        
+        # pre-allocate
+        trajectory      = np.zeros((max_steps+1, S))
+        energies        = np.zeros(max_steps+1)
+        actions         = np.zeros(max_steps, dtype=int)
+        rewards         = np.zeros(max_steps)
+        solar_samples   = np.zeros(max_steps)
+        wind_samples    = np.zeros(max_steps)
+        whale_samples   = np.zeros(max_steps)
+        
+        # initialize at t=0
         energy = self.mdp.transition_logic.soc_to_energy(state[0])
-        energies = [energy]
-        trajectory = [state]
-        actions = []
-        rewards = []
-        solar_samples = []
-        wind_samples = []
-        whale_samples = []
-        for t in range(self.horizon):
-            # Sample environmental data
-            solar_sample = self.env_provider.sample_sunlight(t, 1)[0]
-            wind_sample = self.env_provider.sample_wind_speed(t, 1)[0]
-            whale_observation = self.env_provider.sample_whale_observation(t, 1)[0]
-            action = self.choose_action(state=state,
-                                        solar_sample_w=solar_sample,
-                                        wind_sample_ms=wind_sample,
-                                        whale_observation=whale_observation,
-                                        t=t)
-            actions.append(action)
-            next_state, reward, next_energy = self.step(energy, state[np.newaxis, :], np.full((1,),action), solar_sample, wind_sample,t)
-            state = next_state[0]
-            energy = next_energy
-            trajectory.append(state)
-            rewards.append(reward[0])
-            energies.append(energy)
-            solar_samples.append(solar_sample)
-            wind_samples.append(wind_sample)
-            whale_samples.append(whale_observation)
+        trajectory[0] = state
+        energies[0]   = energy
+        rewards[0]    = 0.0
+        actions[0]    = 0
+        solar_samples[0] = 0.0
+        wind_samples[0]  = 0.0
+        whale_samples[0] = 0.0
+        
+        # run
+        for t in range(max_steps):
+            # sample environment
+            solar = self.env_provider.sample_sunlight(t, 1)[0]
+            wind  = self.env_provider.sample_wind_speed(t, 1)[0]
+            whale = self.env_provider.sample_whale_observation(t, 1)[0]
+            
+            # choose and record action
+            a = self.choose_action(
+                state=state,
+                solar_sample_w=solar,
+                wind_sample_ms=wind,
+                whale_observation=whale,
+                t=t
+            )
+            actions[t]       = a
+            solar_samples[t] = solar
+            wind_samples[t]  = wind
+            whale_samples[t] = whale
+            
+            # step
+            (next_state_arr, reward_arr, next_energy_arr) = self.step(
+                energy,
+                state[np.newaxis, :],
+                np.full((1,), a),
+                solar, wind, t
+            )
+            state  = next_state_arr[0]
+            reward = reward_arr[0]
+            energy = next_energy_arr
+            
+            # record
+            trajectory[t+1] = state
+            rewards[t]      = reward
+            energies[t+1]   = energy
+            
+            # check for failure (mode==2)
             if state[1] == 2:
+                last_idx = t + 1
                 break
-        return trajectory, actions, rewards, solar_samples, wind_samples, whale_samples, energies
+        else:
+            # no failure in full horizon
+            last_idx = max_steps
+        
+        # slice out only the filled portion
+        return (
+            trajectory[:last_idx+1],     # states from t=0 to last_idx
+            actions[:last_idx],          # actions t=0 … last_idx-1
+            rewards[:last_idx],          # rewards t=0 … last_idx-1
+            solar_samples[:last_idx],
+            wind_samples[:last_idx],
+            whale_samples[:last_idx],
+            energies[:last_idx+1]        # energies from t=0 to last_idx
+        )
     
     def step(self, energy, states, actions, energy_gain, wind_sample,t):
         # The samples for solar, wind, and whale need to be exposed in this function. Right now these are sampled in the transition function, but it needs to be in the simulation loop.
@@ -437,6 +521,7 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
         super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
         # Pre-solve the MDP (compute the value function using backward induction).
         # mdp_solver.solve()
+        mdp_solver.solve()
         self.mdp_solver = mdp_solver
 
     def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:

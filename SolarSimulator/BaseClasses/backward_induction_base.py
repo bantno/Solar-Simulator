@@ -85,8 +85,8 @@ class mdpBackwardSolver:
                     value = max(float_val, fly_val)
 
                 self.future_value_table[i, stage] = value
-
-        PlottingUtils.plot_surface_plotly(self.future_value_table, self.mdp.battery_capacity_wh)
+        filename = f"future_value_table_{self.mdp.battery_capacity_wh}Wh_{self.horizon}horizon.html"
+        PlottingUtils.plot_surface_plotly(self.future_value_table, self.mdp.battery_capacity_wh, filename)
 
     def value_function(self, stage: int, rewards: np.ndarray, next_states: np.ndarray) -> float:
         """

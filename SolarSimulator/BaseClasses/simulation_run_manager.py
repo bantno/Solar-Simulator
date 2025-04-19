@@ -1,4 +1,4 @@
-from BaseClasses.simulation_storage import SimulationStorage
+from BaseClasses.simulation_storage import SimulationStorage, SimulationStorageHDF5
 import multiprocessing
 
 def _run_one_sim(args):
@@ -54,7 +54,7 @@ class SimulationRunManager:
             storage_dir (str): Directory where the simulation results will be stored.
         """
         self.episodes_per_simulation = episodes_per_simulation
-        self.storage = SimulationStorage(storage_dir)
+        self.storage = SimulationStorageHDF5(storage_dir)
     
     def run_simulations(self, simulation_list: list, use_multiprocessing=False, num_workers=None):
         """
@@ -70,15 +70,22 @@ class SimulationRunManager:
                 # Reuse the same worker logic but just call it directly
                 simulation_metadata, episodes = _run_one_sim((sim, self.episodes_per_simulation))
                 self.storage.store_simulation(simulation_metadata, episodes)
+                self.storage.close()
                 print(f"Stored simulation {simulation_metadata} with {len(episodes)} episodes.")
-            return
-
+                
         # --- MULTIPROCESSING path ---
-        with multiprocessing.Pool(processes=num_workers) as pool:
-            # Build tasks as (sim, episodes_per_simulation) pairs
-            tasks = [(sim, self.episodes_per_simulation) for sim in simulation_list]
+        else:
+            with multiprocessing.Pool(processes=num_workers) as pool:
+                # Build tasks as (sim, episodes_per_simulation) pairs
+                tasks = [(sim, self.episodes_per_simulation) for sim in simulation_list]
 
-            # Use imap_unordered so results arrive as soon as they're ready
-            for (sim_metadata, episodes) in pool.imap_unordered(_run_one_sim, tasks):
-                self.storage.store_simulation(sim_metadata, episodes)
-                print(f"Stored simulation {sim_metadata} with {len(episodes)} episodes.")
+                # Use imap_unordered so results arrive as soon as they're ready
+                for (sim_metadata, episodes) in pool.imap_unordered(_run_one_sim, tasks):
+                    self.storage.store_simulation(sim_metadata, episodes)
+                    self.storage.close()
+                    print(f"Stored simulation {sim_metadata} with {len(episodes)} episodes.")
+                
+
+
+        print("All simulations completed and stored.")
+        return

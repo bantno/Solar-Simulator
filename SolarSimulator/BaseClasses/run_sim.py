@@ -9,7 +9,7 @@ from BaseClasses.mdp_base import stochasticMDP
 from BaseClasses.backward_induction_base import mdpBackwardSolver
 from BaseClasses.simulation_base import (
     ObservationThresholdContinuousSimulation,
-    OptimalPolicySimulation,
+    OptimalContinuousAnalyticalPolicySimulation,
 )
 from BaseClasses.simulation_run_manager import SimulationRunManager
 from BaseClasses.whale_base import WhaleRewardSeriesFactory
@@ -93,7 +93,7 @@ class SimulationFactory:
             )
         elif sim_type == "optimal":
             solver = mdpBackwardSolver(mdp, self.horizon)
-            return OptimalPolicySimulation(
+            return OptimalContinuousAnalyticalPolicySimulation(
                 solver, self.horizon, initial_state, env_provider=self.env_provider
             )
         else:
@@ -130,7 +130,7 @@ class YAMLSimulationRunner:
         print(f"Created {len(simulations)} simulation objects.")
         manager = SimulationRunManager(
             episodes_per_simulation=self.config.get("episodes", 3000),
-            storage_dir="simulation_results"
+            storage_dir="." # TODO: Enable setting of storage directory in config file.
         )
         manager.run_simulations(simulations, use_multiprocessing=use_multiprocessing)
 
@@ -139,7 +139,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", type=str, default="config.yaml", help="Path to config YAML")
+    parser.add_argument("-c", "--config", type=str, default="quick_test.yaml", help="Path to config YAML")
     args = parser.parse_args()
 
     runner = YAMLSimulationRunner(args.config)

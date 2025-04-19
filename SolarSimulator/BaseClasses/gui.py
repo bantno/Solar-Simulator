@@ -1,15 +1,17 @@
+# pylint: disable=no-name-in-module
+
 import sys
 import os
-import yaml
 import multiprocessing
-from functools import partial
+import yaml
+
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
-    QVBoxLayout, QHBoxLayout, QFileDialog, QComboBox, QMessageBox,
-    QCheckBox, QTabWidget, QTextEdit, QListWidget, QListWidgetItem, QSpinBox
+    QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox,
+    QCheckBox, QTabWidget, QSpinBox
 )
-from PyQt5.QtCore import Qt
-from BaseClasses.run_sim import YAMLSimulationRunner, SimulationFactory
+# from PyQt5.QtCore import Qt
+from BaseClasses.run_sim import YAMLSimulationRunner
 
 
 def create_simulation_wrapper(args):
@@ -21,6 +23,7 @@ class SimulationGUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Simulation Runner")
+        self.setMinimumSize(600, 400)
         self.init_ui()
 
     def init_ui(self):
@@ -29,12 +32,16 @@ class SimulationGUI(QWidget):
         self.tabs.addTab(self._build_config_tab(), "Create Config")
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
         layout.addWidget(self.tabs)
         self.setLayout(layout)
 
     def _build_run_tab(self):
         run_tab = QWidget()
         layout = QVBoxLayout()
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
 
         config_layout = QHBoxLayout()
         self.config_label = QLabel("YAML Config File:")
@@ -59,6 +66,8 @@ class SimulationGUI(QWidget):
     def _build_config_tab(self):
         config_tab = QWidget()
         layout = QVBoxLayout()
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
 
         self.output_path_input = QLineEdit()
         browse_out_button = QPushButton("Select Output Path")
@@ -67,17 +76,29 @@ class SimulationGUI(QWidget):
         self.battery_input = QLineEdit("100, 200, 300")
         self.threshold_input = QLineEdit("0.2, 0.4, 0.6")
         self.wind_input = QLineEdit("5, 10, 15")
+        self.lat_input = QLineEdit("30")
+        self.lon_input = QLineEdit("-90")
+        self.horizon_input = QSpinBox()
+        self.horizon_input.setRange(1, 100000)
+        self.horizon_input.setValue(1000)
         self.episodes_input = QSpinBox()
         self.episodes_input.setRange(1, 100000)
         self.episodes_input.setValue(3000)
 
         form_layout = QVBoxLayout()
+        form_layout.setSpacing(8)
         form_layout.addWidget(QLabel("Battery Capacities (Wh):"))
         form_layout.addWidget(self.battery_input)
         form_layout.addWidget(QLabel("Observation Thresholds:"))
         form_layout.addWidget(self.threshold_input)
         form_layout.addWidget(QLabel("Wind Thresholds (m/s):"))
         form_layout.addWidget(self.wind_input)
+        form_layout.addWidget(QLabel("Latitude:"))
+        form_layout.addWidget(self.lat_input)
+        form_layout.addWidget(QLabel("Longitude:"))
+        form_layout.addWidget(self.lon_input)
+        form_layout.addWidget(QLabel("Horizon (time steps):"))
+        form_layout.addWidget(self.horizon_input)
         form_layout.addWidget(QLabel("Episodes per Simulation:"))
         form_layout.addWidget(self.episodes_input)
         form_layout.addWidget(QLabel("Output YAML File Path:"))
@@ -139,16 +160,22 @@ class SimulationGUI(QWidget):
             thresholds = [float(t.strip()) for t in self.threshold_input.text().split(",") if t.strip()]
             winds = [float(w.strip()) for w in self.wind_input.text().split(",") if w.strip()]
             episodes = int(self.episodes_input.value())
+            horizon = int(self.horizon_input.value())
+            latitude = float(self.lat_input.text().strip())
+            longitude = float(self.lon_input.text().strip())
             out_path = self.output_path_input.text().strip()
 
             config = {
                 "battery_capacities": batteries,
                 "threshold_values": thresholds,
                 "wind_thresholds": winds,
+                "horizon": horizon,
                 "episodes": episodes,
                 "transition_model": "moderate",
                 "solar_panel_model": "constant",
-                "data_path": "Data/EXPECTED_DATA/data_expected_lat30_lon-90_15min.pkl"
+                "latitude": latitude,
+                "longitude": longitude,
+                "data_path": f"Data/EXPECTED_DATA/data_expected_lat{latitude}_lon{longitude}_15min.pkl"
             }
 
             with open(out_path, 'w') as f:
@@ -162,6 +189,40 @@ class SimulationGUI(QWidget):
 
 def main():
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    app.setStyleSheet("""
+        QWidget {
+            font-size: 12pt;
+            background-color: #121212;
+            color: #f0f0f0;
+        }
+        QLineEdit, QSpinBox {
+            padding: 5px;
+            background-color: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #ffffff;
+        }
+        QPushButton {
+            padding: 6px 12px;
+            background-color: #2979FF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        QPushButton:hover {
+            background-color: #448AFF;
+        }
+        QLabel {
+            font-weight: bold;
+        }
+        QCheckBox {
+            padding: 5px;
+        }
+        QTabWidget::pane {
+            border: 1px solid #444;
+        }
+    """)
     gui = SimulationGUI()
     gui.show()
     sys.exit(app.exec_())

@@ -70,7 +70,7 @@ class PlottingUtils:
         plt.savefig("ev_table_broken.png")
 
     @staticmethod
-    def plot_surface_plotly(data, capacity=50):
+    def plot_surface_plotly(data, capacity=50, filename="ev_table_combined.html"):
         """
         Plots an interactive 3D surface plot for the 'moored,' 'flying,' and 'broken'
         states using Plotly.
@@ -135,4 +135,4 @@ class PlottingUtils:
         )
 
         # Save plot
-        fig.write_html("ev_table_combined.html")
+        fig.write_html(filename)

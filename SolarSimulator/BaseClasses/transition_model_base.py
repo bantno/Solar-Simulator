@@ -894,7 +894,12 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
             [land_energy, continue_flight_energy],
             [0, 0]
         ])
-        return energy_lookup[states[:, 1].astype(int), actions.astype(int)]
+        if isinstance(actions, np.ndarray):
+            # If actions is an array, use it to index the energy consumption lookup table
+            return energy_lookup[states[:, 1].astype(int), actions.astype(int)]
+        else:
+            # If actions is a single value, use it to index the energy consumption lookup table
+            return energy_lookup[states[:, 1].astype(int), actions]
 
     def _update_energy_and_state_continuous(self, current_energy: np.ndarray, energy_gain: np.ndarray,
                                             energy_consumption: np.ndarray, actions: np.ndarray):

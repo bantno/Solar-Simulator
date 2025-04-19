@@ -83,137 +83,74 @@ class SimulationStorage:
         return all_simulations
 
 
-
-import os
 import h5py
-import numpy as np
-from datetime import datetime
-
+import uuid
 
 class SimulationStorageHDF5:
     """
-    Stores simulation runs in individual HDF5 files. Filenames are auto-generated
-    based on provided metadata and a timestamp for uniqueness.
-
-    Usage:
-        storage = SimulationStorageHDF5('path/to/storage')
-        storage.store_simulation(sim_meta, episodes)
-        storage.close()
+    HDF5-based storage for batches of simulations.
+    Each simulation is stored as a top-level group within one file.
     """
+    def __init__(self, file_path: str):
+        """
+        Open the HDF5 file in append mode (creates if not exists).
+        """
+        self.h5file = h5py.File(file_path, "a")
 
-    def __init__(self, storage_dir: str):
+    def store_simulation(self,
+                         sim_metadata: dict,
+                         episodes: list,
+                         group_name: str = None):
         """
-        Initialize storage directory and internal counters.
+        Store a batch of episodes under a unique top-level group.
 
-        Args:
-            storage_dir (str): Directory where HDF5 files will be saved.
-        """
-        os.makedirs(storage_dir, exist_ok=True)
-        self.storage_dir = storage_dir
-        self.simulation_counter = 0
-        # Base timestamp for this run (will vary per file if multiple store calls)
-        self.run_base_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.data_file = None
+        Parameters:
+        - sim_metadata: dict of simple metadata entries for the simulation
+        - episodes: list of dicts, each dict represents one episode
+        - group_name: mandatory name for the group identifying this simulation
 
-    def _generate_filename(self, simulation_metadata: dict) -> str:
+        Raises:
+            ValueError: if the given group_name already exists in the file.
         """
-        Create a filename using metadata fields and timestamp.
-        Example: ObservationThresholdContinuousSimulation_10ep_400Ah_0.0obs_10.0wind_20250418-153000_0001.hdf5
-        """
-        mtype = simulation_metadata.get('simulation_type', 'sim')
-        epc = simulation_metadata.get('episodes_count', self.simulation_counter)
-        cap = simulation_metadata.get('battery_capacity', 'cap')
-        obs = simulation_metadata.get('observation_threshold', 'obs')
-        wind = simulation_metadata.get('wind_threshold', 'wind')
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        idx = f"{self.simulation_counter:04d}"
-        fname = f"{mtype}_{epc}ep_{cap}Ah_{obs}obs_{wind}wind_{timestamp}_{idx}.hdf5"
-        return os.path.join(self.storage_dir, fname)
+        if not group_name:
+            raise ValueError("group_name must be provided to store_simulation")
+        if group_name in self.h5file:
+            raise ValueError(f"Simulation group '{group_name}' already exists in the HDF5 file.")
 
-    def _open_file(self, filepath: str):
-        """
-        Opens (or reopens) the HDF5 file for writing.
-        """
-        # Close previous if open
-        if self.data_file:
-            self.data_file.close()
-        # Remove existing and open new
-        if os.path.exists(filepath):
-            os.remove(filepath)
-        self.data_file = h5py.File(filepath, 'w', libver='earliest')
+        # Create simulation group and store simulation-level metadata
+        grp = self.h5file.create_group(group_name)
+        for key, val in sim_metadata.items():
+            try:
+                grp.attrs[key] = val
+            except TypeError:
+                grp.attrs[key] = str(val)
+
+        # Episodes subgroup
+        eps_grp = grp.create_group("episodes")
+        for idx, ep in enumerate(episodes, start=1):
+            ep_grp = eps_grp.create_group(f"episode {idx}")
+            # Episode-level metadata
+            metadata = ep.get("metadata", {})
+            if isinstance(metadata, dict):
+                for mkey, mval in metadata.items():
+                    try:
+                        ep_grp.attrs[mkey] = mval
+                    except TypeError:
+                        ep_grp.attrs[mkey] = str(mval)
+            # Store other fields as datasets
+            for field, data in ep.items():
+                if field == "metadata":
+                    continue
+                arr = np.asarray(data)
+                # Handle non-numeric/object arrays by JSON-encoding elements
+                if arr.dtype == object:
+                    str_data = np.array([json.dumps(x) for x in data], dtype="S")
+                    ep_grp.create_dataset(field, data=str_data)
+                else:
+                    ep_grp.create_dataset(field, data=arr)
 
     def close(self):
         """
-        Closes the HDF5 file if open.
+        Close the underlying HDF5 file.
         """
-        if self.data_file:
-            self.data_file.close()
-            self.data_file = None
-
-    def save_dataset(self, grp, data_name: str, data_values: np.ndarray):
-        """
-        Saves or appends data to a dataset under a given group.
-        """
-        if data_name in grp:
-            ds = grp[data_name]
-            old_shape = ds.shape
-            new_len = old_shape[0] + data_values.shape[0]
-            ds.resize((new_len,) + old_shape[1:])
-            ds[old_shape[0]:] = data_values
-        else:
-            maxshape = (None,) + data_values.shape[1:]
-            grp.create_dataset(
-                data_name,
-                data=data_values,
-                maxshape=maxshape,
-                chunks=True,
-                compression='gzip',
-                compression_opts=4
-            )
-
-    def store_simulation(self, simulation_metadata: dict, episodes: list):
-        """
-        Writes a simulation run to its own HDF5 file:
-
-        - Filename auto-generated from metadata and timestamp
-        - Root attributes store simulation_metadata keys
-        - '/episodes' group contains one subgroup per episode
-        - Episode metadata stored as group attributes, data as datasets
-        """
-        # Prepare file
-        filepath = self._generate_filename(simulation_metadata)
-        self._open_file(filepath)
-        # Write global metadata
-        for key, val in simulation_metadata.items():
-            self.data_file.attrs[key] = val
-        # Episodes container
-        ep_root = self.data_file.require_group('episodes')
-        # Write each episode
-        for idx, ep in enumerate(episodes):
-            grp = ep_root.require_group(f'episode_{idx:04d}')
-            # Episode metadata
-            meta = ep.get('metadata', {})
-            for mkey, mval in meta.items():
-                grp.attrs[mkey] = mval
-            if 'total_reward' in ep:
-                grp.attrs['total_reward'] = ep['total_reward']
-            # Time-series and arrays
-            for key, vals in ep.items():
-                if key in ('metadata', 'total_reward'):
-                    continue
-                arr = np.array(vals)
-                if arr.ndim == 0:
-                    grp.attrs[key] = arr.item()
-                else:
-                    self.save_dataset(grp, key, arr)
-        for key, val in simulation_metadata.items():
-            ep_root.attrs[key] = val
-        
-        # Flush and increment
-        self.data_file.flush()
-        self.simulation_counter += 1
-
-# Example:
-# storage = SimulationStorageHDF5('Data/EXPECTED_DATA')
-# storage.store_simulation(sim_meta, episodes)
-# storage.close()
+        self.h5file.close()

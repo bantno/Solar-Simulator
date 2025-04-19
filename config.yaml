@@ -1,6 +1,0 @@
-battery_capacities: [800]
-threshold_values: [0.5]
-wind_thresholds: [5]
-horizon: 500
-data_path: "Data/EXPECTED_DATA/data_expected_lat0_lon-90_15min.pkl"
-episodes: 1

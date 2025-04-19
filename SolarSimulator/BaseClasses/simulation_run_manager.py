@@ -1,5 +1,6 @@
-from BaseClasses.simulation_storage import SimulationStorage, SimulationStorageHDF5
+import os
 import multiprocessing
+from BaseClasses.simulation_storage import SimulationStorageHDF5
 
 def _run_one_sim(args):
     """
@@ -44,51 +45,56 @@ def _run_one_sim(args):
 class SimulationRunManager:
     """
     A generic manager for running multiple simulations and storing each simulation run's
-    episodes together as a batch in one file.
-    
-    The manager accepts a list of simulation instances (each must implement
-    simulate_multiple_episodes(num_episodes) as a generator) and stores the results.
+    episodes together as a batch in one file (all_simulations.h5).
     """
-    
     def __init__(self, episodes_per_simulation: int, storage_dir: str):
         """
         Parameters:
             episodes_per_simulation (int): Number of episodes to run for each simulation instance.
-            storage_dir (str): Directory where the simulation results will be stored.
+            storage_dir (str): Directory where the batch HDF5 file will be stored.
         """
         self.episodes_per_simulation = episodes_per_simulation
-        self.storage = SimulationStorageHDF5(storage_dir)
-    
+        batch_path = os.path.join(storage_dir, "all_simulations.h5")
+        self.storage = SimulationStorageHDF5(batch_path)
+
     def run_simulations(self, simulation_list: list, use_multiprocessing=False, num_workers=None):
         """
         Runs each simulation in the provided list, collects its episodes, enriches metadata,
-        and stores all episodes for that simulation. Optionally parallelized.
+        and stores all episodes for that simulation into one HDF5 file.
         """
+        # Determine worker count
         if use_multiprocessing and (num_workers is None):
-            num_workers = multiprocessing.cpu_count()-1
+            num_workers = max(1, multiprocessing.cpu_count() - 1)
 
-        # --- SERIAL path (no multiprocessing) ---
+        # --- SERIAL execution ---
         if not use_multiprocessing:
             for sim in simulation_list:
-                # Reuse the same worker logic but just call it directly
-                simulation_metadata, episodes = _run_one_sim((sim, self.episodes_per_simulation))
-                self.storage.store_simulation(simulation_metadata, episodes)
-                self.storage.close()
-                print(f"Stored simulation {simulation_metadata} with {len(episodes)} episodes.")
-                
-        # --- MULTIPROCESSING path ---
+                sim_meta, episodes = _run_one_sim((sim, self.episodes_per_simulation))
+                group = self._make_group_name(sim_meta)
+                self.storage.store_simulation(sim_meta, episodes, group_name=group)
+                print(f"→ Stored group '{group}' with {len(episodes)} episodes")
+
+        # --- PARALLEL execution ---
         else:
+            tasks = [(sim, self.episodes_per_simulation) for sim in simulation_list]
             with multiprocessing.Pool(processes=num_workers) as pool:
-                # Build tasks as (sim, episodes_per_simulation) pairs
-                tasks = [(sim, self.episodes_per_simulation) for sim in simulation_list]
+                for sim_meta, episodes in pool.imap_unordered(_run_one_sim, tasks):
+                    group = self._make_group_name(sim_meta)
+                    self.storage.store_simulation(sim_meta, episodes, group_name=group)
+                    print(f"→ Stored group '{group}' with {len(episodes)} episodes")
 
-                # Use imap_unordered so results arrive as soon as they're ready
-                for (sim_metadata, episodes) in pool.imap_unordered(_run_one_sim, tasks):
-                    self.storage.store_simulation(sim_metadata, episodes)
-                    self.storage.close()
-                    print(f"Stored simulation {sim_metadata} with {len(episodes)} episodes.")
-                
+        # Close the HDF5 file when all writes are done
+        self.storage.close()
+        print("All simulations completed and stored in one file.")
 
-
-        print("All simulations completed and stored.")
-        return
+    def _make_group_name(self, meta: dict) -> str:
+        """
+        Build a group name mirroring previous filenames, e.g. 'threshold_c100_t0.5_w2.0'.
+        """
+        parts = [meta["simulation_type"].lower()]
+        parts.append(f"c{int(meta['battery_capacity'])}")
+        if "observation_threshold" in meta:
+            parts.append(f"t{meta['observation_threshold']}")
+        if "wind_threshold" in meta:
+            parts.append(f"w{meta['wind_threshold']}")
+        return "_".join(parts)

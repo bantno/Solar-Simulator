@@ -30,6 +30,9 @@ def _run_one_sim(args):
         "simulation_type": sim.__class__.__name__,
         "episodes_count": len(episodes),
         "battery_capacity": sim.mdp.battery_capacity_wh,
+        "horizon": sim.horizon,
+        "initial_state": sim.initial_state.tolist(),
+        "start_time": sim.start_datetime,
     }
     if hasattr(sim, "observation_threshold"):
         simulation_metadata["observation_threshold"] = sim.observation_threshold

@@ -8,9 +8,9 @@ import yaml
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox,
-    QCheckBox, QTabWidget, QSpinBox
+    QCheckBox, QTabWidget, QSpinBox, QDateTimeEdit
 )
-# from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QDateTime, Qt
 from BaseClasses.run_sim import YAMLSimulationRunner
 
 
@@ -69,10 +69,12 @@ class SimulationGUI(QWidget):
         layout.setSpacing(10)
         layout.setContentsMargins(10, 10, 10, 10)
 
+        # Output path selector
         self.output_path_input = QLineEdit()
         browse_out_button = QPushButton("Select Output Path")
         browse_out_button.clicked.connect(self.browse_output)
 
+        # Config inputs
         self.battery_input = QLineEdit("100, 200, 300")
         self.threshold_input = QLineEdit("0.2, 0.4, 0.6")
         self.wind_input = QLineEdit("5, 10, 15")
@@ -85,8 +87,16 @@ class SimulationGUI(QWidget):
         self.episodes_input.setRange(1, 100000)
         self.episodes_input.setValue(3000)
 
+        # Start date/time selector
+        self.start_date_input = QDateTimeEdit(self)
+        self.start_date_input.setCalendarPopup(True)
+        self.start_date_input.setDisplayFormat("yyyy-MM-dd HH:mm")
+        self.start_date_input.setDateTime(QDateTime.currentDateTime())
+
         form_layout = QVBoxLayout()
         form_layout.setSpacing(8)
+        form_layout.addWidget(QLabel("Start Date & Time:"))
+        form_layout.addWidget(self.start_date_input)
         form_layout.addWidget(QLabel("Battery Capacities (Wh):"))
         form_layout.addWidget(self.battery_input)
         form_layout.addWidget(QLabel("Observation Thresholds:"))
@@ -114,12 +124,16 @@ class SimulationGUI(QWidget):
         return config_tab
 
     def browse_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select YAML Config File", "", "YAML Files (*.yaml *.yml)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select YAML Config File", "", "YAML Files (*.yaml *.yml)"
+        )
         if file_path:
             self.config_input.setText(file_path)
 
     def browse_output(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Config File", "config.yaml", "YAML Files (*.yaml *.yml)")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Config File", "config.yaml", "YAML Files (*.yaml *.yml)"
+        )
         if file_path:
             self.output_path_input.setText(file_path)
 
@@ -163,9 +177,11 @@ class SimulationGUI(QWidget):
             horizon = int(self.horizon_input.value())
             latitude = float(self.lat_input.text().strip())
             longitude = float(self.lon_input.text().strip())
+            start_dt = self.start_date_input.dateTime().toString(Qt.ISODate)
             out_path = self.output_path_input.text().strip()
 
             config = {
+                "start_datetime": start_dt,
                 "battery_capacities": batteries,
                 "threshold_values": thresholds,
                 "wind_thresholds": winds,
@@ -196,7 +212,7 @@ def main():
             background-color: #121212;
             color: #f0f0f0;
         }
-        QLineEdit, QSpinBox {
+        QLineEdit, QSpinBox, QDateTimeEdit {
             padding: 5px;
             background-color: #1e1e1e;
             border: 1px solid #444;

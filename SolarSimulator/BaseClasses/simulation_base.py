@@ -157,7 +157,9 @@ class AbstractContinuousEnergySimulation(ABC):
     data (solar, wind, whale observation) rather than passing these arrays explicitly.
     """
     
-    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, env_provider: AbstractEnvironmentProvider = None, save_history = True):
+    def __init__(self, mdp, horizon: int, initial_state: np.ndarray,
+                 start_datetime,
+                  env_provider: AbstractEnvironmentProvider = None, save_history = True):
         """
         Parameters:
             mdp: An instance of a class that implements the MDP.
@@ -169,6 +171,7 @@ class AbstractContinuousEnergySimulation(ABC):
         self.mdp = mdp
         self.horizon = horizon
         self.initial_state = initial_state
+        self.start_datetime = start_datetime
         self.save_history = save_history
         if env_provider is None and hasattr(mdp, 'env_provider'):
             self.env_provider = mdp.env_provider
@@ -516,9 +519,9 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
     for each action (0 or 1) using a backward induction solver.
     """
 
-    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray, env_provider=None):
+    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray,start_datetime, env_provider=None):
         # Initialize the simulation using the MDP from the solver.
-        super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
+        super().__init__(mdp_solver.mdp, horizon, initial_state,start_datetime, env_provider)
         # Pre-solve the MDP (compute the value function using backward induction).
         # mdp_solver.solve()
         mdp_solver.solve()
@@ -581,8 +584,9 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
         return int(np.argmax(value_list))
 
 class ObservationThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
-    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, observation_threshold: float, wind_threshold: float, env_provider=None):
-        super().__init__(mdp, horizon, initial_state, env_provider)
+    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, observation_threshold: float,
+                  wind_threshold: float,start_datetime, env_provider=None):
+        super().__init__(mdp, horizon, initial_state, start_datetime, env_provider)
         self.observation_threshold = observation_threshold
         self.wind_threshold = wind_threshold
         self.low_battery_threshold = 30.

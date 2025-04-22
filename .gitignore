@@ -6,4 +6,5 @@ Data/
 *.sqlite
 *.npz
 *.h5
+*.html
 Data/EXPECTED_DATA/data_expected_30min.pkl

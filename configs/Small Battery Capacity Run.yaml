@@ -1,0 +1,21 @@
+battery_capacities:
+- 400.0
+- 600.0
+- 800.0
+data_path: Data/EXPECTED_DATA/data_expected_lat0.0_lon-90.0_15min.pkl
+episodes: 5000
+horizon: 3000
+latitude: 0.0
+longitude: -90.0
+solar_panel_model: constant
+start_datetime: '2024-04-01T00:00:57'
+threshold_values:
+- 0.0
+- 0.1
+- 0.2
+- 0.25
+transition_model: moderate
+wind_thresholds:
+- 0.0
+- 5.0
+- 10.0

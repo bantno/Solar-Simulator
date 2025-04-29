@@ -1,5 +1,6 @@
 import os
 import multiprocessing
+from datetime import datetime
 from BaseClasses.simulation_storage import SimulationStorageHDF5
 
 def _run_one_sim(args):
@@ -54,7 +55,17 @@ class SimulationRunManager:
             storage_dir (str): Directory where the batch HDF5 file will be stored.
         """
         self.episodes_per_simulation = episodes_per_simulation
-        batch_path = os.path.join(storage_dir, "all_simulations.h5")
+        # Get current timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Example metadata – you can substitute or extend this
+        sim_name = f"sim_{episodes_per_simulation}_eps"
+
+        # Create unique filename
+        unique_filename = f"{sim_name}_{timestamp}.h5"
+
+        # Join with the storage directory
+        batch_path = os.path.join(storage_dir, unique_filename)
         self.storage = SimulationStorageHDF5(batch_path)
 
     def run_simulations(self, simulation_list: list, use_multiprocessing=False, num_workers=None):

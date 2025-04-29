@@ -174,7 +174,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", type=str, default="dt_config.yaml", help="Path to config YAML")
+    parser.add_argument("-c", "--config", type=str, default="threshold_test.yaml", help="Path to config YAML")
     args = parser.parse_args()
 
     runner = YAMLSimulationRunner(args.config)

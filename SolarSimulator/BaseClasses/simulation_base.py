@@ -159,7 +159,7 @@ class AbstractContinuousEnergySimulation(ABC):
     
     def __init__(self, mdp, horizon: int, initial_state: np.ndarray,
                  start_datetime,
-                  env_provider: AbstractEnvironmentProvider = None, save_history = True):
+                  env_provider: AbstractEnvironmentProvider = None, save_history = False):
         """
         Parameters:
             mdp: An instance of a class that implements the MDP.
@@ -337,6 +337,8 @@ class AbstractContinuousEnergySimulation(ABC):
             else:
                 episode_data = {
                     'metadata': {'episode_index': episode_index},
+                    'failure': traj[-1][1] == 2,  # Check if the last state is a failure state
+                    'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
                     'total_reward': sum(rews),
                 }
             yield episode_data
@@ -521,10 +523,9 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
 
     def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray,start_datetime, env_provider=None):
         # Initialize the simulation using the MDP from the solver.
+        mdp_solver.solve()
         super().__init__(mdp_solver.mdp, horizon, initial_state,start_datetime, env_provider)
         # Pre-solve the MDP (compute the value function using backward induction).
-        # mdp_solver.solve()
-        mdp_solver.solve()
         self.mdp_solver = mdp_solver
 
     def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:

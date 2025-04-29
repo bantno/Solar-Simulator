@@ -67,6 +67,10 @@ class Seaplane:
         self.required_takeoff_energy = self.get_required_takeoff_energy(1)
 
     def get_total_mass(self, directory):
+        """
+        Searches for a file containing 'mass' in its name within the specified directory.
+        If found, reads the file to extract the total mass of the aircraft.
+        """
         # Search for a file with 'mass' in its name in the given directory.
         for filename in os.listdir(directory):
             if "mass" in filename.lower():
@@ -79,16 +83,19 @@ class Seaplane:
         return None
 
     def update_plane(self):
+        """Update the plane's parameters based on the current state."""
         self.calculate_pdc0()
         self.calculate_weight()
         self.required_cruise_power = self.cruise_power
         self.required_takeoff_energy = self.get_required_takeoff_energy(1)
 
     def update_location(self, lat):
+        """Update the plane's location based on the given latitude."""
         self.lat = lat
         self.location = location.Location(self.lat, self.lon, tz=self.tz)
 
     def calculate_pdc0(self):
+        """Calculate the initial power output of the solar panels."""
         # Based on an ascent solar bare module - mid scale
         self.pdc0 = self.S * 3.3 / 0.034
 
@@ -139,6 +146,12 @@ class Seaplane:
         power_induced = 2 * self.weight**2 * self.k / (rho * U * self.S)
         P_propulsion = (power_parasite + power_induced) / (eta_m * eta_p)
         return P_propulsion
+
+    def get_takeoff_power(self, U: float, rho: float) -> float:
+        """Estimate the propulsion power (W) needed during takeoff.
+        
+        """
+        return 
 
     @property
     def cruise_power(self) -> float:

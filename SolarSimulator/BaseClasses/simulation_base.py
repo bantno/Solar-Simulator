@@ -124,14 +124,17 @@ class AbstractSimulation(ABC):
 
     def simulate_multiple_episodes(self, num_episodes: int):
         """
-        Generate simulation episodes one-by-one.
-        Each episode is yielded as a dictionary containing its trajectory, actions, rewards,
-        and a metadata dictionary with the episode index.
+        Yield episode data; full history for first full_history_episodes,
+        then only summary for the remainder.
         """
         for episode_index in tqdm(range(num_episodes)):
             self.env_provider.reset(episode_index)
             traj, acts, rews, solar, wind, whale = self.simulate_episode()
-            if self.save_history:
+
+            # Determine if this episode should save full history
+            if self.save_history or (
+               self.full_history_episodes is not None 
+               and episode_index < self.full_history_episodes):
                 episode_data = {
                     'trajectory': traj,
                     'actions': acts,
@@ -140,13 +143,17 @@ class AbstractSimulation(ABC):
                     'wind_series': wind,
                     'whale_series': whale,
                     'metadata': {'episode_index': episode_index},
-                    'total_reward': sum(rews),
+                    'total_reward': float(sum(rews)),
                 }
             else:
+                # summary only
                 episode_data = {
                     'metadata': {'episode_index': episode_index},
-                    'total_reward': sum(rews),
+                    'failure': bool(traj[-1][1] == 2),
+                    'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
+                    'total_reward': float(sum(rews)),
                 }
+
             yield episode_data
 
 class AbstractContinuousEnergySimulation(ABC):
@@ -157,69 +164,28 @@ class AbstractContinuousEnergySimulation(ABC):
     data (solar, wind, whale observation) rather than passing these arrays explicitly.
     """
     
-    def __init__(self, mdp, horizon: int, initial_state: np.ndarray,
-                 start_datetime,
-                  env_provider: AbstractEnvironmentProvider = None, save_history = False):
-        """
-        Parameters:
-            mdp: An instance of a class that implements the MDP.
-            horizon: Total number of simulation time steps.
-            initial_state: The starting state.
-            env_provider: Provides environmental samples. If not provided, the simulation
-                          will attempt to use the MDP’s own provider.
-        """
+    def __init__(self,
+                mdp,
+                horizon: int,
+                initial_state: np.ndarray,
+                start_datetime,
+                env_provider: AbstractEnvironmentProvider = None,
+                save_history=False,
+                full_history_episodes=None):
         self.mdp = mdp
         self.horizon = horizon
         self.initial_state = initial_state
         self.start_datetime = start_datetime
+        self.env_provider = env_provider or mdp.env_provider
         self.save_history = save_history
-        if env_provider is None and hasattr(mdp, 'env_provider'):
-            self.env_provider = mdp.env_provider
-        else:
-            self.env_provider = env_provider
+        self.full_history_episodes = full_history_episodes
 
     @abstractmethod
     def choose_action(self, **kwargs) -> int:
         """
         Select an action given the current state and time step.
         """
-
-    # def simulate_episode(self):
-    #     """
-    #     Simulate a single episode using the policy and environment provider.
-    #     """
-    #     state = self.initial_state
-    #     energy = self.mdp.transition_logic.soc_to_energy(state[0])
-    #     energies = [energy]
-    #     trajectory = [state]
-    #     actions = []
-    #     rewards = []
-    #     solar_samples = []
-    #     wind_samples = []
-    #     whale_samples = []
-    #     for t in range(self.horizon):
-    #         # Sample environmental data
-    #         solar_sample = self.env_provider.sample_sunlight(t, 1)[0]
-    #         wind_sample = self.env_provider.sample_wind_speed(t, 1)[0]
-    #         whale_observation = self.env_provider.sample_whale_observation(t, 1)[0]
-    #         action = self.choose_action(state=state,
-    #                                     solar_sample_w=solar_sample,
-    #                                     wind_sample_ms=wind_sample,
-    #                                     whale_observation=whale_observation,
-    #                                     t=t)
-    #         actions.append(action)
-    #         next_state, reward, next_energy = self.step(energy, state[np.newaxis, :], np.full((1,),action), solar_sample, wind_sample,t)
-    #         state = next_state[0]
-    #         energy = next_energy
-    #         trajectory.append(state)
-    #         rewards.append(reward[0])
-    #         energies.append(energy)
-    #         solar_samples.append(solar_sample)
-    #         wind_samples.append(wind_sample)
-    #         whale_samples.append(whale_observation)
-    #         if state[1] == 2:
-    #             break
-    #     return trajectory, actions, rewards, solar_samples, wind_samples, whale_samples, energies
+        raise NotImplementedError("Subclasses must implement this method.")
 
     def simulate_episode(self):
         """
@@ -314,14 +280,17 @@ class AbstractContinuousEnergySimulation(ABC):
 
     def simulate_multiple_episodes(self, num_episodes: int):
         """
-        Generate simulation episodes one-by-one.
-        Each episode is yielded as a dictionary containing its trajectory, actions, rewards,
-        and a metadata dictionary with the episode index.
+        Yield episode data; full history for first full_history_episodes,
+        then only summary for the remainder.
         """
         for episode_index in tqdm(range(num_episodes)):
             self.env_provider.reset(episode_index)
             traj, acts, rews, solar, wind, whale, energies = self.simulate_episode()
-            if self.save_history:
+
+            # Determine if this episode should save full history
+            if (self.save_history
+                or (self.full_history_episodes is not None
+                    and episode_index < self.full_history_episodes)):
                 episode_data = {
                     'trajectory': traj,
                     'actions': acts,
@@ -333,14 +302,15 @@ class AbstractContinuousEnergySimulation(ABC):
                     'metadata': {'episode_index': episode_index},
                     'total_reward': sum(rews),
                 }
-                # print(episode_data['energy_series'])
             else:
+                # summary only
                 episode_data = {
                     'metadata': {'episode_index': episode_index},
-                    'failure': traj[-1][1] == 2,  # Check if the last state is a failure state
+                    'failure': traj[-1][1] == 2,
                     'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
                     'total_reward': sum(rews),
                 }
+
             yield episode_data
 
 ####################################################################################
@@ -521,11 +491,19 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
     for each action (0 or 1) using a backward induction solver.
     """
 
-    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray,start_datetime, env_provider=None):
-        # Initialize the simulation using the MDP from the solver.
+    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray,
+                 start_datetime, env_provider=None, save_history=False,full_history_episodes=None):
+        # Pre-solve MDP
         mdp_solver.solve()
-        super().__init__(mdp_solver.mdp, horizon, initial_state,start_datetime, env_provider)
-        # Pre-solve the MDP (compute the value function using backward induction).
+        super().__init__(
+            mdp_solver.mdp,
+            horizon,
+            initial_state,
+            start_datetime,
+            env_provider,
+            save_history=save_history,
+            full_history_episodes=full_history_episodes,
+        )
         self.mdp_solver = mdp_solver
 
     def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
@@ -585,12 +563,21 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
         return int(np.argmax(value_list))
 
 class ObservationThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
-    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, observation_threshold: float,
-                  wind_threshold: float,start_datetime, env_provider=None):
-        super().__init__(mdp, horizon, initial_state, start_datetime, env_provider)
+    def __init__(self, mdp, horizon: int, initial_state: np.ndarray,
+                 observation_threshold: float, wind_threshold: float,
+                 start_datetime, env_provider=None, save_history=False, full_history_episodes=None):
+        super().__init__(
+            mdp,
+            horizon,
+            initial_state,
+            start_datetime,
+            env_provider,
+            save_history=save_history,
+            full_history_episodes=full_history_episodes)
+        
         self.observation_threshold = observation_threshold
         self.wind_threshold = wind_threshold
-        self.low_battery_threshold = 30.
+        self.low_battery_threshold = 20.
 
     def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
         action = 0

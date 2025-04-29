@@ -3,6 +3,7 @@ import numpy as np
 import h5py
 import json
 from datetime import datetime
+import h5py
 
 class SimulationStorage:
     """
@@ -83,9 +84,6 @@ class SimulationStorage:
         return all_simulations
 
 
-import h5py
-import uuid
-
 class SimulationStorageHDF5:
     """
     HDF5-based storage for batches of simulations.
@@ -98,11 +96,12 @@ class SimulationStorageHDF5:
         self.h5file = h5py.File(file_path, "a")
 
     def store_simulation(self,
-                         sim_metadata: dict,
-                         episodes: list,
-                         group_name: str = None):
+                        sim_metadata: dict,
+                        episodes: list,
+                        group_name: str = None):
         """
-        Store a batch of episodes under a unique top-level group.
+        Store a batch of episodes under a unique top-level group,
+        using gzip compression for array datasets.
 
         Parameters:
         - sim_metadata: dict of simple metadata entries for the simulation
@@ -110,14 +109,14 @@ class SimulationStorageHDF5:
         - group_name: mandatory name for the group identifying this simulation
 
         Raises:
-            ValueError: if the given group_name already exists in the file.
+            ValueError: if group_name missing or already exists.
         """
         if not group_name:
             raise ValueError("group_name must be provided to store_simulation")
         if group_name in self.h5file:
-            raise ValueError(f"Simulation group '{group_name}' already exists in the HDF5 file.")
+            raise ValueError(f"Simulation group '{group_name}' already exists.")
 
-        # Create simulation group and store simulation-level metadata
+        # Create simulation group + write metadata as attributes
         grp = self.h5file.create_group(group_name)
         for key, val in sim_metadata.items():
             try:
@@ -125,29 +124,61 @@ class SimulationStorageHDF5:
             except TypeError:
                 grp.attrs[key] = str(val)
 
-        # Episodes subgroup
         eps_grp = grp.create_group("episodes")
         for idx, ep in enumerate(episodes, start=1):
             ep_grp = eps_grp.create_group(f"episode {idx}")
-            # Episode-level metadata
-            metadata = ep.get("metadata", {})
-            if isinstance(metadata, dict):
-                for mkey, mval in metadata.items():
+            # metadata-specific attributes
+            meta = ep.get("metadata", {})
+            if isinstance(meta, dict):
+                for mkey, mval in meta.items():
                     try:
                         ep_grp.attrs[mkey] = mval
                     except TypeError:
                         ep_grp.attrs[mkey] = str(mval)
-            # Store other fields as datasets
+
+            # now handle each dataset field
             for field, data in ep.items():
                 if field == "metadata":
                     continue
+
                 arr = np.asarray(data)
-                # Handle non-numeric/object arrays by JSON-encoding elements
+
+                # 1) Scalar case: store as plain scalar, no chunks/compression
+                if arr.ndim == 0:
+                    ep_grp.create_dataset(field, data=arr.item())
+                    continue
+
+                # 2) Object-dtype: JSON-encode to bytes
                 if arr.dtype == object:
-                    str_data = np.array([json.dumps(x) for x in data], dtype="S")
-                    ep_grp.create_dataset(field, data=str_data)
-                else:
-                    ep_grp.create_dataset(field, data=arr)
+                    str_data = np.array([json.dumps(x) for x in arr.ravel()], dtype="S")
+                    # reshape back to original shape
+                    str_data = str_data.reshape(arr.shape)
+                    ep_grp.create_dataset(
+                        field,
+                        data=str_data,
+                        compression="gzip",
+                        compression_opts=9,
+                        shuffle=True,
+                        # a simple chunk along first axis
+                        chunks=(min(arr.shape[0], 1024),) + arr.shape[1:]
+                    )
+                    continue
+
+                # 3) Numeric arrays: choose a chunk size on the first axis
+                #    to keep each chunk ≲1 MB
+                item_bytes = arr.dtype.itemsize
+                max_elems = max(1, (1024 * 1024) // item_bytes)
+                chunk_len = min(arr.shape[0], max_elems)
+                chunk_shape = (chunk_len,) + arr.shape[1:] if arr.ndim > 1 else (chunk_len,)
+
+                ep_grp.create_dataset(
+                    field,
+                    data=arr,
+                    compression="gzip",
+                    compression_opts=9,
+                    shuffle=True,
+                    chunks=chunk_shape
+                )
 
     def close(self):
         """

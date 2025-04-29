@@ -111,25 +111,42 @@ class SimulationFactory:
             soc_increment=1.0,
             env_provider=self.env_provider,
         )
+    
+    def create_simulation(self, sim_type, cap, threshold=None, wind_threshold=None, save_states=False,full_history_episodes=None):
+        """
+        Create a simulation instance, optionally saving full state history
+        for the first N episodes, then only summary info thereafter.
 
-
-    def create_simulation(self, sim_type, cap, threshold=None, wind_threshold=None):
+        Parameters:
+        - save_states (bool): if True, saves full history for all episodes.
+        - full_history_episodes (int, optional): if set, saves full history
+          only for episodes with index < full_history_episodes, summary thereafter.
+        """
         mdp = self.build_mdp(cap)
         initial_state = np.array([100.0, 0])
         datetime_str = self.start_dt.strftime("%Y-%m-%d %H:%M:%S")
         if sim_type == "threshold":
             return ObservationThresholdContinuousSimulation(
-                mdp, self.horizon, initial_state,
+                mdp,
+                self.horizon,
+                initial_state,
                 observation_threshold=threshold,
                 wind_threshold=wind_threshold,
                 start_datetime=datetime_str,
-                env_provider=self.env_provider
+                env_provider=self.env_provider,
+                save_history=save_states,
+                full_history_episodes=full_history_episodes
             )
         elif sim_type == "optimal":
             solver = mdpBackwardSolver(mdp, self.horizon)
             return OptimalContinuousAnalyticalPolicySimulation(
-                solver, self.horizon, initial_state, start_datetime=datetime_str,
-                env_provider=self.env_provider
+                solver,
+                self.horizon,
+                initial_state,
+                start_datetime=datetime_str,
+                env_provider=self.env_provider,
+                save_history=save_states,
+                full_history_episodes=full_history_episodes
             )
         else:
             raise ValueError(f"Unknown simulation type: {sim_type}")

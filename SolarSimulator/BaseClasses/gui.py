@@ -15,8 +15,17 @@ from BaseClasses.run_sim import YAMLSimulationRunner
 
 
 def create_simulation_wrapper(args):
-    factory, sim_type, cap, threshold, wind_threshold = args
-    return factory.create_simulation(sim_type, cap, threshold, wind_threshold)
+    # Unpack including save_history flag and full_history_episodes
+    factory, sim_type, cap, threshold, wind_threshold, save_history, full_history_episodes = args
+    # Pass save_states and full_history_episodes to factory
+    return factory.create_simulation(
+        sim_type,
+        cap,
+        threshold,
+        wind_threshold,
+        save_states=save_history,
+        full_history_episodes=full_history_episodes
+    )
 
 
 class SimulationGUI(QWidget):
@@ -31,11 +40,11 @@ class SimulationGUI(QWidget):
         self.tabs.addTab(self._build_run_tab(), "Run Simulation")
         self.tabs.addTab(self._build_config_tab(), "Create Config")
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
-        layout.addWidget(self.tabs)
-        self.setLayout(layout)
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(10)
+        main_layout.addWidget(self.tabs)
+        self.setLayout(main_layout)
 
     def _build_run_tab(self):
         run_tab = QWidget()
@@ -43,6 +52,7 @@ class SimulationGUI(QWidget):
         layout.setSpacing(10)
         layout.setContentsMargins(10, 10, 10, 10)
 
+        # Config file selector
         config_layout = QHBoxLayout()
         self.config_label = QLabel("YAML Config File:")
         self.config_input = QLineEdit()
@@ -52,13 +62,26 @@ class SimulationGUI(QWidget):
         config_layout.addWidget(self.config_input)
         config_layout.addWidget(self.browse_button)
 
+        # Options
         self.multiproc_checkbox = QCheckBox("Use Multiprocessing")
+        self.save_history_checkbox = QCheckBox("Save Full State Info")
+        self.save_history_checkbox.setChecked(False)
 
+        # Spinbox for number of full-history episodes
+        self.full_state_label = QLabel("Number of Full History Episodes:")
+        self.full_state_input = QSpinBox()
+        self.full_state_input.setRange(1, 100000)
+        self.full_state_input.setValue(3000)
+
+        # Run button
         self.run_button = QPushButton("Run Simulation")
         self.run_button.clicked.connect(self.run_simulation)
 
         layout.addLayout(config_layout)
         layout.addWidget(self.multiproc_checkbox)
+        layout.addWidget(self.save_history_checkbox)
+        layout.addWidget(self.full_state_label)
+        layout.addWidget(self.full_state_input)
         layout.addWidget(self.run_button)
         run_tab.setLayout(layout)
         return run_tab
@@ -144,22 +167,39 @@ class SimulationGUI(QWidget):
             return
 
         use_multiproc = self.multiproc_checkbox.isChecked()
+        save_history = self.save_history_checkbox.isChecked()
+        full_history_eps = self.full_state_input.value()
+
         try:
+            # Load runner and parameters
             runner = YAMLSimulationRunner(config_path)
-
             param_list = runner._build_parameter_list()
-            job_args = [(runner.factory, *args) for args in param_list]
 
+            # Create simulation objects
             if use_multiproc:
+                job_args = [
+                    (runner.factory, *args, save_history, full_history_eps)
+                    for args in param_list
+                ]
                 with multiprocessing.Pool() as pool:
                     simulations = pool.map(create_simulation_wrapper, job_args)
             else:
-                simulations = [runner.factory.create_simulation(*args) for args in param_list]
+                simulations = [
+                    runner.factory.create_simulation(
+                        *args,
+                        save_states=save_history,
+                        full_history_episodes=full_history_eps
+                    )
+                    for args in param_list
+                ]
 
             print(f"Created {len(simulations)} simulation objects.")
+
+            # Determine total episodes from config, not full-history setting
+            total_episodes = runner.config.get("episodes", full_history_eps)
             from BaseClasses.simulation_run_manager import SimulationRunManager
             manager = SimulationRunManager(
-                episodes_per_simulation=runner.config.get("episodes", 3000),
+                episodes_per_simulation=total_episodes,
                 storage_dir="simulation_results"
             )
             manager.run_simulations(simulations, use_multiprocessing=use_multiproc)
@@ -198,7 +238,6 @@ class SimulationGUI(QWidget):
                 yaml.dump(config, f)
 
             QMessageBox.information(self, "Success", f"Config file saved to: {out_path}")
-
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to export config:\n{str(e)}")
 

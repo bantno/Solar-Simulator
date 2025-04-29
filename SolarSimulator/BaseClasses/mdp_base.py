@@ -114,8 +114,9 @@ class stochasticMDP(AbstractMDP):
     def reward(self, states: np.ndarray, actions: np.ndarray, next_states: np.ndarray, t: int) -> np.ndarray:
         """Calculate the reward for taking the given actions in the provided states."""
         # TODO: Determine if the sampling of the reward here is appropriate.
-        whale_reward = np.where(actions == 1, self.env_provider.sample_whale_observation(t,len(actions)), 0.0)
-        failure_penalty = np.where(next_states[:, 1] == 2, self.failure_penalty, 0.0)
-        rewards = whale_reward - failure_penalty
+        samples = self.env_provider.sample_whale_observation(t, len(actions))
+        rewards = actions * samples
+        fail_mask = next_states[:, 1] == 2
+        rewards[fail_mask] -= self.failure_penalty
         return rewards
 

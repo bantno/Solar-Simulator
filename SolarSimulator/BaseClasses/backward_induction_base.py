@@ -151,20 +151,62 @@ class mdpBackwardSolver:
         return self.future_value_table[state_idxs, stages]
 
 class mdpAnalyticalBackwardSolver:
-    def __init__(self, mdp: stochasticMDP, horizon):
+    """
+    Analytically solves a finite-horizon stochastic MDP via backward induction.
+
+    At each stage, integrates over solar and wind distributions to compute
+    expected action values and fills a future-value table, which can then be
+    visualized as a surface plot.
+
+    Parameters
+    ----------
+    mdp : stochasticMDP
+        The MDP model, providing transition, reward, and environment data.
+    horizon : int
+        Number of discrete time steps in the planning horizon.
+    """
+
+    def __init__(self, mdp: stochasticMDP, horizon: int):
+        """
+        Initialize the backward solver.
+
+        Parameters
+        ----------
+        mdp : stochasticMDP
+            The MDP model, providing transition, reward, and environment data.
+        horizon : int
+            Total number of decision epochs.
+        """
         self.mdp = mdp
         self.horizon = horizon
         self.states = self.mdp._get_states()
         self._GAMMA = 1.0
         self.future_value_table = self._initialize_future_value_table()
 
-    def _initialize_future_value_table(self):
+    def _initialize_future_value_table(self) -> np.ndarray:
+        """
+        Allocate and zero-initialize the future value table.
+
+        Returns
+        -------
+        numpy.ndarray
+            A zero matrix of shape (num_states, horizon).
+        """
         num_states = self.states.shape[0]
         T = self.horizon
-        future_value_table = np.zeros((num_states, T))
-        return future_value_table
+        return np.zeros((num_states, T))
 
-    def solve(self):
+    def solve(self) -> None:
+        """
+        Perform backward induction to fill the future value table.
+
+        Loops backward over each stage, approximates integrals over solar (Beta)
+        and wind (Weibull) distributions using Riemann sums, evaluates the two
+        discrete actions per state, and stores the maximal expected value.
+
+        After filling the table, prints it and plots a surface of value vs. state
+        & stage using PlottingUtils.plot_surface_plotly.
+        """
         NUM_POINTS_SOLAR = 800
         NUM_POINTS_WIND = 800
         for stage in tqdm(range(self.horizon - 1, -1, -1)):
@@ -172,76 +214,112 @@ class mdpAnalyticalBackwardSolver:
             scale_stage = self.mdp.env_provider.get_wind_scale(stage)
             a_stage = self.mdp.env_provider.get_solar_alpha(stage)
             b_stage = self.mdp.env_provider.get_solar_beta(stage)
-            # Define distributions for the current stage
-            distSolar = beta(a_stage,b_stage, scale=1.0)
+            distSolar = beta(a_stage, b_stage, scale=1.0)
             distWind = weibull_min(c_stage, scale=scale_stage)
+
             for i, state in enumerate(self.states[:-1, :]):
                 values = np.zeros(2)
-                for action in [0,1]:
+                for action in [0, 1]:
                     solar_vals = np.linspace(0, 1, NUM_POINTS_SOLAR)
                     dx = solar_vals[1] - solar_vals[0]
-                    # fX_vals = distSolar.pdf(solar_vals)
-
-                    # For Y ~ Weibull(2,1), domain is [0,∞), but we truncate:
                     y_max = 50.0
                     wind_vals = np.linspace(0, y_max, NUM_POINTS_WIND)
                     dy = wind_vals[1] - wind_vals[0]
-                    # fY_vals = distWind.pdf(wind_vals)
 
                     X_mesh, Y_mesh = np.meshgrid(solar_vals, wind_vals, indexing='xy')
-                    states = np.full((X_mesh.shape[0]*X_mesh.shape[1], 2), state)
-                    actions = np.full_like(X_mesh.flatten(), action)
-                    next_states = self.mdp.transition_logic.nofail_transition(states,actions,X_mesh)
+                    states = np.full((X_mesh.size, 2), state)
+                    actions = np.full(X_mesh.size, action)
+                    next_states = self.mdp.transition_logic.nofail_transition(states, actions, X_mesh)
                     failure_states = np.full_like(next_states, np.array([-1.0, 2]))
-                    # It is better to rewrite V for vectorized operations:
 
                     rewards = self.mdp.reward(states, actions, next_states, stage)
-                    # need to set reward to be negative where battery is empty
-                    
-                    V_vec = self.value_function(stage,rewards,next_states)
+                    V_vec = self.value_function(stage, rewards, next_states)
 
                     p_success = self.mdp.transition_model.compute_probability(Y_mesh.flatten(), action, state)
                     failure_rewards = np.full_like(p_success, -self.mdp.failure_penalty)
-
-                    # 2) Compute the true failure‐state value (penalty + γ·future( failure_state ))
-                    #    Use the MDP’s reward() + lookup_future_values() on failure_states
-                    future_fail = self.lookup_future_values(failure_states, np.full_like(p_success, stage+1))
+                    future_fail = self.lookup_future_values(failure_states, np.full(p_success.shape, stage + 1))
                     failure_value = failure_rewards + self._GAMMA * future_fail
-                    # Assume V(C) is already scalar.
-                    fX = distSolar.pdf( X_mesh.flatten() )
-                    fY = distWind.pdf( Y_mesh.flatten() )
+
+                    fX = distSolar.pdf(X_mesh.flatten())
+                    fY = distWind.pdf(Y_mesh.flatten())
                     joint_pdf = fX * fY
-                    integrand = (p_success * V_vec
-                        + (1 - p_success) * failure_value) \
-                        * joint_pdf
+                    integrand = (p_success * V_vec + (1 - p_success) * failure_value) * joint_pdf
+
                     values[action] = np.sum(integrand) * dx * dy
 
-                self.future_value_table[i, stage] = max(values)
+                self.future_value_table[i, stage] = np.max(values)
+
         print(self.future_value_table)
         PlottingUtils.plot_surface_plotly(self.future_value_table, self.mdp.battery_capacity_wh)
 
-    def value_function(self, stage, rewards, next_states) -> float:
-        unique_next_states, inverse_indices, counts = np.unique(next_states, axis=0, return_inverse=True, return_counts=True)
+    def value_function(self, stage: int, rewards: np.ndarray, next_states: np.ndarray) -> np.ndarray:
+        """
+        Compute the stage-t value for each next state instance.
+
+        Groups identical next states to avoid redundant table lookups, then
+        returns γ·V_{t+1}(s') + r for each sample.
+
+        Parameters
+        ----------
+        stage : int
+            The current stage index (0-based).
+        rewards : numpy.ndarray
+            Immediate rewards for each sample, shape (N,).
+        next_states : numpy.ndarray
+            Array of next states for each sample, shape (N, state_dim).
+
+        Returns
+        -------
+        numpy.ndarray
+            Values per sample, shape (N,).
+        """
+        unique_next_states, inverse_indices, _ = np.unique(
+            next_states, axis=0, return_inverse=True, return_counts=True
+        )
         next_stage = stage + 1
         if next_stage < self.horizon:
-            future_values = self.lookup_future_values(unique_next_states, np.full(unique_next_states.shape[0], next_stage))
+            future_values = self.lookup_future_values(
+                unique_next_states, np.full(unique_next_states.shape[0], next_stage)
+            )
         else:
-            future_values = np.full_like(rewards,0.)
+            future_values = np.zeros_like(rewards)
+
         values = np.zeros_like(rewards)
-        for i, _ in enumerate(unique_next_states):
-            indices = np.where(inverse_indices == i)[0]
-            values[indices] = self._GAMMA * future_values[i] + rewards[indices]
+        for i in range(unique_next_states.shape[0]):
+            idx = np.where(inverse_indices == i)[0]
+            values[idx] = self._GAMMA * future_values[i] + rewards[idx]
         return values
 
     def lookup_future_values(self, states: np.ndarray, stages: np.ndarray) -> np.ndarray:
+        """
+        Retrieve future values V_t(s) from the table for given states and stages.
+
+        Parameters
+        ----------
+        states : numpy.ndarray
+            Array of query states, shape (M, state_dim).
+        stages : numpy.ndarray
+            Array of stage indices for each state, shape (M,).
+
+        Returns
+        -------
+        numpy.ndarray
+            Future-value entries, shape (M,).
+
+        Raises
+        ------
+        ValueError
+            If any query state is not in the precomputed state list or if
+            requested stages exceed the horizon.
+        """
         if np.any(stages >= self.horizon):
-            return np.full_like(stages,0.0)
+            return np.zeros_like(stages, dtype=float)
+
         stages = stages.astype(int)
         mask = np.all(self.states[None, :, :] == states[:, None, :], axis=2)
         if not np.all(mask.any(axis=1)):
-            missing_indices = np.where(~mask.any(axis=1))[0]
-            raise ValueError(f"States at indices {missing_indices} not found in the state table.")
-        state_indices = np.argmax(mask, axis=1)
-        future_values = self.future_value_table[state_indices, stages]
-        return future_values
+            missing = np.where(~mask.any(axis=1))[0]
+            raise ValueError(f"States at indices {missing} not found in the state table.")
 
+        state_indices = np.argmax(mask, axis=1)
+        return self.future_value_table[state_indices, stages]

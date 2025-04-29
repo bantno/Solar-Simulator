@@ -221,7 +221,7 @@ def generate_yearly_weather_data(historical_data, N, latitude, longitude, seed=N
 # Example usage
 if __name__ == "__main__":
     processor = WeatherDataProcessor()
-    lat, lon = 0, -90
+    lat, lon = 30, -90
     timestep_min = 15
     processor.fetch_weather_data(
         lat,

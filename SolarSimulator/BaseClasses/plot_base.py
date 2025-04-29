@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
+import plotly.graph_objects as go
 from BaseClasses.simulation_storage import SimulationStorage
 
 class SimulationPlotter:
@@ -391,7 +392,6 @@ class SimulationPlotter:
         For each run, summary statistics (n, mean, median, std) are shown as an annotation,
         and the legend entry is set to the run's metadata (if available).
         """
-        import plotly.graph_objects as go
 
         # Sort simulation ids for consistent x-axis ordering
         sim_ids = sorted(sim_results.keys())
@@ -625,6 +625,10 @@ class SimulationPlotter:
         plt.show()
 
     def load_and_plot_threshold_sweep(self, simulation_ids,storage_dir=None):
+        """
+        Loads episodes from the specified simulation IDs (from a directory) and plots the average reward
+        versus the observation threshold for the threshold-based approach, segmented by wind_threshold values.
+        """
 
         if storage_dir is None:
             if self.storage_dir is None:

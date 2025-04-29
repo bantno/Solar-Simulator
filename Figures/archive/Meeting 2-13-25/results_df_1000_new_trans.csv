@@ -1,4 +1,0 @@
-,Algorithm,Capacity,Threshold,Timestep,Probability,Latitude,StartDate,EndDate,NumTimesteps,NumRuns,MeanFailureStep,MedianFailureStep,MeanReward,MedianReward
-0,Optimal,30,,15,1.0,30.0,60,93,3168,100,2230,2165.0,-1.37,-3.5
-1,Threshold,30,0.0,15,,30.0,60,93,3168,100,1405,1106.5,-13.4,-20.0
-2,Threshold,30,0.25,15,,30.0,60,93,3168,100,1988,2434.5,3.26,7.5

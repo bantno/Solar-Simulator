@@ -208,6 +208,7 @@ class Seaplane:
                 'climb_power' : Estimated propulsion power during the climb (W),
                 'climb_energy': Energy required for the climb (J).
         """
+        # TODO: Implement this so that density changes with altitude. Will likely require integrating dynamic equations of motion
         # Compute the level-flight propulsion power at speed U and air density rho.
         P_level = self.get_propulsion_power(U, rho)
         # Adjust for climb: additional power is required to overcome the vertical component of weight.
@@ -215,6 +216,34 @@ class Seaplane:
         climb_energy = P_climb * climb_time
         return {"climb_power": P_climb, "climb_energy": climb_energy}
 
+    def descend(self):
+        """Estimate the propulsion power and energy required for a descent maneuver.
+        
+        Under the constant lift-to-drag assumption, the steady-state propulsion power for descent is given by:
+        
+           P_descent = P_level * [cos(γ) - (L/D)·sin(γ)]
+        
+        where:
+          • P_level is the steady-state (level) propulsion power computed at airspeed U and air density ρ.
+          • γ is the descent angle (in radians; negative for descent).
+          • L/D is the lift-to-drag ratio (here assumed to be self.L_over_D).
+        
+        The energy required to sustain the descent for a duration of descent_time is then:
+        
+           E_descent = P_descent * descent_time
+        
+        Args:
+            U (float): Flight speed during the descent (m/s).
+            gamma (float): Descent angle (radians); negative for descent, positive for climb.
+            descent_time (float): Duration of the descent maneuver (seconds).
+            rho (float): Air density (kg/m³); defaults to 1.2 for sea-level conditions.
+        
+        Returns:
+            dict: A dictionary containing:
+                'descent_power' : Estimated propulsion power during the descent (W),
+                'descent_energy': Energy required for the descent (J).
+        """
+        
     def get_mdp_power_params(self) -> dict:
         """
         Adapter method to package the power parameters for the MDP.
@@ -223,5 +252,6 @@ class Seaplane:
         return {
             "idle_power": self.idle_power,
             "cruise_power": self.cruise_power,
-            "takeoff_power": self.takeoff_power
+            "takeoff_power": self.takeoff_power,
+            "climb_power": None, # TODO: Implement this using constant L/D ratio fomulation in Dantsker et al. (2018) [10.2514/6.2018-5009]
         }

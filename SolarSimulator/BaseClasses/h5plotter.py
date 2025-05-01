@@ -157,7 +157,7 @@ class HDF5RewardPlotter:
 if __name__ == "__main__":
 
     # Example usage:
-    plotter = HDF5RewardPlotter("simulation_results\sim_5000_eps_20250423_223408.h5")
+    plotter = HDF5RewardPlotter("simulation_results\sim_1000_eps_20250430_022508.h5")
 
     plotter.plot_mean_by_thresholds()                 # Mean reward vs thresholds (with optimal line)
     plotter.plot_mean_failure_step_by_thresholds()    # Mean failure step

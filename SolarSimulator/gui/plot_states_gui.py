@@ -10,7 +10,8 @@ from matplotlib.backends.backend_qt5agg import (
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QLabel,
-    QComboBox, QSizePolicy, QSlider, QSpinBox
+    QComboBox, QSizePolicy, QSlider,
+    QSpinBox, QPushButton
 )
 from PyQt5.QtCore import Qt
 
@@ -21,13 +22,13 @@ class MultiSimInspector(QMainWindow):
         self.resize(1000, 800)
 
         # ——— USER CONFIG ———
-        self.file_path         = r'simulation_results\sim_1000_eps_20250430_022508.h5'
-        self.sim_group_names   = [
+        self.file_path           = r'simulation_results\sim_1000_eps_20250430_022508.h5'
+        self.sim_group_names     = [
             'optimalcontinuousanalyticalpolicysimulation_c640',
             'observationthresholdcontinuoussimulation_c640_t0.0_w8.0',
             'observationthresholdcontinuoussimulation_c640_t0.25_w8.0',
         ]
-        self.dataset_names     = [
+        self.dataset_names       = [
             'solar_series',
             'wind_series',
             'whale_series',
@@ -35,8 +36,8 @@ class MultiSimInspector(QMainWindow):
             'actions',
             'rewards',
         ]
-        self.style_name        = 'seaborn-v0_8-darkgrid'
-        self.rcparams          = {
+        self.style_name          = 'seaborn-v0_8-darkgrid'
+        self.rcparams            = {
             'font.size':        10,
             'axes.titlesize':   12,
             'axes.labelsize':   11,
@@ -50,7 +51,7 @@ class MultiSimInspector(QMainWindow):
         self.color_cycle         = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd']
         self.toolbar_enabled     = True
         self.use_constrained_layout = False
-        self.layout_settings    = {
+        self.layout_settings     = {
             'top':    0.92,
             'bottom': 0.08,
             'left':   0.10,
@@ -58,8 +59,10 @@ class MultiSimInspector(QMainWindow):
             'hspace': 0.3
         }
         # ——— Time & window settings ———
-        self.time_step_min      = 15    # minutes per decision stage
-        self.window_size        = 100   # default window size in stages
+        self.time_step_min       = 15    # minutes per decision stage
+        self.window_size         = 100   # default window size in stages
+        # for vertical line
+        self.vline_refs          = []
         # ——————————————————————
 
         # apply style & rcParams globally
@@ -123,42 +126,93 @@ class MultiSimInspector(QMainWindow):
         # Slider for panning window
         self.slider = QSlider(Qt.Horizontal)
         self.slider.setMinimum(1)
-        self.slider.setMaximum(1)  # will be set in update_plot
+        self.slider.setMaximum(1)
         self.slider.setValue(1)
         self.slider.setTickPosition(QSlider.TicksBelow)
         self.slider.setTickInterval(self.window_size)
         self.slider.valueChanged.connect(self.on_window_slide)
         vlay.addWidget(self.slider)
 
+        # Rescale button for cumulative flight-time axis
+        self.btn_rescale = QPushButton("Rescale Flight-Time Axis")
+        self.btn_rescale.clicked.connect(self.rescale_cumulative_axis)
+        vlay.addWidget(self.btn_rescale)
+
+        # Slider for vertical line cursor
+        ctl_line = QHBoxLayout()
+        ctl_line.addWidget(QLabel("Cursor Stage:"))
+        self.line_slider = QSlider(Qt.Horizontal)
+        self.line_slider.setMinimum(1)
+        self.line_slider.setMaximum(1)
+        self.line_slider.setValue(1)
+        self.line_slider.setTickPosition(QSlider.TicksBelow)
+        self.line_slider.valueChanged.connect(self.on_line_slide)
+        ctl_line.addWidget(self.line_slider)
+        ctl_line.addStretch()
+        vlay.addLayout(ctl_line)
+
         # initial draw
         self.update_plot(self.episode_list[0])
 
     def on_window_size_change(self, new_size):
-        """Adjust window size and update slider & view."""
         self.window_size = new_size
         self.slider.setTickInterval(new_size)
         if hasattr(self, 'current_total_stages'):
             max_val = max(1, self.current_total_stages - self.window_size + 1)
             self.slider.setMaximum(max_val)
-            # clamp slider value into new range
             if self.slider.value() > max_val:
                 self.slider.setValue(max_val)
-            # re-draw with updated window
             self.on_window_slide(self.slider.value())
 
     def on_window_slide(self, start_stage):
-        """Pan all subplots to the window [start_stage, start+window_size-1]."""
         end_stage = start_stage + self.window_size - 1
         for ax in self.axes:
             ax.set_xlim(start_stage, end_stage)
+        self.update_line_slider_range()
         self.canvas.draw()
 
+    def rescale_cumulative_axis(self):
+        start = self.slider.value()
+        end = start + self.window_size - 1
+        cf_ax = self.axes[-1]
+        lines = cf_ax.get_lines()
+        y_vals = []
+        for line in lines:
+            xdata = line.get_xdata()
+            ydata = line.get_ydata()
+            mask = (xdata >= start) & (xdata <= end)
+            y_vals.append(ydata[mask])
+        if y_vals:
+            all_y = np.concatenate(y_vals)
+            cf_ax.set_ylim(all_y.min(), all_y.max())
+            self.canvas.draw()
+
+    def on_line_slide(self, stage):
+        # remove old vlines
+        for ln in self.vline_refs:
+            ln.remove()
+        self.vline_refs.clear()
+        # draw new vline on each axis
+        for ax in self.axes:
+            ln = ax.axvline(stage, color='k', linestyle='--')
+            self.vline_refs.append(ln)
+        self.canvas.draw()
+
+    def update_line_slider_range(self):
+        start = self.slider.value()
+        end = start + self.window_size - 1
+        self.line_slider.blockSignals(True)
+        self.line_slider.setMinimum(start)
+        self.line_slider.setMaximum(end)
+        if self.line_slider.value() < start or self.line_slider.value() > end:
+            self.line_slider.setValue(start)
+        self.line_slider.blockSignals(False)
+        self.on_line_slide(self.line_slider.value())
+
     def update_plot(self, episode_name):
-        # Clear all axes
         for ax in self.axes:
             ax.clear()
 
-        # Load data for this episode
         loaded = {}
         with h5py.File(self.file_path, 'r') as f:
             for sim in self.sim_group_names:
@@ -171,19 +225,12 @@ class MultiSimInspector(QMainWindow):
         if not loaded:
             return
 
-        # Determine total stages and update slider + spinbox ranges
         first_sim = next(iter(loaded.values()))
         total_stages = len(first_sim['actions'])
         self.current_total_stages = total_stages
-
-        # Update spinbox maximum
         self.spin_window.setMaximum(total_stages)
+        self.slider.setMaximum(max(1, total_stages - self.window_size + 1))
 
-        # Update slider maximum
-        max_slider = max(1, total_stages - self.window_size + 1)
-        self.slider.setMaximum(max_slider)
-
-        # Plot each series
         for idx, (ax, ds) in enumerate(zip(self.axes, self.dataset_names)):
             for sim, data in loaded.items():
                 y = data[ds]
@@ -196,7 +243,6 @@ class MultiSimInspector(QMainWindow):
             if idx == 0:
                 ax.legend(loc='upper right', frameon=True)
 
-        # Cumulative flight-time subplot
         cf_ax = self.axes[-1]
         for sim, data in loaded.items():
             flight_flag = (data['actions'] != 0).astype(int)
@@ -205,12 +251,13 @@ class MultiSimInspector(QMainWindow):
             cf_ax.plot(stages, cum_minutes, label=sim)
         cf_ax.set_ylabel('Cumulative Flight Time (min)')
         cf_ax.set_xlabel('Decision Stage')
+        # legend removed for last plot
 
-        # Title & redraw
         self.fig.suptitle(f"Episode {episode_name} across simulations")
         if not self.use_constrained_layout:
             self.fig.subplots_adjust(**self.layout_settings)
         self.canvas.draw()
+        self.update_line_slider_range()
 
 
 if __name__ == '__main__':

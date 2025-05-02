@@ -265,14 +265,22 @@ def main():
             border: none;
             border-radius: 4px;
         }
+        QCheckBox::indicator {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #888;
+            background: #121212;
+        }
+
+        QCheckBox::indicator:checked {
+            background: #2979FF;        /* matches your button color */
+            border: 1px solid #888;  /* slightly lighter */
+        }
         QPushButton:hover {
             background-color: #448AFF;
         }
         QLabel {
             font-weight: bold;
-        }
-        QCheckBox {
-            padding: 5px;
         }
         QTabWidget::pane {
             border: 1px solid #444;

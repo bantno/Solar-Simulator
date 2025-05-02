@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
 class MultiSimInspector(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.time_step_min = 15  # each stage = 15 minutes
         self.setWindowTitle("Multi‐Simulation Episode Inspector")
         self.resize(1000, 800)
 
@@ -94,12 +95,14 @@ class MultiSimInspector(QMainWindow):
         vlay.addLayout(ctl)
 
         # matplotlib canvas + optional toolbar
+        n_plots = len(self.dataset_names) + 1
         self.fig, self.axes = plt.subplots(
-            len(self.dataset_names), 1,
+            n_plots, 1,
             sharex=True,
-            figsize=(12, 3 * len(self.dataset_names)),
+            figsize=(12, 3 * n_plots),
             constrained_layout=self.use_constrained_layout
         )
+
         if not self.use_constrained_layout:
             self.fig.subplots_adjust(**self.layout_settings)
 
@@ -143,6 +146,17 @@ class MultiSimInspector(QMainWindow):
                 ax.legend(loc='upper right', frameon=True)
 
         self.axes[-1].set_xlabel("Decision Stage")
+
+        cf_ax = self.axes[-1]
+        for sim, data in loaded.items():
+            flight_flag = (data['actions'] != 0).astype(int)
+            cum_hours = np.cumsum(flight_flag) * self.time_step_min/60.
+            stages = np.arange(1, len(cum_hours) + 1)
+            cf_ax.plot(stages, cum_hours, label=sim)
+        cf_ax.set_ylabel('Cumulative Flight Time (hours)')
+        cf_ax.set_xlabel('Decision Stage')
+        # cf_ax.legend(loc='upper right', frameon=True)
+
         self.fig.suptitle(f"Episode {episode_name} across simulations")
         if not self.use_constrained_layout:
             self.fig.subplots_adjust(**self.layout_settings)

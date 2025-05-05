@@ -129,6 +129,7 @@ class mdpBackwardSolver:
     def lookup_future_values(self, states: np.ndarray, stages: np.ndarray) -> np.ndarray:
         """
         Retrieve precomputed future values for given states and stages.
+        Any state with mode==2 is treated as the broken state [-1.0, 2].
 
         Args:
             states (np.ndarray): Array of states to look up (shape: [n, state_dim]).
@@ -138,17 +139,42 @@ class mdpBackwardSolver:
             np.ndarray: Array of future values for each (state, stage) pair.
 
         Raises:
-            ValueError: If any requested state is not in the solver's state table.
+            ValueError: If any non-broken state isn’t in the solver’s state table.
         """
-        # Build boolean mask matching requested states to self.states
-        mask = np.all(self.states[None, :, :] == states[:, None, :], axis=2)
-        if not np.all(mask.any(axis=1)):
-            missing = np.where(~mask.any(axis=1))[0]
-            raise ValueError(f"States at indices {missing} not found in the state table.")
+        # 1) Locate the broken‐state index
+        is_broken_state = (self.states[:, 1] == 2) & (self.states[:, 0] == -1.0)
+        try:
+            broken_idx = np.nonzero(is_broken_state)[0][0]
+        except IndexError:
+            raise ValueError("Broken state [-1.0, 2] not found in state table.")
 
-        # Map each requested state to its index in self.states
-        state_idxs = np.argmax(mask, axis=1)
+        n = states.shape[0]
+        state_idxs = np.empty(n, dtype=int)
+
+        # 2) Map all mode==2 inputs to the broken index
+        broken_mask = (states[:, 1] == 2)
+        state_idxs[broken_mask] = broken_idx
+
+        # 3) Handle the remaining (mode 0 or 1) inputs
+        normal_idxs = np.nonzero(~broken_mask)[0]
+        if normal_idxs.size > 0:
+            norm_states = states[normal_idxs]
+            # exact match on soc and mode
+            mask = np.all(self.states[None, :, :] == norm_states[:, None, :], axis=2)
+
+            # check that every normal state was found
+            if not np.all(mask.any(axis=1)):
+                missing = normal_idxs[~mask.any(axis=1)]
+                bad_states = states[missing]
+                raise ValueError(f"States {bad_states.tolist()} at indices {missing.tolist()} not found.")
+
+            # pick the first matching index for each
+            matched_idxs = np.argmax(mask, axis=1)
+            state_idxs[normal_idxs] = matched_idxs
+
+        # 4) Finally, pull from the table
         return self.future_value_table[state_idxs, stages]
+
 
 class mdpAnalyticalBackwardSolver:
     """

@@ -10,6 +10,7 @@ from BaseClasses.backward_induction_base import mdpBackwardSolver
 from BaseClasses.simulation_base import (
     ObservationThresholdContinuousSimulation,
     OptimalContinuousAnalyticalPolicySimulation,
+    UnifiedThresholdContinuousSimulation,
 )
 from BaseClasses.simulation_run_manager import SimulationRunManager
 from BaseClasses.whale_base import WhaleRewardSeriesFactory
@@ -126,7 +127,7 @@ class SimulationFactory:
         initial_state = np.array([100.0, 0])
         datetime_str = self.start_dt.strftime("%Y-%m-%d %H:%M:%S")
         if sim_type == "threshold":
-            return ObservationThresholdContinuousSimulation(
+            return UnifiedThresholdContinuousSimulation(
                 mdp,
                 self.horizon,
                 initial_state,

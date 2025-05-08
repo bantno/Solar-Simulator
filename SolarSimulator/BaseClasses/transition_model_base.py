@@ -671,6 +671,10 @@ class ProbabilityModelFactory:
         """
         return model_name.lower() in ProbabilityModelFactory.list_models()
 
+#################################################################################################
+# Transition Logic Classes
+#################################################################################################
+
 class AbstractTransitionLogic(ABC):
     @property
     @abstractmethod
@@ -696,10 +700,6 @@ class AbstractTransitionLogic(ABC):
 
     def min_to_seconds(self, minutes: float) -> float:
         return minutes * 60.
-
-#################################################################################################
-# Transition Logic Classes
-#################################################################################################
 
 
 class DeterministicTransitionLogic(AbstractTransitionLogic):

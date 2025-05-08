@@ -562,6 +562,50 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
         # Return the action with the highest expected value.
         return int(np.argmax(value_list))
 
+class UnifiedThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
+    def __init__(self, mdp, horizon: int, initial_state: np.ndarray,
+                 observation_threshold: float, wind_threshold: float,
+                 start_datetime, env_provider=None, save_history=False, full_history_episodes=None):
+        super().__init__(
+            mdp,
+            horizon,
+            initial_state,
+            start_datetime,
+            env_provider,
+            save_history=save_history,
+            full_history_episodes=full_history_episodes)
+        
+        self.observation_threshold = observation_threshold
+        self.wind_threshold = wind_threshold
+        self.low_battery_threshold = 15.
+
+    def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
+        
+        # Behavior when current state is 0 (floating)
+        # Choose to takeoff only if wind is acceptable, observation is sufficient, and battery is sufficient.
+        if state[1] == 0:
+            action = 0
+            is_wind_acceptable = wind_sample_ms < self.wind_threshold
+            is_observation_sufficient = whale_observation > self.observation_threshold
+            is_battery_sufficient = state[0] > self.low_battery_threshold and state[0] > 95
+            if is_wind_acceptable and is_observation_sufficient and is_battery_sufficient:
+                action = 1
+
+        # Behavior when current state is 1 (flying)
+        # Choose to continue flying as long as possible. Choose to land if battery is low, if whale observation chance is low, or if wind is very low.
+        elif state[1] == 1:
+            is_batt_low      = state[0] < self.low_battery_threshold
+            is_obs_low       = whale_observation < self.observation_threshold
+            is_wind_landable    = wind_sample_ms <= self.wind_threshold-3
+            if is_batt_low or is_obs_low or is_wind_landable:
+                action = 0  # land
+            else:
+                action = 1  # continue flying
+
+        else:
+            raise ValueError("Invalid state: {}".format(state))
+
+        return action
 class ObservationThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
     def __init__(self, mdp, horizon: int, initial_state: np.ndarray,
                  observation_threshold: float, wind_threshold: float,
@@ -577,7 +621,7 @@ class ObservationThresholdContinuousSimulation(AbstractContinuousEnergySimulatio
         
         self.observation_threshold = observation_threshold
         self.wind_threshold = wind_threshold
-        self.low_battery_threshold = 20.
+        self.low_battery_threshold = 15.
 
     def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
         action = 0

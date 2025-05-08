@@ -71,7 +71,7 @@ class SimulationGUI(QWidget):
         self.full_state_label = QLabel("Number of Full History Episodes:")
         self.full_state_input = QSpinBox()
         self.full_state_input.setRange(1, 100000)
-        self.full_state_input.setValue(3000)
+        self.full_state_input.setValue(30)
 
         # Run button
         self.run_button = QPushButton("Run Simulation")

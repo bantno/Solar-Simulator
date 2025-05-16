@@ -12,19 +12,19 @@ def _run_one_sim(args):
     episodes = []
     for episode in sim.simulate_multiple_episodes(episodes_per_simulation):
         # Enrich each episode’s metadata
-        metadata = {"simulation_type": sim.__class__.__name__}
+        # metadata = {"simulation_type": sim.__class__.__name__}
         # Optionally add simulation-specific parameters if they exist
-        if hasattr(sim, "observation_threshold"):
-            metadata["observation_threshold"] = sim.observation_threshold
-        if hasattr(sim, "wind_threshold"):
-            metadata["wind_threshold"] = sim.wind_threshold
-
-        episode["metadata"].update(metadata)
+        # if hasattr(sim, "observation_threshold"):
+        #     metadata["observation_threshold"] = sim.observation_threshold
+        # if hasattr(sim, "wind_threshold"):
+        #     metadata["wind_threshold"] = sim.wind_threshold
+        # episode["metadata"].update(metadata)
 
         # Ensure total_reward is set
         episode["total_reward"] = episode.get(
             "total_reward", sum(episode.get("rewards", []))
         )
+
         episodes.append(episode)
 
     # Create overall simulation-level metadata
@@ -40,6 +40,13 @@ def _run_one_sim(args):
         simulation_metadata["observation_threshold"] = sim.observation_threshold
     if hasattr(sim, "wind_threshold"):
         simulation_metadata["wind_threshold"] = sim.wind_threshold
+
+    if hasattr(sim, "location"):
+        # standardize into a short string, e.g. “lat30.0_lon-90.0”
+        loc = sim.location
+        simulation_metadata["location_id"] = (
+        f"lat{loc['latitude']}_lon{loc['longitude']}"
+        )
 
     return (simulation_metadata, episodes)
 
@@ -104,6 +111,8 @@ class SimulationRunManager:
         """
         parts = [meta["simulation_type"].lower()]
         parts.append(f"c{int(meta['battery_capacity'])}")
+        if "location_id" in meta:
+            parts.append(meta["location_id"])
         if "observation_threshold" in meta:
             parts.append(f"t{meta['observation_threshold']}")
         if "wind_threshold" in meta:

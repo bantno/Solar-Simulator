@@ -210,7 +210,6 @@ from BaseClasses.environment_provider_base import StochasticWindSolarEnvironment
 from BaseClasses.mdp_base import stochasticMDP
 from BaseClasses.backward_induction_base import mdpBackwardSolver
 from BaseClasses.simulation_base import (
-    ObservationThresholdContinuousSimulation,
     OptimalContinuousAnalyticalPolicySimulation,
     UnifiedThresholdContinuousSimulation,
 )
@@ -261,8 +260,8 @@ class EnvironmentLoader:
         wind_scale = window["weibull_scale"].values
         solar_a = window["beta_alpha"].values
         solar_b = window["beta_beta"].values
-        wind_dist = np.column_stack((wind_k, wind_scale))
-        solar_dist = np.column_stack((solar_a, solar_b))
+        wind_dist = np.column_stack(tup=(wind_k, wind_scale))
+        solar_dist = np.column_stack(tup=(solar_a, solar_b))
         whale_series = WhaleRewardSeriesFactory.create_series(
             self.whale_type, self.horizon
         )
@@ -469,7 +468,7 @@ def parse_args():
         description="Run simulations from a YAML config."
     )
     parser.add_argument(
-        "-c", "--config", default="config copy.yaml",
+        "-c", "--config", default="horizon_sweep_config.yaml",
         help="YAML config file path"
     )
     parser.add_argument(

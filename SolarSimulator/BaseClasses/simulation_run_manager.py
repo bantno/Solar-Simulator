@@ -40,7 +40,6 @@ def _run_one_sim(args):
         simulation_metadata["observation_threshold"] = sim.observation_threshold
     if hasattr(sim, "wind_threshold"):
         simulation_metadata["wind_threshold"] = sim.wind_threshold
-
     if hasattr(sim, "location"):
         # standardize into a short string, e.g. “lat30.0_lon-90.0”
         loc = sim.location
@@ -111,6 +110,8 @@ class SimulationRunManager:
         """
         parts = [meta["simulation_type"].lower()]
         parts.append(f"c{int(meta['battery_capacity'])}")
+        if "horizon" in meta:
+            parts.append(f"h{int(meta['horizon'])}")
         if "location_id" in meta:
             parts.append(meta["location_id"])
         if "observation_threshold" in meta:

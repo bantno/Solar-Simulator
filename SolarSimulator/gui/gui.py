@@ -1,9 +1,10 @@
+
 # import sys
 # import os
 # import multiprocessing
 # import yaml
 
-# from BaseClasses.run_sim import YAMLSimulationRunner, SimulationFactory
+# from BaseClasses.run_sim import YAMLSimulationRunner
 # from BaseClasses.simulation_run_manager import SimulationRunManager
 # from PyQt5.QtWidgets import (
 #     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
@@ -16,10 +17,10 @@
 # def create_simulation_wrapper(args):
 #     factory, sim_type, cap, threshold, wind_threshold, save_history, full_history_episodes = args
 #     return factory.create_simulation(
-#         sim_type,
-#         cap,
-#         threshold,
-#         wind_threshold,
+#         sim_type=sim_type,
+#         cap=cap,
+#         threshold=threshold,
+#         wind_threshold=wind_threshold,
 #         save_states=save_history,
 #         full_history_episodes=full_history_episodes
 #     )
@@ -163,44 +164,27 @@
 #         try:
 #             runner = YAMLSimulationRunner(config_path)
 #             config = runner.config
-#             locations = config.get("locations", [])
-#             if not locations:
-#                 raise ValueError("No locations specified in config under 'locations'")
 
-#             all_simulations = []
-#             for loc in locations:
-#                 loc_cfg = dict(config)
-#                 loc_cfg["data_path"] = loc["data_path"]
-#                 loc_cfg["latitude"] = loc.get("latitude")
-#                 loc_cfg["longitude"] = loc.get("longitude")
-#                 factory = SimulationFactory(loc_cfg)
-#                 param_list = runner._build_parameter_list()
+#             # build parameter list including all locations
+#             param_list = runner._build_param_list()
 
-#                 if use_multiproc:
-#                     job_args = [
-#                         (factory, *args, save_history, full_history_eps)
-#                         for args in param_list
-#                     ]
-#                     with multiprocessing.Pool() as pool:
-#                         sims = pool.map(create_simulation_wrapper, job_args)
-#                 else:
-#                     sims = [
-#                         factory.create_simulation(
-#                             *args,
-#                             save_states=save_history,
-#                             full_history_episodes=full_history_eps
-#                         )
-#                         for args in param_list
-#                     ]
+#             # prepare arguments for simulation creation
+#             job_args = [(*args, save_history, full_history_eps) for args in param_list]
 
-#                 all_simulations.extend(sims)
+#             # create simulations (parallel or serial)
+#             if use_multiproc:
+#                 with multiprocessing.Pool() as pool:
+#                     sims = pool.map(create_simulation_wrapper, job_args)
+#             else:
+#                 sims = [create_simulation_wrapper(arg) for arg in job_args]
 
+#             # run and store
 #             total_episodes = config.get("episodes", full_history_eps)
 #             manager = SimulationRunManager(
 #                 episodes_per_simulation=total_episodes,
 #                 storage_dir="simulation_results"
 #             )
-#             manager.run_simulations(all_simulations, use_multiprocessing=use_multiproc)
+#             manager.run_simulations(sims, use_multiprocessing=use_multiproc)
 
 #             QMessageBox.information(self, "Success", "Simulations completed successfully.")
 #         except Exception as e:
@@ -236,7 +220,7 @@
 #                 "battery_capacities": batteries,
 #                 "threshold_values": thresholds,
 #                 "wind_thresholds": winds,
-#                 "horizon": horizon,
+#                 "horizons": [horizon],
 #                 "episodes": episodes,
 #                 "transition_model": "moderate",
 #                 "solar_panel_model": "constant",
@@ -282,8 +266,8 @@
 #         }
 
 #         QCheckBox::indicator:checked {
-#             background: #2979FF;        /* matches your button color */
-#             border: 1px solid #888;  /* slightly lighter */
+#             background: #2979FF;
+#             border: 1px solid #888;
 #         }
 #         QPushButton:hover {
 #             background-color: #448AFF;
@@ -302,7 +286,6 @@
 
 # if __name__ == '__main__':
 #     main()
-
 
 import sys
 import os
@@ -395,14 +378,12 @@ class SimulationGUI(QWidget):
         browse_out_button = QPushButton("Select Output Path")
         browse_out_button.clicked.connect(self.browse_output)
 
-        self.battery_input = QLineEdit("100, 200, 300")
+        self.battery_input = QLineEdit("100, 200, 300")  # Wh
         self.threshold_input = QLineEdit("0.2, 0.4, 0.6")
         self.wind_input = QLineEdit("5, 10, 15")
         self.lat_input = QLineEdit("30, 32")
         self.lon_input = QLineEdit("-90, -88")
-        self.horizon_input = QSpinBox()
-        self.horizon_input.setRange(1, 100000)
-        self.horizon_input.setValue(1000)
+        self.horizons_input = QLineEdit("1000, 2000")  # time steps list
         self.episodes_input = QSpinBox()
         self.episodes_input.setRange(1, 100000)
         self.episodes_input.setValue(3000)
@@ -416,18 +397,18 @@ class SimulationGUI(QWidget):
         form_layout.setSpacing(8)
         form_layout.addWidget(QLabel("Start Date & Time:"))
         form_layout.addWidget(self.start_date_input)
-        form_layout.addWidget(QLabel("Battery Capacities (Wh):"))
+        form_layout.addWidget(QLabel("Battery Capacities (Wh, comma-separated):"))
         form_layout.addWidget(self.battery_input)
-        form_layout.addWidget(QLabel("Observation Thresholds:"))
+        form_layout.addWidget(QLabel("Observation Thresholds (comma-separated):"))
         form_layout.addWidget(self.threshold_input)
-        form_layout.addWidget(QLabel("Wind Thresholds (m/s):"))
+        form_layout.addWidget(QLabel("Wind Thresholds (m/s, comma-separated):"))
         form_layout.addWidget(self.wind_input)
         form_layout.addWidget(QLabel("Latitudes (comma-separated):"))
         form_layout.addWidget(self.lat_input)
         form_layout.addWidget(QLabel("Longitudes (comma-separated):"))
         form_layout.addWidget(self.lon_input)
-        form_layout.addWidget(QLabel("Horizon (time steps):"))
-        form_layout.addWidget(self.horizon_input)
+        form_layout.addWidget(QLabel("Horizons (time steps, comma-separated):"))
+        form_layout.addWidget(self.horizons_input)
         form_layout.addWidget(QLabel("Episodes per Simulation:"))
         form_layout.addWidget(self.episodes_input)
         form_layout.addWidget(QLabel("Output YAML File Path:"))
@@ -470,7 +451,7 @@ class SimulationGUI(QWidget):
             runner = YAMLSimulationRunner(config_path)
             config = runner.config
 
-            # build parameter list including all locations
+            # build parameter list including all locations and horizons
             param_list = runner._build_param_list()
 
             # prepare arguments for simulation creation
@@ -501,7 +482,8 @@ class SimulationGUI(QWidget):
             thresholds = [float(x.strip()) for x in self.threshold_input.text().split(",") if x.strip()]
             winds = [float(x.strip()) for x in self.wind_input.text().split(",") if x.strip()]
             episodes = int(self.episodes_input.value())
-            horizon = int(self.horizon_input.value())
+            # parse horizons list
+            horizons = [int(x.strip()) for x in self.horizons_input.text().split(",") if x.strip()]
             start_dt = self.start_date_input.dateTime().toString(Qt.ISODate)
             out_path = self.output_path_input.text().strip()
 
@@ -525,7 +507,7 @@ class SimulationGUI(QWidget):
                 "battery_capacities": batteries,
                 "threshold_values": thresholds,
                 "wind_thresholds": winds,
-                "horizons": [horizon],
+                "horizons": horizons,
                 "episodes": episodes,
                 "transition_model": "moderate",
                 "solar_panel_model": "constant",

@@ -21,8 +21,8 @@ class Seaplane:
         tz,
         cd0=0.01,
         cdtot=0.06,
-        n_tot=0.75,
-        S=1,
+        n_tot=0.65,
+        S=0.66,
         af_mass=6,
         voltage=22.2,
         capacity=150,
@@ -56,9 +56,6 @@ class Seaplane:
         # Propulsion efficiency factors (assumed typical values)
         self.motor_efficiency = 0.85     # η_m
         self.propeller_efficiency = 0.85 # η_p
-
-        # Assume a typical lift-to-drag ratio for the aircraft; this value is used in the climb power model.
-        self.L_over_D = 10.0
 
         # Perform initial calculations
         self.calculate_pdc0()
@@ -104,14 +101,14 @@ class Seaplane:
         
         The weight (in Newtons) is updated in self.weight.
         """
-        battery_mass = self.capacity * self.voltage / energy_density
+        battery_mass = (self.capacity * self.voltage) / energy_density
         payload_mass = 1.35
         pv_mass = self.S * 0.0039 / 0.034
         fcs_mass = 0.2
-        propulsion_mass = 0.0002 * 4000  # k_ps*P_ps
+        propulsion_mass = 0.288*4000/1500  # k_ps*P_ps
         k_str = 0.6
 
-        mass = (payload_mass + pv_mass + fcs_mass + propulsion_mass) / (1 - k_str) + battery_mass
+        mass = (payload_mass + pv_mass + fcs_mass + propulsion_mass + battery_mass) / (1 - k_str) 
         self.weight = 9.81 * mass
         return self.weight
 
@@ -181,7 +178,7 @@ class Seaplane:
         required_takeoff_energy_j = required_power_w * seconds_to_takeoff
         return required_takeoff_energy_j
 
-    def climb(self, U: float, gamma: float, climb_time: float, rho: float = 1.2) -> dict:
+    def climb_power(self, U: float, gamma: float, rho: float = 1.2) -> dict:
         """Estimate the propulsion power and energy required for a climb maneuver.
         
         Under the constant lift-to-drag assumption, the steady-state propulsion power for climb is given by:
@@ -212,11 +209,10 @@ class Seaplane:
         # Compute the level-flight propulsion power at speed U and air density rho.
         P_level = self.get_propulsion_power(U, rho)
         # Adjust for climb: additional power is required to overcome the vertical component of weight.
-        P_climb = P_level * (np.cos(gamma) + self.L_over_D * np.sin(gamma))
-        climb_energy = P_climb * climb_time
-        return {"climb_power": P_climb, "climb_energy": climb_energy}
+        P_climb = P_level * (np.cos(gamma) + 1 * np.sin(gamma))
+        return P_climb
 
-    def descend(self):
+    def descent_power(self,U,gamma,rho):
         """Estimate the propulsion power and energy required for a descent maneuver.
         
         Under the constant lift-to-drag assumption, the steady-state propulsion power for descent is given by:
@@ -235,15 +231,79 @@ class Seaplane:
         Args:
             U (float): Flight speed during the descent (m/s).
             gamma (float): Descent angle (radians); negative for descent, positive for climb.
-            descent_time (float): Duration of the descent maneuver (seconds).
             rho (float): Air density (kg/m³); defaults to 1.2 for sea-level conditions.
         
         Returns:
-            dict: A dictionary containing:
-                'descent_power' : Estimated propulsion power during the descent (W),
-                'descent_energy': Energy required for the descent (J).
+            'P_descent' : Estimated propulsion power during the descent (W),
         """
+        P_level = self.get_propulsion_power(U,rho)
+        P_descent = P_level * (np.cos(gamma) - (1)*np.sin(gamma))
+        return P_descent
         
+    def rho(self, altitude: float) -> float:
+        """Dry-air density from the ISA tropospheric model (0–11 km).
+        
+        Args:
+            altitude (float): Altitude in meters.
+        
+        Returns:
+            float: Air density in kg/m³.
+        """
+        # 1. Temperature (K)
+        T = 288.15 - 0.0065 * altitude
+        # 2. Pressure (Pa)
+        p = 101325 * (T / 288.15) ** 5.2561
+        # 3. Density (kg m-3)
+        return p / (287.05 * T)
+    
+    def climb_energy(self, U: float, gamma: float, starting_altitude:float, ending_altitude:float, timestep:int) -> float:
+        """Estimate the energy required for a climb maneuver.
+        
+        Uses the climb power and the duration of the climb to compute the total energy required.
+        
+        Args:
+            U (float): Forward flight speed during the climb (m/s).
+            gamma (float): Climb angle (radians); positive for climb, negative for descent.
+            starting_altitude (float): Starting altitude (m).
+            ending_altitude (float): Ending altitude (m).
+            timestep (int): Time step for the climb (seconds).
+        
+        Returns:
+            float: Energy required for the climb in Joules.
+        """
+        if gamma == 0.0:
+            raise AssertionError("Climb angle must be non-zero.")
+        altitude = starting_altitude
+        E_climb = 0.0
+        time = 0.0
+        v_vert = U * np.sin(gamma)
+        while altitude < ending_altitude:
+            rho = self.rho(altitude)
+            P_climb = self.climb_power(U, gamma, rho)
+            E_climb += P_climb * timestep
+            altitude += v_vert * timestep
+            time+= timestep
+        return E_climb, time
+    
+    def climb_phase(self, U: float, gamma: float, starting_altitude:float, ending_altitude:float, timestep:int) -> dict:
+        """Estimate the energy required for a climb maneuver.
+        
+        Uses the climb power and the duration of the climb to compute the total energy required.
+        
+        Args:
+            U (float): Forward flight speed during the climb (m/s).
+            gamma (float): Climb angle (radians); positive for climb, negative for descent.
+            starting_altitude (float): Starting altitude (m).
+            ending_altitude (float): Ending altitude (m).
+            timestep (int): Time step for the climb + cruise (minutes).
+        
+        Returns:
+            energy: Energy required for the climb + cruise (J).
+        """
+        E_climb,time = self.climb_energy(U, gamma, starting_altitude, ending_altitude,1)
+        energy = E_climb + (self.cruise_power * (timestep*60-time))
+        return energy
+    
     def get_mdp_power_params(self) -> dict:
         """
         Adapter method to package the power parameters for the MDP.
@@ -255,3 +315,25 @@ class Seaplane:
             "takeoff_power": self.takeoff_power,
             "climb_power": None, # TODO: Implement this using constant L/D ratio fomulation in Dantsker et al. (2018) [10.2514/6.2018-5009]
         }
+
+if __name__ == "__main__":
+    # Example usage
+    import matplotlib.pyplot as plt
+    seaplane = Seaplane(lat=0.0, lon=0.0, tz="UTC")
+    power_list = []
+    endurance_list = []
+    capacities_wh = range(0,2000,100)
+    for i in capacities_wh:
+        seaplane.capacity = i/22.2
+        seaplane.update_plane()
+        print(seaplane.weight/9.81)
+        Lift_c = seaplane.get_lift_coefficient(1.2,20)
+        print(Lift_c)
+        power = seaplane.get_propulsion_power(U=20, rho=1.2)
+        power_list.append(power)
+        endurance = seaplane.capacity * seaplane.voltage/ power
+        endurance_list.append(endurance)
+
+    # plt.plot(capacities_wh,power_list)
+    plt.plot(capacities_wh,endurance_list)
+    plt.show()

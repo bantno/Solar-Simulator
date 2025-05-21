@@ -8,9 +8,9 @@ from BaseClasses.simulation_run_manager import SimulationRunManager
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox,
-    QCheckBox, QTabWidget, QSpinBox, QDateTimeEdit
+    QCheckBox, QTabWidget, QSpinBox, QDateTimeEdit,
 )
-from PyQt5.QtCore import QDateTime, Qt
+from PyQt5.QtCore import QDateTime, Qt, QDate, QTime
 
 
 def create_simulation_wrapper(args):
@@ -144,7 +144,9 @@ class SimulationGUI(QWidget):
         self.start_date_input = QDateTimeEdit(self)
         self.start_date_input.setCalendarPopup(True)
         self.start_date_input.setDisplayFormat("yyyy-MM-dd HH:mm")
-        self.start_date_input.setDateTime(QDateTime.currentDateTime())
+        dt = QDateTime.currentDateTime()
+        dt.setTime(QTime(0, 0))
+        self.start_date_input.setDateTime(dt)
         self.failure_penalty_input = QLineEdit("5, 10, 15")
 
         form_layout = QVBoxLayout()

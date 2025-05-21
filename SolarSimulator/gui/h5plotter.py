@@ -39,6 +39,8 @@ class HDF5RewardPlotter:
             wind_t = grp.attrs.get('wind_threshold')
             cap = grp.attrs.get('battery_capacity', grp.attrs.get('capacity', np.nan))
             horizon = grp.attrs.get('horizon', np.nan)
+            # extract failure penalty from attributes
+            fp = grp.attrs.get('failure_penalty', np.nan)
 
             # allow optimal group even if thresholds missing
             if (obs_t is None or wind_t is None) and 'optimal' not in sim_type.lower():
@@ -79,6 +81,7 @@ class HDF5RewardPlotter:
                 'wind_threshold': wind_t,
                 'battery_capacity': cap,
                 'horizon': horizon,
+                'failure_penalty': fp,
                 'mean_reward': mean_reward,
                 'failure_percentage': failure_percentage,
                 'mean_failure_step': mean_failure_step
@@ -89,10 +92,9 @@ class HDF5RewardPlotter:
         self._summary = df
         opt_df = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
         if not opt_df.empty:
-            row = opt_df.iloc[0]
-            self.opt_reward = row['mean_reward']
-            self.opt_failure_step = row['mean_failure_step']
-            self.opt_failure_pct = row['failure_percentage']
+            self.opt_reward = opt_df['mean_reward'].mean()
+            self.opt_failure_step = opt_df['mean_failure_step'].mean()
+            self.opt_failure_pct = opt_df['failure_percentage'].mean()
 
     def _get_summary(self):
         if self._summary is None:
@@ -274,13 +276,410 @@ class HDF5RewardPlotter:
         for idx in range(n, rows*cols):
             fig.delaxes(axes.flatten()[idx])
 
+    def plot_reward_vs_penalty(self):
+        """
+        Plot Mean Total Reward vs Failure Penalty:
+          - Collapse across all other parameters
+          - Overlay optimal policy reward vs penalty
+        """
+        df = self._get_summary()
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+        df_opt  = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
+
+        if 'failure_penalty' not in df_main.columns:
+            raise KeyError("No 'failure_penalty' column found in data")
+
+        # average reward per penalty
+        main_group = df_main.groupby('failure_penalty')['mean_reward'].mean()
+        plt.figure()
+        plt.plot(main_group.index, main_group.values, marker='o', label='Mean Reward')
+
+        # overlay optimal
+        if not df_opt.empty:
+            opt_group = df_opt.groupby('failure_penalty')['mean_reward'].mean()
+            plt.plot(opt_group.index, opt_group.values,
+                     linestyle='--', marker='s', label='Optimal Reward')
+
+        plt.xlabel("Failure Penalty")
+        plt.ylabel("Mean Total Reward")
+        plt.title("Mean Total Reward vs Failure Penalty")
+        plt.legend()
+        plt.grid(True)
         plt.tight_layout()
         plt.show()
 
+
+        plt.tight_layout()
+        plt.show()
+
+    def plot_failure_percentage_by_penalty(self, subplots=True):
+        """
+        Plot failure percentage vs. observation threshold for each wind threshold,
+        either as separate subplots per failure penalty (if subplots=True),
+        or all penalty curves on a single plot (if subplots=False).
+        """
+        if subplots:
+            self._plot_failure_percentage_by_penalty_subplots()
+        else:
+            self._plot_failure_percentage_by_penalty_single()
+
+    def _plot_failure_percentage_by_penalty_subplots(self):
+        df = self._get_summary()
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+        df_opt  = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
+        fp_vals = sorted(df_main['failure_penalty'].dropna().unique())
+        wind_vals = sorted(df_main['wind_threshold'].dropna().unique())
+        n = len(fp_vals)
+        cols = int(np.ceil(np.sqrt(n)))
+        rows = int(np.ceil(n / cols))
+        fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4*rows), squeeze=False)
+
+        opt_group = None
+        if not df_opt.empty:
+            opt_group = df_opt.groupby('failure_penalty')['failure_percentage'].mean()
+
+        for idx, fp in enumerate(fp_vals):
+            ax = axes[idx//cols][idx%cols]
+            subset = df_main[df_main['failure_penalty'] == fp]
+            pivot = subset.pivot(
+                index='observation_threshold',
+                columns='wind_threshold',
+                values='failure_percentage'
+            )
+            for w in pivot.columns:
+                ax.plot(pivot.index, pivot[w], marker='x', label=f"Wind {w}")
+            if opt_group is not None and fp in opt_group.index:
+                ax.axhline(opt_group[fp], linestyle='--', label=f"Optimal ({opt_group[fp]:.1f}%)")
+            ax.set_title(f"Penalty = {fp}")
+            ax.set_xlabel("Observation Threshold")
+            ax.set_ylabel("Failure Percentage (%)")
+            ax.grid(True)
+            ax.legend()
+
+        for idx in range(n, rows*cols):
+            fig.delaxes(axes.flatten()[idx])
+
+        plt.tight_layout()
+        plt.show()
+
+    def _plot_failure_percentage_by_penalty_single(self):
+        df = self._get_summary()
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+        df_opt  = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
+
+        # Identify unique threshold combinations
+        combos = df_main[['observation_threshold', 'wind_threshold']].drop_duplicates()
+
+        plt.figure()
+        # Plot one line per threshold combo: failure_percentage vs failure_penalty
+        for _, combo in combos.iterrows():
+            obs = combo['observation_threshold']
+            wind = combo['wind_threshold']
+            subset = df_main[
+                (df_main['observation_threshold'] == obs) &
+                (df_main['wind_threshold'] == wind)
+            ]
+            if subset.empty:
+                continue
+            series = subset.sort_values('failure_penalty')
+            plt.plot(
+                series['failure_penalty'],
+                series['failure_percentage'],
+                marker='o',
+                label=f"Obs {obs}, Wind {wind}"
+            )
+
+        # Overlay optimal policy series
+        if not df_opt.empty:
+            opt_series = df_opt.groupby('failure_penalty')['failure_percentage'].mean().reset_index()
+            plt.plot(
+                opt_series['failure_penalty'],
+                opt_series['failure_percentage'],
+                linestyle='--', marker='s',
+                label='Optimal'
+            )
+
+        plt.xlabel("Failure Penalty")
+        plt.ylabel("Failure Percentage (%)")
+        plt.title("Failure Percentage vs Failure Penalty by Threshold Combination")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+    def plot_failure_step_by_penalty(self, subplots=True):
+        """
+        Plot mean failure step vs. observation threshold (subplots),
+        or vs. failure penalty for each threshold combo (single).
+        """
+        if subplots:
+            self._plot_failure_step_by_penalty_subplots()
+        else:
+            self._plot_failure_step_by_penalty_single()
+
+    def _plot_failure_step_by_penalty_subplots(self):
+        df = self._get_summary()
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+        df_opt  = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
+        fp_vals = sorted(df_main['failure_penalty'].dropna().unique())
+        wind_vals = sorted(df_main['wind_threshold'].dropna().unique())
+        n = len(fp_vals)
+        cols = int(np.ceil(np.sqrt(n)))
+        rows = int(np.ceil(n / cols))
+        fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4*rows), squeeze=False)
+
+        opt_group = None
+        if not df_opt.empty:
+            opt_group = df_opt.groupby('failure_penalty')['mean_failure_step'].mean()
+
+        for idx, fp in enumerate(fp_vals):
+            ax = axes[idx//cols][idx%cols]
+            subset = df_main[df_main['failure_penalty'] == fp]
+            pivot = subset.pivot(
+                index='observation_threshold',
+                columns='wind_threshold',
+                values='mean_failure_step'
+            )
+            for w in pivot.columns:
+                ax.plot(pivot.index, pivot[w], marker='x', label=f"Wind {w}")
+            if opt_group is not None and fp in opt_group.index:
+                ax.axhline(opt_group[fp], linestyle='--', label=f"Optimal ({opt_group[fp]:.2f})")
+            ax.set_title(f"Penalty = {fp}")
+            ax.set_xlabel("Observation Threshold")
+            ax.set_ylabel("Mean Failure Step")
+            ax.grid(True)
+            ax.legend()
+
+        for idx in range(n, rows*cols):
+            fig.delaxes(axes.flatten()[idx])
+
+        plt.tight_layout()
+        plt.show()
+
+    def _plot_failure_step_by_penalty_single(self):
+        df = self._get_summary()
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+        df_opt  = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
+
+        combos = df_main[['observation_threshold', 'wind_threshold']].drop_duplicates()
+
+        plt.figure()
+        for _, combo in combos.iterrows():
+            obs = combo['observation_threshold']
+            wind = combo['wind_threshold']
+            subset = df_main[
+                (df_main['observation_threshold'] == obs) &
+                (df_main['wind_threshold'] == wind)
+            ]
+            if subset.empty:
+                continue
+            series = subset.sort_values('failure_penalty')
+            plt.plot(
+                series['failure_penalty'],
+                series['mean_failure_step'],
+                marker='o',
+                label=f"Obs {obs}, Wind {wind}"
+            )
+
+        if not df_opt.empty:
+            opt_series = df_opt.groupby('failure_penalty')['mean_failure_step'].mean().reset_index()
+            plt.plot(
+                opt_series['failure_penalty'],
+                opt_series['mean_failure_step'],
+                linestyle='--', marker='s',
+                label='Optimal'
+            )
+
+        plt.xlabel("Failure Penalty")
+        plt.ylabel("Mean Failure Step")
+        plt.title("Mean Failure Step vs Failure Penalty by Threshold Combination")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+    def plot_optimal_reward_distribution_by_penalty(
+        self,
+        penalties=None,
+        max_series=4,
+        bins=50,
+        subplots=False
+    ):
+        """
+        Plot reward distribution histograms for optimal simulations across
+        different failure penalties.
+
+        Parameters:
+        - penalties: list of specific penalty values to include (or None)
+        - max_series: maximum number of penalties to plot
+        - bins: number of histogram bins
+        - subplots: if True, place each penalty on its own subplot with
+          shared x-limits; if False, overlay histograms.
+        """
+        # gather data
+        self.open_file()
+        rewards_by_fp = {}
+        for sim_group in self.file.keys():
+            grp = self.file[sim_group]
+            sim_type = grp.attrs.get('simulation_type', '')
+            if 'optimal' not in sim_type.lower():
+                continue
+            fp = grp.attrs.get('failure_penalty', None)
+            if fp is None:
+                continue
+            if penalties is not None and fp not in penalties:
+                continue
+            episodes = grp.get('episodes', {})
+            for ep in episodes.values():
+                if 'total_reward' in ep:
+                    rewards_by_fp.setdefault(fp, []).append(ep['total_reward'][()])
+
+        # select penalty series
+        fps = sorted(rewards_by_fp.keys())
+        fps = (fps if penalties else fps[:max_series])[:max_series]
+
+        if subplots:
+            self._plot_opt_reward_dist_subplots(rewards_by_fp, fps, bins)
+        else:
+            self._plot_opt_reward_dist_overlay(rewards_by_fp, fps, bins)
+
+    def _plot_opt_reward_dist_overlay(self, rewards_by_fp, fps, bins):
+        plt.figure()
+        for fp in fps:
+            data = rewards_by_fp.get(fp, [])
+            if not data:
+                continue
+            plt.hist(data, bins=bins, alpha=0.5, label=f'Penalty {fp}')
+        plt.xlabel('Total Reward')
+        plt.ylabel('Episode Count')
+        plt.title('Reward Distribution for Optimal Policy by Failure Penalty')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+    def _plot_opt_reward_dist_subplots(self, rewards_by_fp, fps, bins):
+        # compute global x-limits
+        all_vals = [v for fp in fps for v in rewards_by_fp.get(fp, [])]
+        if not all_vals:
+            return
+        xmin, xmax = min(all_vals), max(all_vals)
+
+        # vertical stack: one column, one row per penalty
+        n = len(fps)
+        fig, axes = plt.subplots(n, 1, figsize=(6, 3 * n), sharex=True)
+        # ensure axes is always a list
+        if n == 1:
+            axes = [axes]
+
+        for idx, fp in enumerate(fps):
+            ax = axes[idx]
+            data = rewards_by_fp.get(fp, [])
+            # opaque blue bars with black outline
+            ax.hist(data, bins=bins, edgecolor='black')
+            ax.set_xlim(xmin, xmax)
+            ax.set_title(f'Penalty {fp}')
+            ax.set_ylabel('Episode Count')
+            ax.patch.set_alpha(0.3)        # make the bar background semi-transparent
+            ax.grid(True)
+
+        # label the bottom plot's x-axis only
+        axes[-1].set_xlabel('Total Reward')
+
+        plt.tight_layout()
+        plt.show()
+
+    def plot_optimal_failure_step_distribution_by_penalty(
+        self,
+        penalties=None,
+        max_series=4,
+        bins=50,
+        subplots=False
+    ):
+        """
+        Plot failure step distribution histograms for optimal simulations across
+        different failure penalties.
+
+        Parameters:
+        - penalties: list of penalty values to include (or None)
+        - max_series: maximum number of penalties to plot
+        - bins: number of histogram bins
+        - subplots: if True, separate subplots per penalty with shared x-limits;
+                    if False, overlay histograms.
+        """
+        self.open_file()
+        steps_by_fp = {}
+        for sim_group in self.file.keys():
+            grp = self.file[sim_group]
+            if 'optimal' not in grp.attrs.get('simulation_type', '').lower():
+                continue
+            fp = grp.attrs.get('failure_penalty', None)
+            if fp is None:
+                continue
+            if penalties is not None and fp not in penalties:
+                continue
+            episodes = grp.get('episodes', {})
+            for ep in episodes.values():
+                if 'failure_step' in ep:
+                    steps_by_fp.setdefault(fp, []).append(ep['failure_step'][()])
+
+        fps = sorted(steps_by_fp.keys())
+        fps = (fps if penalties else fps[:max_series])[:max_series]
+        if subplots:
+            self._plot_opt_failure_step_subplots(steps_by_fp, fps, bins)
+        else:
+            self._plot_opt_failure_step_overlay(steps_by_fp, fps, bins)
+
+    def _plot_opt_failure_step_overlay(self, steps_by_fp, fps, bins):
+        plt.figure()
+        for fp in fps:
+            data = steps_by_fp.get(fp, [])
+            if not data:
+                continue
+            plt.hist(data, bins=bins, alpha=0.5, label=f'Penalty {fp}')
+        plt.xlabel('Failure Step')
+        plt.ylabel('Episode Count')
+        plt.title('Failure Step Distribution for Optimal Policy by Penalty')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+    def _plot_opt_failure_step_subplots(self, steps_by_fp, fps, bins):
+        # compute global x-limits
+        all_vals = [v for fp in fps for v in steps_by_fp.get(fp, [])]
+        if not all_vals:
+            return
+        xmin, xmax = min(all_vals), max(all_vals)
+        # vertical stack
+        n = len(fps)
+        fig, axes = plt.subplots(n, 1, figsize=(6, 3*n), sharex=True)
+        if n == 1:
+            axes = [axes]
+        for idx, fp in enumerate(fps):
+            ax = axes[idx]
+            data = steps_by_fp.get(fp, [])
+            if data:
+                ax.hist(data, bins=bins, edgecolor='black')
+            ax.set_xlim(xmin, xmax)
+            ax.set_title(f'Penalty {fp}')
+            ax.set_ylabel('Episode Count')
+            ax.grid(True)
+        axes[-1].set_xlabel('Failure Step')
+        plt.tight_layout()
+        plt.show()
+
+
+
+
 if __name__ == "__main__":
     plotter = HDF5RewardPlotter(
-        r"simulation_results\sim_5000_eps_20250519_101037.h5"
+        r"simulation_results\sim_5000_eps_20250520_233022.h5"
     )
     # plotter.plot_reward_vs_capacity_by_thresholds()
     # plotter.plot_reward_vs_horizon_by_thresholds()
-    plotter.plot_reward_vs_capacity_by_thresholds()
+    # plotter.plot_reward_vs_capacity_by_thresholds()
+    # plotter.plot_failure_percentage_by_thresholds()
+    # plotter.plot_reward_vs_penalty()
+    # plotter.plot_failure_percentage_by_penalty(subplots=False)
+    # plotter.plot_failure_step_by_penalty(subplots=False)
+    # plotter.plot_optimal_reward_distribution_by_penalty(penalties=[0,5,10], bins = 50, subplots= True)
+    plotter.plot_optimal_failure_step_distribution_by_penalty(penalties=[0,5,10], bins=100, subplots=True)

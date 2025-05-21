@@ -369,6 +369,7 @@ class SimulationFactory:
                     full_history_episodes=full_history_episodes,
                 )
             sim.location = self.location
+            sim.failure_penalty = self.failure_penalty
             return sim
         if sim_type == "optimal":
             solver = mdpBackwardSolver(mdp, self.horizon)
@@ -380,6 +381,7 @@ class SimulationFactory:
                 full_history_episodes=full_history_episodes,
             )
             sim.location = self.location
+            sim.failure_penalty = self.failure_penalty
             return sim
         raise ValueError(f"Unknown simulation type: {sim_type}")
 
@@ -390,11 +392,14 @@ class YAMLSimulationRunner:
             self.config = yaml.safe_load(f)
 
         # Hyperparameter lists with fallbacks
-        self.horizons = self.config.get("horizons") or [self.config["horizon"]]
+        #  — allow multiple horizons
+        self.horizons = self.config.get("horizons") or [self.config.get("horizon")]
+        #  — allow multiple failure penalties (or fall back to a single one)
         self.failure_penalties = (
             self.config.get("failure_penalties")
-            or [self.config.get("failure_penalty", 15)]
+            or [ self.config.get("failure_penalty", 15) ]
         )
+
         if "locations" in self.config:
             self.locations = self.config["locations"]
         else:
@@ -407,11 +412,16 @@ class YAMLSimulationRunner:
             }],
 
     def _build_param_list(self) -> List[Tuple]:
-        thresholds = self.config.get("threshold_values", [])
+        """
+        Build a list of parameters for each simulation type.
+        Each entry is a tuple of (factory, sim_type, cap, threshold, wind_threshold).
+        """
+
+        thresholds      = self.config.get("threshold_values", [])
         wind_thresholds = self.config.get("wind_thresholds", [])
         params: List[Tuple] = []
 
-        # Threshold simulations
+        # 1) Threshold-based simulations, now including each failure_penalty:
         for loc, H, fp, cap, th, wth in product(
             self.locations,
             self.horizons,
@@ -423,7 +433,7 @@ class YAMLSimulationRunner:
             factory = SimulationFactory(self.config, loc, H, fp)
             params.append((factory, "threshold", cap, th, wth))
 
-        # Optimal simulations
+        # 2) Optimal-policy simulations, also over each failure_penalty:
         for loc, H, fp, cap in product(
             self.locations,
             self.horizons,
@@ -434,6 +444,7 @@ class YAMLSimulationRunner:
             params.append((factory, "optimal", cap, None, None))
 
         return params
+
 
     def run(self, use_multiprocessing: bool = False) -> None:
         param_list = self._build_param_list()

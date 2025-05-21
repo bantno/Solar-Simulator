@@ -11,15 +11,6 @@ def _run_one_sim(args):
     sim, episodes_per_simulation = args
     episodes = []
     for episode in sim.simulate_multiple_episodes(episodes_per_simulation):
-        # Enrich each episode’s metadata
-        # metadata = {"simulation_type": sim.__class__.__name__}
-        # Optionally add simulation-specific parameters if they exist
-        # if hasattr(sim, "observation_threshold"):
-        #     metadata["observation_threshold"] = sim.observation_threshold
-        # if hasattr(sim, "wind_threshold"):
-        #     metadata["wind_threshold"] = sim.wind_threshold
-        # episode["metadata"].update(metadata)
-
         # Ensure total_reward is set
         episode["total_reward"] = episode.get(
             "total_reward", sum(episode.get("rewards", []))
@@ -35,6 +26,7 @@ def _run_one_sim(args):
         "horizon": sim.horizon,
         "initial_state": sim.initial_state.tolist(),
         "start_time": sim.start_datetime,
+        "failure_penalty": sim.failure_penalty,
     }
     if hasattr(sim, "observation_threshold"):
         simulation_metadata["observation_threshold"] = sim.observation_threshold
@@ -110,6 +102,8 @@ class SimulationRunManager:
         """
         parts = [meta["simulation_type"].lower()]
         parts.append(f"c{int(meta['battery_capacity'])}")
+        if "failure_penalty" in meta:
+            parts.append(f"f{int(meta['failure_penalty'])}")
         if "horizon" in meta:
             parts.append(f"h{int(meta['horizon'])}")
         if "location_id" in meta:

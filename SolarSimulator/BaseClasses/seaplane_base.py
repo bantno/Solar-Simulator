@@ -43,6 +43,8 @@ class Seaplane:
         # Battery and airframe properties
         self.voltage = voltage
         self.capacity = capacity
+        self.capacity_Wh = voltage*capacity
+        self.capacity_J = self.capacity_Wh * 3600
         self.af_mass = af_mass   # (Unused in weight calculation here)
 
         # Additional aerodynamic and propulsion parameters

@@ -126,7 +126,7 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
     def sample_wind_speed(self, t: int, n: int) -> np.ndarray:
         return self.weibull_wind_speed_dist(t, n)
 
-    def sample_whale_observation(self, t: int, n: int) -> np.ndarray:
+    def sample_whale_observation(self, t: int, n: int=1) -> np.ndarray:
         return np.array([self.whale_reward_series[t]] * n)
 
     def weibull_wind_speed_dist(self, t: int, n: int) -> np.ndarray:
@@ -138,6 +138,12 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         a = self.solar_alpha[t]
         b = self.solar_beta[t]
         return self.rng.beta(a, b, size=n)
+    
+    def get_solar_alpha(self,stage):
+        return self.solar_alpha[stage]
+    
+    def get_solar_beta(self, stage):
+        return self.solar_beta[stage]
 
 class RegimeSwitchingWindSolarEnvironmentProvider(StochasticWindSolarEnvironmentProvider):
     """

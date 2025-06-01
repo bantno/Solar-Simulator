@@ -4,8 +4,10 @@ from tqdm import tqdm
 from BaseClasses.plotting_utils_base import PlottingUtils
 from BaseClasses.mdp_base import AbstractMDP, stochasticMDP
 from scipy.stats import beta, weibull_min
+from scipy.special import betainc
 
 from numpy.polynomial.legendre import leggauss
+
 
 class mdpBackwardSolver:
     """
@@ -88,7 +90,9 @@ class mdpBackwardSolver:
                     value = max(float_val, fly_val)
 
                 self.future_value_table[i, stage] = value
-        filename = f"future_value_table_{self.mdp.battery_capacity_wh}Wh_{self.horizon}horizon.html"
+        filename = f"future_value_table_{self.mdp.battery_capacity_wh}Wh_{self.horizon}h_{self.mdp.failure_penalty}p.npy"
+        np.save(filename, self.future_value_table)
+        print("Value function table saved to:", filename)
         # PlottingUtils.plot_surface_plotly(self.future_value_table, self.mdp.battery_capacity_wh, filename)
 
     def value_function(self, stage: int, rewards: np.ndarray, next_states: np.ndarray) -> float:
@@ -193,17 +197,30 @@ class mdpAnalyticalBackwardSolver:
         self.states = self.mdp._get_states()
         self._GAMMA = 1.0
         self.future_value_table = self._initialize_future_value_table()
+        self.G_MAX = self.mdp.env_provider._energy_gain_from_solar(1.)
+        soc_values = self.states[:-1, 0]  # exclude the 'broken' terminal state
+        self._soc_grid = np.array(sorted(set(np.round(soc_values, 6))))
+        self._num_modes = 2  # assume modes 0 and 1, mode==2 is broken
 
     def _initialize_future_value_table(self) -> np.ndarray:
         num_states = self.states.shape[0]
         return np.zeros((num_states, self.horizon))
 
-    def _value(self, state: np.ndarray, a: int, next_state:np.ndarray, t: int,):
+    def _value(
+        self,
+        state: np.ndarray, # shape (n,2): [SoC, mode]
+        a: np.ndarray,     # shape (n,): 0 or 1
+        t: int,
+    ):
         """
         Compute the value of a state-action pair at a given time step.
         """
-        # Placeholder for actual value computation
-        return 0.0
+        p_f_total = self._compute_failure_probability(state,a,t)
+        observation_k = self.mdp.get_obs(t)
+        expected_one_stage_reward = self.expected_reward(a,observation_k,self.mdp.failure_penalty,p_f_total)
+        expected_future_value = self.expected_future_value(state,a,t,p_f_total)
+        value = expected_one_stage_reward + self._GAMMA*expected_future_value
+        return value
     
     def _compute_failure_probability(
         self,
@@ -212,364 +229,208 @@ class mdpAnalyticalBackwardSolver:
         t: int
     ) -> np.ndarray:
         """
-        Compute p_fail(s_k,a_k) = p_B + p_M - p_B*p_M for each (state,action) pair.
-
-        Step 1:  p_B = P(battery failure) = F_beta(required - stored; α,β)
-        Step 2:  p_M = ∫₀^∞ [1 - P_success(w; a_k,s_k)] f_Weibull(w) dw
-        Step 3:  p_fail = p_B + p_M - p_B*p_M
+        Compute overall failure probability p_fail = p_B + p_M - p_B * p_M
+        for each (state, action) pair by delegating to helper methods.
         """
+        p_B = self._battery_failure_probability(states, actions, t)
+        p_M = self._mechanical_failure_probability(states, actions, t)
+        return self._combine_failure_probabilities(p_B, p_M)
 
-        # --- grab helpers and parameters ---
-        tl  = self.mdp.transition_logic
+    def _battery_failure_probability(
+        self,
+        states: np.ndarray,
+        actions: np.ndarray,
+        t: int
+    ) -> np.ndarray:
+        """
+        Step 1: Compute p_B = P(battery failure) using a Beta CDF of energy deficit.
+        """
+        tl = self.mdp.transition_logic
         env = tl.env_provider
-
-        # --- Step 1: battery failure via Beta CDF ---
-        a_s, b_s = env.get_solar_alpha(t), env.get_solar_beta(t)
-        solar_dist = beta(a=a_s, b=b_s, loc=0.0, scale=1357*.66*.01*15*60)
-        # stored and required energy (J or Wh)
-        stored   = tl.soc_to_energy(states[:, 0])
+        alpha = env.get_solar_alpha(t)
+        beta_param = env.get_solar_beta(t)
+        scale = self.G_MAX
+        solar_dist = beta(a=alpha, b=beta_param, loc=0.0, scale=scale)
+        stored = tl.soc_to_energy(states[0,0])
         required = tl._calculate_energy_consumption(states, actions)
-        deficit  = required - stored
-        p_B      = solar_dist.cdf(deficit)
+        deficit = required - stored
+        return solar_dist.cdf(deficit)
 
-        # --- Step 2: mechanical failure via Weibull‐sigmoid integration ---
-        k_w, lam = env.get_wind_shape(t), env.get_wind_scale(t)
-        wind_dist = weibull_min(c=k_w, loc=0.0, scale=lam)
-        grid_size = 800
-        w_max     = wind_dist.ppf(0.9999)
-        w         = np.linspace(0.0, w_max, grid_size)
-        pdf       = wind_dist.pdf(w)
-
+    def _mechanical_failure_probability(
+        self,
+        states: np.ndarray,
+        actions: np.ndarray,
+        t: int
+    ) -> np.ndarray:
+        """
+        Step 2: Compute p_M via Weibull-sigmoid integration over wind.
+        """
+        actions = np.array(actions)
+        tl = self.mdp.transition_logic
+        env = tl.env_provider
+        shape_param = env.get_wind_shape(t)
+        scale_param = env.get_wind_scale(t)
+        wind_dist = weibull_min(c=shape_param, loc=0.0, scale=scale_param)
+        grid_size = 400
+        w_max = wind_dist.ppf(0.999999999999999)
+        w = np.linspace(0.0, w_max, grid_size)
+        pdf = wind_dist.pdf(w)
         n = states.shape[0]
-        # Broadcast wind × (state,action) to shape (grid_size*n,)
-        w_mat      = np.repeat(w[:, None],        n, axis=1).ravel()
-        action_mat = np.repeat(actions[None, :],  grid_size, axis=0).ravel()
-        state_mat  = np.repeat(states[None, :, :], grid_size, axis=0) \
-                          .reshape(-1, states.shape[1])
-
-        # success probability P_success(w, a, s)
-        succ = tl.transition_model.compute_probability(
-                    w_mat, action_mat, state_mat
-               )
+        w_mat = np.repeat(w[:, None], n, axis=1).ravel()
+        action_mat = np.repeat(actions[None, :], grid_size, axis=0).ravel()
+        state_mat = np.repeat(states[None, :, :], grid_size, axis=0).reshape(-1, states.shape[1])
+        succ = tl.transition_model.compute_probability(w_mat, action_mat, state_mat)
         succ = succ.reshape(grid_size, n)
         fail_cond = 1.0 - succ
+        return np.trapz(fail_cond * pdf[:, None], w, axis=0)
 
-        # integrate to get p_M
-        p_M = np.trapz(fail_cond * pdf[:, None], w, axis=0)
-
-        # --- Step 3: combine independent failures ---
+    def _combine_failure_probabilities(
+        self,
+        p_B: np.ndarray,
+        p_M: np.ndarray
+    ) -> np.ndarray:
+        """
+        Step 3: Combine independent failure probabilities:
         p_fail = p_B + p_M - (p_B * p_M)
-
-        return p_fail
+        """
+        return p_B + p_M - (p_B * p_M)
     
     def solve(self) -> None:
         """
         Perform backward induction, filling future_value_table.
         """
         states = self.states
-        Ptab = self.future_value_table
+        action_list = [np.array(0)[np.newaxis],np.array(1)[np.newaxis]]
+        values = np.zeros(2)
         for t in tqdm(range(self.horizon-2, -1, -1)):
-            solar_nodes, solar_pdf, wind_nodes, wind_pdf = self._get_integration_grids(t)
-            for i, s in tqdm(enumerate(states[:-1])):
-                values = [self._expected_action_value(s, a, t,
-                            solar_nodes, solar_pdf,
-                            wind_nodes, wind_pdf)
-                          for a in (0,1)]
-                Ptab[i, t] = max(values)
-        print("Future-value table:\n", Ptab)
+            for i, s in enumerate(states[:-1]):
+                for a in action_list:
+                    values[a] = self._value(s[np.newaxis],a,t)
+ 
+                self.future_value_table[i, t] = max(values)
+        filename = f"future_value_table_{self.mdp.battery_capacity_wh}Wh_{self.horizon}h_{self.mdp.failure_penalty}p.npy"
+        np.save(filename, self.future_value_table)
+        print("Value function table saved to:", filename)
 
     def lookup_future_values(self, states: np.ndarray, stages: np.ndarray) -> np.ndarray:
         """
-        Retrieve precomputed future values for given states and stages.
-        Any state with mode==2 is treated as the broken state [-1.0, 2].
-
-        Args:
-            states (np.ndarray): Array of states to look up (shape: [n, state_dim]).
-            stages (np.ndarray): Array of time indices corresponding to each state (shape: [n]).
-
-        Returns:
-            np.ndarray: Array of future values for each (state, stage) pair.
-
-        Raises:
-            ValueError: If any non-broken state isn’t in the solver’s state table.
+        Vectorized retrieval of future values for given states and stages.
+        Any state with mode==2 is treated as the broken state.
         """
-        # 1) Locate the broken‐state index
-        is_broken_state = (self.states[:, 1] == 2) & (self.states[:, 0] == -1.0)
-        try:
-            broken_idx = np.nonzero(is_broken_state)[0][0]
-        except IndexError:
-            raise ValueError("Broken state [-1.0, 2] not found in state table.")
+        # find broken-state index
+        broken_mask = (self.states[:, 0] == -1.0) & (self.states[:, 1] == 2)
+        broken_idx = np.flatnonzero(broken_mask)[0]
 
-        n = states.shape[0]
-        state_idxs = np.empty(n, dtype=int)
+        # unpack query arrays
+        soc_vals = states[:, 0]
+        modes    = states[:, 1].astype(int)
 
-        # 2) Map all mode==2 inputs to the broken index
-        broken_mask = (states[:, 1] == 2)
-        state_idxs[broken_mask] = broken_idx
+        # find bin indices for each SoC
+        bin_idxs = np.searchsorted(self._soc_grid, soc_vals, side='right') - 1
+        bin_idxs = np.clip(bin_idxs, 0, len(self._soc_grid) - 1)
 
-        # 3) Handle the remaining (mode 0 or 1) inputs
-        normal_idxs = np.nonzero(~broken_mask)[0]
-        if normal_idxs.size > 0:
-            norm_states = states[normal_idxs]
-            # exact match on soc and mode
-            mask = np.all(self.states[None, :, :] == norm_states[:, None, :], axis=2)
+        # flat index = bin_idx * num_modes + mode
+        state_idxs = bin_idxs * self._num_modes + modes
 
-            # check that every normal state was found
-            if not np.all(mask.any(axis=1)):
-                missing = normal_idxs[~mask.any(axis=1)]
-                bad_states = states[missing]
-                raise ValueError(f"States {bad_states.tolist()} at indices {missing.tolist()} not found.")
+        # override broken-mode entries
+        state_idxs[modes == 2] = broken_idx
 
-            # pick the first matching index for each
-            matched_idxs = np.argmax(mask, axis=1)
-            state_idxs[normal_idxs] = matched_idxs
-
-        # 4) Finally, pull from the table
         return self.future_value_table[state_idxs, stages]
 
-
-# class mdpAnalyticalBackwardSolver:
-#     """
-#     Analytically solves a finite-horizon stochastic MDP via backward induction.
-
-#     At each stage, integrates over solar and wind distributions to compute
-#     expected action values and fills a future-value table, which can then be
-#     visualized as a surface plot.
-
-#     Parameters
-#     ----------
-#     mdp : stochasticMDP
-#         The MDP model, providing transition, reward, and environment data.
-#     horizon : int
-#         Number of discrete time steps in the planning horizon.
-#     """
-
-#     def __init__(self, mdp: stochasticMDP, horizon: int):
-#         """
-#         Initialize the backward solver.
-
-#         Parameters
-#         ----------
-#         mdp : stochasticMDP
-#             The MDP model, providing transition, reward, and environment data.
-#         horizon : int
-#             Total number of decision epochs.
-#         """
-#         self.mdp = mdp
-#         self.horizon = horizon
-#         self.states = self.mdp._get_states()
-#         self._GAMMA = 1.0
-#         self.future_value_table = self._initialize_future_value_table()
-
-#     def _initialize_future_value_table(self) -> np.ndarray:
-#         """
-#         Allocate and zero-initialize the future value table.
-
-#         Returns
-#         -------
-#         numpy.ndarray
-#             A zero matrix of shape (num_states, horizon).
-#         """
-#         num_states = self.states.shape[0]
-#         T = self.horizon
-#         return np.zeros((num_states, T))
-
-#     def solve(self) -> None:
-#         """
-#         Perform backward induction to fill the future value table.
-
-#         Loops backward over each stage, approximates integrals over solar (Beta)
-#         and wind (Weibull) distributions using Riemann sums, evaluates the two
-#         discrete actions per state, and stores the maximal expected value.
-
-#         After filling the table, prints it and plots a surface of value vs. state
-#         & stage using PlottingUtils.plot_surface_plotly.
-#         """
+    @staticmethod
+    def expected_reward(a_k,O_k,penalty,p_failure):
+        return a_k*O_k-penalty*p_failure
+    
+    def expected_future_value(self,state, action, stage, p_fail):
         
-#         raise NotImplementedError("Analytical backward induction is not implemented.")
+        if state[0,0] == 0:
+            return 0
+
+        # Broken state contribution to expected future value
+        broken_value = 0
+        broken_contribution = broken_value*p_fail
+
+        # Survival states controbution to expected future value
+        stored_energy = self.state_to_energy(state)
+        required_energy = self.get_required_energy(state,action)
+        alpha_k,beta_k = self.get_beta_params(stage)
+        # Get future values that are possible as a result of action from current state
+        ROWS_PER_MODE = int((self.future_value_table.shape[0]-1)/2)
+        if action == 0:
+            possible_future_values = self.future_value_table[:ROWS_PER_MODE,stage+1]
+            c_grid = np.arange(0,1.02,.01)*self.mdp.battery_capacity_joules
+        if action == 1:
+            possible_future_values = self.future_value_table[ROWS_PER_MODE:-1,stage+1]
+            c_grid = np.arange(0,1.02,.01)*self.mdp.battery_capacity_joules
+
+        unweighted_survival = self.compute_survival_contribution(stored_energy,
+                                                    required_energy,
+                                                    self.G_MAX,
+                                                    alpha_k,beta_k,
+                                                    p_fail,
+                                                    possible_future_values, # future value will be at the next stage
+                                                    c_grid)
+        survival_contribution = (1-p_fail)*unweighted_survival
+        
+        return broken_contribution + survival_contribution
+
+    def state_to_energy(self,state):
+        return self.mdp.transition_logic.soc_to_energy(state[0,0])
     
-#     def battery_failure_probability(self, solar_energy_distribution, stored_energy, required_energy) -> float:
-#         """
-#         Calculate the probability of battery failure based on the solar energy distribution.
-
-#         Args:
-#             solar_energy_distribution (scipy.stats distribution): The distribution of solar energy.
-#             stored_energy (float): The amount of energy currently stored in the battery.
-#             required_energy (float): The amount of energy required to avoid failure.
-
-#         Returns:
-#             float: Probability of battery failure.
-#         """
-#         # P(failure) = P(G ≤ required − stored)
-#         threshold = required_energy - stored_energy
-#         return solar_energy_distribution.cdf(threshold)
-
-#     def mechanical_failure_probability(self, wind_speed_mps, action, state) -> float:
-#         """
-#         Calculate the probability of mechanical failure based on wind speed and action.
-
-#         Args:
-#             wind_speed_mps (float): Wind speed in meters per second.
-#             action (int): Action taken (0 for float, 1 for fly).
-#             state (np.ndarray): Current state of the system.
-
-#         Returns:
-#             float: Probability of mechanical failure.
-#         """
-#         failure_probability = self.mdp.transition_model.compute_probability(
-#                                                             wind_speed=wind_speed_mps,
-#                                                             action=action,
-#                                                             state=state
-#                                                             )
-#         return failure_probability
+    def get_required_energy(self, state, action):
+        return self.mdp.transition_logic.get_required_energy(state,action)
     
-#     def total_failure_probability(self, mechanical_failure_prob, battery_failure_prob) -> float:
-#         """
-#         Calculate the total probability of failure.
+    def get_beta_params(self,stage):
+        alpha_k = self.mdp.env_provider.get_solar_alpha(stage)
+        beta_k = self.mdp.env_provider.get_solar_beta(stage)
+        return alpha_k, beta_k
 
-#         Args:
-#             mechanical_failure_prob (float): Probability of mechanical failure.
-#             battery_failure_prob (float): Probability of battery failure.
+    @staticmethod
+    def compute_survival_contribution(C_k, E_k, G_max, alpha_k, beta_k, p_fail, V_next, c_grid):
+        """
+        Compute the 'survival contribution' term in the Bellman expectation:
+        sum_j (1 - p_fail) * DeltaP_j * V_next[j]
+        where DeltaP_j = BetaCDF((c_j +/- Δc/2 - (C_k - E_k)) / G_max)
 
-#         Returns:
-#             float: Total probability of failure.
-#         """
-#         return mechanical_failure_prob + battery_failure_prob - (mechanical_failure_prob * battery_failure_prob)
+        Parameters:
+        - C_k (float): current stored energy
+        - E_k (float): energy required for the action
+        - G_max (float): maximum possible solar gain in stage k
+        - alpha, beta (float): parameters of the Beta distribution
+        - p_fail (float): total failure probability at stage k
+        - V_next (np.ndarray): array of V_{k+1}(c_j, m*) values for each bin j
+        - c_grid (np.ndarray): array of bin centers c_j
 
-#     def lookup_future_values(self, states: np.ndarray, stages: np.ndarray) -> np.ndarray:
-#         """
-#         Retrieve precomputed future values for given states and stages.
-#         Any state with mode==2 is treated as the broken state [-1.0, 2].
+        Returns:
+        - float: the survival contribution to E[V_{k+1} | s, a]
+        """
+    # Shift due to energy consumption
+        delta = C_k - E_k
 
-#         Args:
-#             states (np.ndarray): Array of states to look up (shape: [n, state_dim]).
-#             stages (np.ndarray): Array of time indices corresponding to each state (shape: [n]).
+        # c_grid is an array of bin edges, length M+1 if there are M bins
+        edges = c_grid
+        e_lower = edges[:-1]   # shape = (M,)
+        e_upper = edges[1:]    # shape = (M,)
 
-#         Returns:
-#             np.ndarray: Array of future values for each (state, stage) pair.
+        u_lower = (e_lower - delta) / G_max   # shape = (M,)
+        u_upper = (e_upper - delta) / G_max   # shape = (M,)
 
-#         Raises:
-#             ValueError: If any non-broken state isn’t in the solver’s state table.
-#         """
-#         # 1) Locate the broken‐state index
-#         is_broken_state = (self.states[:, 1] == 2) & (self.states[:, 0] == -1.0)
-#         try:
-#             broken_idx = np.nonzero(is_broken_state)[0][0]
-#         except IndexError:
-#             raise ValueError("Broken state [-1.0, 2] not found in state table.")
+        # Clamp between 0 and 1
+        u_upper = np.clip(u_upper, 0, 1)
+        u_lower = np.clip(u_lower, 0, 1)
 
-#         n = states.shape[0]
-#         state_idxs = np.empty(n, dtype=int)
+        # Regularized incomplete beta (Beta CDF)
+        F_upper = betainc(alpha_k, beta_k, u_upper)
+        F_lower = betainc(alpha_k, beta_k, u_lower)
 
-#         # 2) Map all mode==2 inputs to the broken index
-#         broken_mask = (states[:, 1] == 2)
-#         state_idxs[broken_mask] = broken_idx
+        # Probability mass in each bin
+        deltaP = F_upper - F_lower
 
-#         # 3) Handle the remaining (mode 0 or 1) inputs
-#         normal_idxs = np.nonzero(~broken_mask)[0]
-#         if normal_idxs.size > 0:
-#             norm_states = states[normal_idxs]
-#             # exact match on soc and mode
-#             mask = np.all(self.states[None, :, :] == norm_states[:, None, :], axis=2)
+        # Survival mass allocated to each bin
+        survival_mass = (1 - p_fail) * deltaP
 
-#             # check that every normal state was found
-#             if not np.all(mask.any(axis=1)):
-#                 missing = normal_idxs[~mask.any(axis=1)]
-#                 bad_states = states[missing]
-#                 raise ValueError(f"States {bad_states.tolist()} at indices {missing.tolist()} not found.")
-
-#             # pick the first matching index for each
-#             matched_idxs = np.argmax(mask, axis=1)
-#             state_idxs[normal_idxs] = matched_idxs
-
-#         # 4) Finally, pull from the table
-#         return self.future_value_table[state_idxs, stages]
+        # Compute weighted sum of V_next
+        survival_contribution = np.dot(survival_mass, V_next)
+        return survival_contribution#, deltaP, survival_mass
 
 
-import unittest
-from BaseClasses.transition_model_base import RealisticSuccessProbability
-class TestFailureProbability(unittest.TestCase):
-    def setUp(self):
-        # common dummy parameters and solver setup
-        alpha, beta_param = 2.0, 5.0
-        k_w, lam = 1.5, 3.0
-        G_max = 1357*.66*.01*15*60
-
-        class DummyEnv:
-            def get_solar_alpha(self, t): return alpha
-            def get_solar_beta(self, t): return beta_param
-            def get_wind_shape(self, t): return k_w
-            def get_wind_scale(self, t): return lam
-
-        env = DummyEnv()
-        class StubLogic:
-            def __init__(self):
-                from transition_model_base import RealisticSuccessProbability
-                self.env_provider = env
-                self.transition_model = RealisticSuccessProbability()
-                self._battery_capacity_joules = G_max
-            def soc_to_energy(self, soc):
-                return (soc / 100.0) * self._battery_capacity_joules
-            def _calculate_energy_consumption(self, states, actions):
-                # constant consumption of 30 units
-                return np.full(states.shape[0], 30.0)
-
-        self.solver = mdpAnalyticalBackwardSolver.__new__(mdpAnalyticalBackwardSolver)
-        self.solver.mdp = type('M', (), {})()
-        self.solver.mdp.transition_logic = StubLogic()
-        self.G_max = G_max
-        self.alpha = alpha
-        self.beta = beta_param
-        self.k_w = k_w
-        self.lam = lam
-
-    def monte_carlo_failure(self, soc, action, N=50000):
-        # helper to compute Monte Carlo p_fail for given scenario
-        beta_dist = beta(a=self.alpha, b=self.beta, loc=0.0, scale=1.0)
-        wind_dist = weibull_min(c=self.k_w, loc=0.0, scale=self.lam)
-        stored = self.solver.mdp.transition_logic.soc_to_energy(np.array([soc]))[0]
-        required = self.solver.mdp.transition_logic._calculate_energy_consumption(
-            np.array([[soc, 0]]), np.array([action]))[0]
-        model = self.solver.mdp.transition_logic.transition_model
-        rng = np.random.default_rng(123)
-
-        failures = 0
-        for _ in range(N):
-            G = beta_dist.rvs(random_state=rng) * self.G_max
-            w = wind_dist.rvs(random_state=rng)
-            succ = model.compute_probability(np.array([w]), np.array([action]), np.array([[soc,0]]))[0]
-            B = (G < (required - stored))
-            M = rng.random() > succ
-            if B or M:
-                failures += 1
-        return failures / N
-
-    def test_single_scenario(self):
-        # single reference scenario
-        soc, action, t = 50.0, 1, 0
-        p_analytical = self.solver._compute_failure_probability(
-            np.array([[soc, 0]]), np.array([action]), t)[0]
-        p_mcs = self.monte_carlo_failure(soc, action)
-        self.assertAlmostEqual(p_analytical, p_mcs, delta=0.02)
-
-    def test_multiple_scenarios(self):
-        # test a variety of SoC and action combinations
-        scenarios = [(0.0, 0), (0.0,1), (50.0,1), (100.0,1)]
-        t = 0
-        for soc, action in scenarios:
-            with self.subTest(soc=soc, action=action):
-                p_analytical = self.solver._compute_failure_probability(
-                    np.array([[soc, 0]]), np.array([action]), t)[0]
-                p_mcs = self.monte_carlo_failure(soc, action)
-                # for full battery (soc=100), ensure battery failure is zero
-                if soc == 100.0:
-                    self.assertAlmostEqual(
-                        p_analytical, 
-                        self.solver._compute_failure_probability(
-                            np.array([[soc,0]]), np.array([action]), t)[0],
-                        delta=1e-6
-                    )
-                self.assertAlmostEqual(p_analytical, p_mcs, delta=0.03)
-
-if __name__ == '__main__':
-    unittest.main()

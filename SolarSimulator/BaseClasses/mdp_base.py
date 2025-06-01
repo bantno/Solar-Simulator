@@ -63,32 +63,35 @@ class AbstractMDP(ABC):
         next_states = self.transition(states, actions, t)
         rewards = self.reward(states, actions, next_states, t)
         return next_states, rewards
+    
+    def get_obs(self,stage:int):
+        return self.env_provider.sample_whale_observation(stage)
 
-class deterministicMDP(AbstractMDP):
-    def __init__(self, battery_capacity_wh, idle_power, cruise_power, takeoff_power,
-                 failure_penalty, delta_t, gamma, transition_model_name: str, soc_increment: float,
-                 env_provider: AbstractEnvironmentProvider):
-        super().__init__(battery_capacity_wh, idle_power, cruise_power, takeoff_power,
-                         failure_penalty, delta_t, gamma, transition_model_name, soc_increment, env_provider)
-        self.transition_logic = DeterministicTransitionLogic(
-            battery_capacity_joules=self.battery_capacity_joules,
-            soc_increment=self.soc_increment,
-            idle_power=self.idle_power,
-            cruise_power=self.cruise_power,
-            takeoff_power=self.takeoff_power,
-            delta_t=self.delta_t,
-            transition_model=self.transition_model,
-            env_provider=self.env_provider
-        )
+# class deterministicMDP(AbstractMDP):
+#     def __init__(self, battery_capacity_wh, idle_power, cruise_power, takeoff_power,
+#                  failure_penalty, delta_t, gamma, transition_model_name: str, soc_increment: float,
+#                  env_provider: AbstractEnvironmentProvider):
+#         super().__init__(battery_capacity_wh, idle_power, cruise_power, takeoff_power,
+#                          failure_penalty, delta_t, gamma, transition_model_name, soc_increment, env_provider)
+#         self.transition_logic = DeterministicTransitionLogic(
+#             battery_capacity_joules=self.battery_capacity_joules,
+#             soc_increment=self.soc_increment,
+#             idle_power=self.idle_power,
+#             cruise_power=self.cruise_power,
+#             takeoff_power=self.takeoff_power,
+#             delta_t=self.delta_t,
+#             transition_model=self.transition_model,
+#             env_provider=self.env_provider
+#         )
 
-    def transition(self, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
-        return self.transition_logic.transition(states, actions, t)
+#     def transition(self, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
+#         return self.transition_logic.transition(states, actions, t)
 
-    def reward(self, states: np.ndarray, actions: np.ndarray, next_states: np.ndarray, t: int) -> np.ndarray:
-        whale_reward = np.where(actions == 1, self.env_provider.sample_whale_observation(t,len(actions)), 0.0)
-        failure_penalty = np.where(next_states[:, 1] == 2, self.failure_penalty, 0.0)
-        rewards = whale_reward - failure_penalty
-        return rewards
+#     def reward(self, states: np.ndarray, actions: np.ndarray, next_states: np.ndarray, t: int) -> np.ndarray:
+#         whale_reward = np.where(actions == 1, self.env_provider.sample_whale_observation(t,len(actions)), 0.0)
+#         failure_penalty = np.where(next_states[:, 1] == 2, self.failure_penalty, 0.0)
+#         rewards = whale_reward - failure_penalty
+#         return rewards
 
 class stochasticMDP(AbstractMDP):
     def __init__(self, battery_capacity_wh, idle_power, cruise_power, takeoff_power,

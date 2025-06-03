@@ -20,6 +20,7 @@ class EVTablePlotterPlotly:
         moored     = data[:101, :]
         flying     = data[101:202, :]
         broken_row = data[202, :]
+        print(broken_row)
 
         # grids
         T      = data.shape[1]
@@ -31,20 +32,20 @@ class EVTablePlotterPlotly:
         # build figure
         fig = go.Figure()
 
-        # moored
-        fig.add_trace(go.Surface(
-            x=X, y=Y, z=moored,
-            colorscale="Blues",
-            opacity=1.0,
-            name="Moored"
-        ))
-        # flying
-        fig.add_trace(go.Surface(
-            x=X, y=Y, z=flying,
-            colorscale="Reds",
-            opacity=0.7,
-            name="Flying"
-        ))
+        # # moored
+        # fig.add_trace(go.Surface(
+        #     x=X, y=Y, z=moored,
+        #     colorscale="Blues",
+        #     opacity=1.0,
+        #     name="Moored"
+        # ))
+        # # flying
+        # fig.add_trace(go.Surface(
+        #     x=X, y=Y, z=flying,
+        #     colorscale="Reds",
+        #     opacity=0.7,
+        #     name="Flying"
+        # ))
         # broken at SoC=0 plane
         fig.add_trace(go.Surface(
             x=X, y=Y*0, z=Zb,

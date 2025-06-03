@@ -672,9 +672,9 @@ class HDF5RewardPlotter:
 
 if __name__ == "__main__":
     plotter = HDF5RewardPlotter(
-        r"simulation_results\sim_5000_eps_20250520_233022.h5"
+        r"sim_1000_eps_20250602_123441.h5"
     )
-    # plotter.plot_reward_vs_capacity_by_thresholds()
+    plotter.plot_reward_vs_capacity_by_thresholds()
     # plotter.plot_reward_vs_horizon_by_thresholds()
     # plotter.plot_reward_vs_capacity_by_thresholds()
     # plotter.plot_failure_percentage_by_thresholds()
@@ -682,4 +682,4 @@ if __name__ == "__main__":
     # plotter.plot_failure_percentage_by_penalty(subplots=False)
     # plotter.plot_failure_step_by_penalty(subplots=False)
     # plotter.plot_optimal_reward_distribution_by_penalty(penalties=[0,5,10], bins = 50, subplots= True)
-    plotter.plot_optimal_failure_step_distribution_by_penalty(penalties=[0,5,10], bins=100, subplots=True)
+    # plotter.plot_optimal_failure_step_distribution_by_penalty(penalties=[0,5,10], bins=100, subplots=True)

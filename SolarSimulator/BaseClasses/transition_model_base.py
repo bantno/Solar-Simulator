@@ -252,7 +252,6 @@ class WindIndependentSuccessProbability(ActionSuccessProbabilityModel):
 
         return success_prob
     
-import numpy as np
 
 class DiscreteSuccessProbability(ActionSuccessProbabilityModel):
     def __init__(self, name="wind_based", wind_bins=None, wind_success_factors=None):
@@ -628,6 +627,7 @@ class ProbabilityModelFactory:
         "moderate": ModerateSuccessProbability,
         "some": SomeSuccessProbability,
         "nowind": WindIndependentSuccessProbability,
+        "wind based": DiscreteSuccessProbability,
         # Add more models here as needed
         # 'new_model': NewModelClass,
     }

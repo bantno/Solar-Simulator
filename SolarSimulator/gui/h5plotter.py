@@ -26,10 +26,6 @@ class HDF5RewardPlotter:
             self.file = h5py.File(self.file_path, 'r')
 
     def _load_summary(self):
-        """
-        Single-pass load of all simulation groups, aggregating metrics
-        into a summary DataFrame, and caching optimal stats.
-        """
         self.open_file()
         records = []
         for sim_group in self.file.keys():
@@ -38,64 +34,33 @@ class HDF5RewardPlotter:
             obs_t = grp.attrs.get('observation_threshold')
             wind_t = grp.attrs.get('wind_threshold')
             cap = grp.attrs.get('battery_capacity', grp.attrs.get('capacity', np.nan))
-            horizon = grp.attrs.get('horizon', np.nan)
-            # extract failure penalty from attributes
-            fp = grp.attrs.get('failure_penalty', np.nan)
+            location_id = grp.attrs.get('location_id', sim_group)
 
-            # allow optimal group even if thresholds missing
-            if (obs_t is None or wind_t is None) and 'optimal' not in sim_type.lower():
+            # skip non-thresholded non-optimal runs
+            if obs_t is None and 'optimal' not in sim_type.lower():
                 continue
-            # default missing thresholds for optimal to NaN
-            if obs_t is None:
-                obs_t = np.nan
-            if wind_t is None:
-                wind_t = np.nan
+            obs_t = obs_t if obs_t is not None else np.nan
+            wind_t = wind_t if wind_t is not None else np.nan
 
-            # Accumulators
             rewards = []
-            total_eps = 0
-            fail_count = 0
-            failure_steps = []
-
-            episodes = grp.get('episodes', {})
+            episodes = grp.get('episodes', {}) or {}
             for ep in episodes.values():
                 if 'total_reward' in ep:
                     rewards.append(ep['total_reward'][()])
-                if 'failure' in ep and 'failure_step' in ep:
-                    total_eps += 1
-                    if bool(ep['failure'][()]):
-                        fail_count += 1
-                        failure_steps.append(ep['failure_step'][()])
 
-            # skip groups with no data (except optimal)
-            if not rewards and total_eps == 0 and 'optimal' not in sim_type.lower():
+            if not rewards and 'optimal' not in sim_type.lower():
                 continue
-
-            mean_reward = np.mean(rewards) if rewards else np.nan
-            failure_percentage = (fail_count / total_eps * 100) if total_eps else np.nan
-            mean_failure_step = np.mean(failure_steps) if failure_steps else np.nan
 
             records.append({
                 'sim_type': sim_type,
                 'observation_threshold': obs_t,
                 'wind_threshold': wind_t,
                 'battery_capacity': cap,
-                'horizon': horizon,
-                'failure_penalty': fp,
-                'mean_reward': mean_reward,
-                'failure_percentage': failure_percentage,
-                'mean_failure_step': mean_failure_step
+                'location_id': location_id,
+                'mean_reward': np.mean(rewards) if rewards else np.nan
             })
 
-        # build summary and cache optimal stats
-        df = pd.DataFrame(records)
-        self._summary = df
-        opt_df = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
-        if not opt_df.empty:
-            self.opt_reward = opt_df['mean_reward'].mean()
-            self.opt_failure_step = opt_df['mean_failure_step'].mean()
-            self.opt_failure_pct = opt_df['failure_percentage'].mean()
-
+        self._summary = pd.DataFrame(records)
     def _get_summary(self):
         if self._summary is None:
             self._load_summary()
@@ -667,12 +632,119 @@ class HDF5RewardPlotter:
         plt.tight_layout()
         plt.show()
 
+    def plot_reward_vs_location_by_thresholds(self):
+        """
+        Plot Mean Total Reward vs Latitude for each threshold combo,
+        with a separate subplot per battery capacity arranged in two columns.
+        """
+        df = self._get_summary()
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)].copy()
+        df_opt = df[df['sim_type'].str.contains('optimal', case=False, na=False)].copy()
+
+        # Extract latitude
+        df_main['latitude'] = df_main['location_id'].str.extract(r'lat([\-\d\.]+)')[0].astype(float)
+        if not df_opt.empty:
+            df_opt['latitude'] = df_opt['location_id'].str.extract(r'lat([\-\d\.]+)')[0].astype(float)
+
+        caps = sorted(df_main['battery_capacity'].unique())
+        combos = df_main[['observation_threshold', 'wind_threshold']].drop_duplicates()
+
+        # Arrange subplots in two columns
+        n = len(caps)
+        cols = 2
+        rows = int(np.ceil(n / cols))
+        fig, axes = plt.subplots(rows, cols, figsize=(8 * cols, 4 * rows), sharex=True, sharey=True)
+        axes = axes.flatten()
+
+        for ax, cap in zip(axes, caps):
+            sub = df_main[df_main['battery_capacity'] == cap]
+            for _, combo in combos.iterrows():
+                obs, wind = combo
+                sel = sub[(sub['observation_threshold'] == obs) & (sub['wind_threshold'] == wind)]
+                if sel.empty:
+                    continue
+                sel = sel.sort_values('latitude')
+                ax.plot(sel['latitude'], sel['mean_reward'], marker='o', label=f"Obs {obs}, Wind {wind}")
+            if not df_opt.empty:
+                sub_opt = df_opt[df_opt['battery_capacity'] == cap]
+                if not sub_opt.empty:
+                    opt_sel = sub_opt.groupby('latitude')['mean_reward'].mean().reset_index().sort_values('latitude')
+                    ax.plot(opt_sel['latitude'], opt_sel['mean_reward'], linestyle='--', marker='s', label='Optimal')
+
+            ax.set_title(f'Capacity = {cap}')
+            ax.set_ylabel('Mean Total Reward')
+            ax.grid(True)
+            ax.legend()
+
+        # Hide unused axes
+        for ax in axes[len(caps):]:
+            ax.axis('off')
+
+        fig.supxlabel('Latitude')
+        fig.supylabel('Mean Total Reward')
+        fig.suptitle('Mean Total Reward vs Location by Battery Capacity and Thresholds', y=0.92)
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        plt.show()
+
+    def plot_reward_vs_capacity_by_location(self):
+        """
+        Plot Mean Total Reward vs Battery Capacity for each threshold combo,
+        with a separate subplot per location (latitude) arranged in two columns.
+
+        Each subplot shows only the optimal runs for the corresponding latitude.
+        """
+        df = self._get_summary()
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)].copy()
+        df_opt = df[df['sim_type'].str.contains('optimal', case=False, na=False)].copy()
+
+        # Extract latitude
+        df_main['latitude'] = df_main['location_id'].str.extract(r'lat([\-\d\.]+)')[0].astype(float)
+        df_opt['latitude'] = df_opt['location_id'].str.extract(r'lat([\-\d\.]+)')[0].astype(float)
+
+        lats = sorted(df_main['latitude'].unique())
+        combos = df_main[['observation_threshold', 'wind_threshold']].drop_duplicates()
+
+        n = len(lats)
+        cols = 2
+        rows = int(np.ceil(n / cols))
+        fig, axes = plt.subplots(rows, cols, figsize=(8 * cols, 4 * rows), sharex=True, sharey=True)
+        axes = axes.flatten()
+
+        for ax, lat in zip(axes, lats):
+            sub = df_main[df_main['latitude'] == lat]
+            for _, combo in combos.iterrows():
+                obs, wind = combo
+                sel = sub[(sub['observation_threshold'] == obs) & (sub['wind_threshold'] == wind)]
+                if sel.empty:
+                    continue
+                sel = sel.sort_values('battery_capacity')
+                ax.plot(sel['battery_capacity'], sel['mean_reward'], marker='o', label=f"Obs {obs}, Wind {wind}")
+
+            # Optimal only for this latitude
+            sub_opt = df_opt[df_opt['latitude'] == lat]
+            if not sub_opt.empty:
+                opt_sel = sub_opt.groupby('battery_capacity')['mean_reward'].mean().reset_index().sort_values('battery_capacity')
+                ax.plot(opt_sel['battery_capacity'], opt_sel['mean_reward'], linestyle='--', marker='s', label='Optimal')
+
+            ax.set_title(f'Latitude = {lat}')
+            ax.set_ylabel('Mean Total Reward')
+            ax.grid(True)
+            ax.legend()
+
+        for ax in axes[len(lats):]:
+            ax.axis('off')
+
+        fig.supxlabel('Battery Capacity')
+        fig.supylabel('Mean Total Reward')
+        fig.suptitle('Mean Total Reward vs Battery Capacity by Location and Thresholds', y=0.92)
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        plt.show()
 
 
 
 if __name__ == "__main__":
     plotter = HDF5RewardPlotter(
-        r"simulation_results\sim_5000_eps_20250520_233022.h5"
+        r"simulation_results\sim_3000_eps_20250521_124518.h5"
     )
     # plotter.plot_reward_vs_capacity_by_thresholds()
     # plotter.plot_reward_vs_horizon_by_thresholds()
@@ -682,4 +754,6 @@ if __name__ == "__main__":
     # plotter.plot_failure_percentage_by_penalty(subplots=False)
     # plotter.plot_failure_step_by_penalty(subplots=False)
     # plotter.plot_optimal_reward_distribution_by_penalty(penalties=[0,5,10], bins = 50, subplots= True)
-    plotter.plot_optimal_failure_step_distribution_by_penalty(penalties=[0,5,10], bins=100, subplots=True)
+    # plotter.plot_optimal_failure_step_distribution_by_penalty(penalties=[0,5,10], bins=100, subplots=True)
+    plotter.plot_reward_vs_location_by_thresholds()
+    plotter.plot_reward_vs_capacity_by_location()

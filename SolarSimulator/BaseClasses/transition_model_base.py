@@ -252,7 +252,6 @@ class WindIndependentSuccessProbability(ActionSuccessProbabilityModel):
 
         return success_prob
     
-import numpy as np
 
 class DiscreteSuccessProbability(ActionSuccessProbabilityModel):
     def __init__(self, name="wind_based", wind_bins=None, wind_success_factors=None):
@@ -628,6 +627,7 @@ class ProbabilityModelFactory:
         "moderate": ModerateSuccessProbability,
         "some": SomeSuccessProbability,
         "nowind": WindIndependentSuccessProbability,
+        "wind based": DiscreteSuccessProbability,
         # Add more models here as needed
         # 'new_model': NewModelClass,
     }
@@ -943,6 +943,8 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
         next_states = self._apply_transition_probability(states, next_state, actions, wind_speeds)
         return next_states, next_energy
 
+    def get_required_energy(self, states, actions):
+        return self._calculate_energy_consumption(states,actions)
 
 
 # Example usage:

@@ -744,9 +744,9 @@ class HDF5RewardPlotter:
 
 if __name__ == "__main__":
     plotter = HDF5RewardPlotter(
-        r"simulation_results\sim_3000_eps_20250521_124518.h5"
+        r"sim_1000_eps_20250602_123441.h5"
     )
-    # plotter.plot_reward_vs_capacity_by_thresholds()
+    plotter.plot_reward_vs_capacity_by_thresholds()
     # plotter.plot_reward_vs_horizon_by_thresholds()
     # plotter.plot_reward_vs_capacity_by_thresholds()
     # plotter.plot_failure_percentage_by_thresholds()

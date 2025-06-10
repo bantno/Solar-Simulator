@@ -60,6 +60,8 @@ class Seaplane:
         self.motor_efficiency = 0.85     # η_m
         self.propeller_efficiency = 0.85 # η_p
 
+        self.INSTALLED_PROPULSION_POWER = 4000 # Watts
+
         # Perform initial calculations
         self.calculate_pdc0()
         self.calculate_weight()
@@ -85,6 +87,8 @@ class Seaplane:
         self.calculate_pdc0()
         self.calculate_weight()
         self._cached_takeoff_power = self.get_average_takeoff_power()
+        self._cached_landing_power = self.get_average_landing_power()
+
 
     def update_location(self, lat):
         """Update the plane's location based on the given latitude."""
@@ -105,7 +109,7 @@ class Seaplane:
         payload_mass = 1.35
         pv_mass = self.S * 0.0039 / 0.034
         fcs_mass = 0.2
-        propulsion_mass = 0.288*4000/1500  # k_ps*P_ps
+        propulsion_mass = 0.288*self.INSTALLED_PROPULSION_POWER/1500  # k_ps*P_ps
         k_str = 0.6
 
         mass = (payload_mass + pv_mass + fcs_mass + propulsion_mass + battery_mass) / (1 - k_str) 
@@ -121,6 +125,15 @@ class Seaplane:
         self.calculate_weight()  # Update weight if necessary.
         C_l = self.weight / (0.5 * rho * U**2 * self.S)
         return C_l
+
+    def get_max_endurance_speed(self):
+        W = self.weight
+        rho = self.rho(self.cruise_altitude)
+        S = self.S
+        k = self.drag_polar_slope
+        C_D0 = self.cd0
+        U_E = np.sqrt(2*W/(rho*S)*np.sqrt(k/(3*C_D0)))
+        return U_E
 
     def get_propulsion_power(self, U: float, rho: float) -> float:
         """Calculates the steady-state propulsion power (Watts) required for level flight at speed U.
@@ -162,24 +175,27 @@ class Seaplane:
 
     @property
     def takeoff_power(self) -> float:
-        """Estimate the propulsion power (W) needed during takeoff.
-        
-        For this heuristic, the takeoff power is assumed to be twice the level-flight (cruise) power.
+        """
+        Estimate the propulsion power (W) needed during takeoff.
         """
         if not hasattr(self, "_cached_takeoff_power"):
             self._cached_takeoff_power = self.get_average_takeoff_power()
         return self._cached_takeoff_power
-    
+
+    def calculate_liftoff_energy(self):
+        return self.INSTALLED_PROPULSION_POWER * 8
+
     def get_average_takeoff_power(self) -> float:
         """Estimate the average propulsion power (W) needed during takeoff.
         
         For this heuristic, the takeoff power is assumed to be twice the level-flight (cruise) power.
         """
+        liftoff_energy = self.calculate_liftoff_energy()
         TIMESTEP_MIN = 15
         climb_energy, climb_time_s = self.climb_energy(20,np.radians(2),0,300,1)
         cruise_power = self.cruise_power
         cruise_time = TIMESTEP_MIN*60 - climb_time_s
-        total_energy = climb_energy + (cruise_power * cruise_time)
+        total_energy = climb_energy + (cruise_power * cruise_time) + liftoff_energy
         average_power = total_energy / (TIMESTEP_MIN*60)
         return average_power
 
@@ -236,50 +252,6 @@ class Seaplane:
         P_climb = P_level * (np.cos(gamma) + L_2_D_RATIO * np.sin(gamma))
         return P_climb
 
-    def descent_power(self,U,gamma,rho):
-        """Estimate the propulsion power and energy required for a descent maneuver.
-        
-        Under the constant lift-to-drag assumption, the steady-state propulsion power for descent is given by:
-        
-           P_descent = P_level * [cos(γ) - (L/D)·sin(γ)]
-        
-        where:
-          • P_level is the steady-state (level) propulsion power computed at airspeed U and air density ρ.
-          • γ is the descent angle (in radians; negative for descent).
-          • L/D is the lift-to-drag ratio (here assumed to be self.L_over_D).
-        
-        The energy required to sustain the descent for a duration of descent_time is then:
-        
-           E_descent = P_descent * descent_time
-        
-        Args:
-            U (float): Flight speed during the descent (m/s).
-            gamma (float): Descent angle (radians); negative for descent, positive for climb.
-            rho (float): Air density (kg/m³); defaults to 1.2 for sea-level conditions.
-        
-        Returns:
-            'P_descent' : Estimated propulsion power during the descent (W),
-        """
-        P_level = self.get_propulsion_power(U,rho)
-        P_descent = P_level * (np.cos(gamma) - (1)*np.sin(gamma))
-        return P_descent
-        
-    def rho(self, altitude: float) -> float:
-        """Dry-air density from the ISA tropospheric model (0–11 km).
-        
-        Args:
-            altitude (float): Altitude in meters.
-        
-        Returns:
-            float: Air density in kg/m³.
-        """
-        # 1. Temperature (K)
-        T = 288.15 - 0.0065 * altitude
-        # 2. Pressure (Pa)
-        p = 101325 * (T / 288.15) ** 5.2561
-        # 3. Density (kg m-3)
-        return p / (287.05 * T)
-    
     def climb_energy(self, U: float, gamma: float, starting_altitude:float, ending_altitude:float, timestep:int) -> float:
         """Estimate the energy required for a climb maneuver.
         
@@ -308,8 +280,61 @@ class Seaplane:
             altitude += v_vert * timestep
             time+= timestep
         return E_climb, time
-    
-    def climb_phase(self, U: float, gamma: float, starting_altitude:float, ending_altitude:float, timestep:int) -> dict:
+
+    @property    
+    def landing_power(self) -> float:
+        """Estimate the propulsion power (W) needed during landing.
+        
+        For this heuristic, the takeoff power is assumed to be twice the level-flight (cruise) power.
+        """
+        if not hasattr(self, "_cached_landing_power"):
+            self._cached_landing_power = self.get_average_landing_power()
+        return self._cached_landing_power
+
+    def get_average_landing_power(self) -> float:
+        """Estimate the average propulsion power (W) needed during takeoff.
+        
+        For this heuristic, the takeoff power is assumed to be twice the level-flight (cruise) power.
+        """
+        
+        TIMESTEP_MIN = 15
+        descent_energy, descent_time_s = self.descent_energy(20,np.radians(-2),0,300,1)
+        cruise_power = self.cruise_power
+        cruise_time = TIMESTEP_MIN*60 - descent_time_s
+        total_energy = descent_energy + (cruise_power * cruise_time)
+        average_power = total_energy / (TIMESTEP_MIN*60)
+        return average_power
+
+    def descent_power(self,U,gamma,rho):
+        """Estimate the propulsion power and energy required for a descent maneuver.
+        
+        Under the constant lift-to-drag assumption, the steady-state propulsion power for descent is given by:
+        
+           P_descent = P_level * [cos(γ) - (L/D)·sin(γ)]
+        
+        where:
+          • P_level is the steady-state (level) propulsion power computed at airspeed U and air density ρ.
+          • γ is the descent angle (in radians; negative for descent).
+          • L/D is the lift-to-drag ratio (here assumed to be self.L_over_D).
+        
+        The energy required to sustain the descent for a duration of descent_time is then:
+        
+           E_descent = P_descent * descent_time
+        
+        Args:
+            U (float): Flight speed during the descent (m/s).
+            gamma (float): Descent angle (radians); negative for descent, positive for climb.
+            rho (float): Air density (kg/m³); defaults to 1.2 for sea-level conditions.
+        
+        Returns:
+            'P_descent' : Estimated propulsion power during the descent (W),
+        """
+        L_2_D_RATIO = 28
+        P_level = self.get_propulsion_power(U,rho)
+        P_descent = P_level * (np.cos(gamma) - (L_2_D_RATIO)*np.sin(gamma))
+        return P_descent
+
+    def descent_energy(self, U: float, gamma: float, starting_altitude:float, ending_altitude:float, timestep:int) -> float:
         """Estimate the energy required for a climb maneuver.
         
         Uses the climb power and the duration of the climb to compute the total energy required.
@@ -319,24 +344,50 @@ class Seaplane:
             gamma (float): Climb angle (radians); positive for climb, negative for descent.
             starting_altitude (float): Starting altitude (m).
             ending_altitude (float): Ending altitude (m).
-            timestep (int): Time step for the climb + cruise (minutes).
+            timestep (int): Time step for the climb (seconds).
         
         Returns:
-            energy: Energy required for the climb + cruise (J).
+            float: Energy required for the climb in Joules.
         """
-        E_climb,time = self.climb_energy(U, gamma, starting_altitude, ending_altitude,1)
-        energy = E_climb + (self.cruise_power * (timestep*60-time))
-        return energy
-    
+        if gamma == 0.0:
+            raise AssertionError("Climb angle must be non-zero.")
+        altitude = starting_altitude
+        E_descend = 0.0
+        time = 0.0
+        v_vert = U * np.sin(gamma)
+        while altitude > ending_altitude:
+            rho = self.rho(altitude)
+            P_descend = self.descent_power(U, gamma, rho)
+            E_descend += P_descend * timestep
+            altitude += v_vert * timestep
+            time+= timestep
+        return E_descend, time
+
+    def rho(self, altitude: float) -> float:
+        """Dry-air density from the ISA tropospheric model (0–11 km).
+        
+        Args:
+            altitude (float): Altitude in meters.
+        
+        Returns:
+            float: Air density in kg/m³.
+        """
+        # 1. Temperature (K)
+        T = 288.15 - 0.0065 * altitude
+        # 2. Pressure (Pa)
+        p = 101325 * (T / 288.15) ** 5.2561
+        # 3. Density (kg m-3)
+        return p / (287.05 * T)
+
     def get_mdp_power_params(self) -> dict:
         """
         Adapter method to package the power parameters for the MDP.
-        Ensure that units match what your MDP expects (e.g., power vs. energy conversion).
         """
         return {
             "idle_power": self.idle_power,
             "cruise_power": self.cruise_power,
             "takeoff_power": self.takeoff_power,
+            "landing_power": self.landing_power,
         }
 
 if __name__ == "__main__":
@@ -346,20 +397,25 @@ if __name__ == "__main__":
     altitude = 300
     Re = seaplane.get_reynolds_number(U=20, altitude=altitude)
     print(f"Reynolds number at 20 m/s, {altitude} km: {Re:.2e}")
-    # power_list = []
-    # endurance_list = []
-    # capacities_wh = range(0,2000,100)
-    # for i in capacities_wh:
-    #     seaplane.capacity = i/22.2
-    #     seaplane.update_plane()
-    #     print(seaplane.weight/9.81)
-    #     Lift_c = seaplane.get_lift_coefficient(1.2,20)
-    #     print(Lift_c)
-    #     power = seaplane.get_propulsion_power(U=20, rho=1.2)
-    #     power_list.append(power)
-    #     endurance = seaplane.capacity * seaplane.voltage/ power
-    #     endurance_list.append(endurance)
+    power_list = []
+    power_list_takeoff = []
+    endurance_list = []
+    capacities_wh = range(0,2000,100)
+    for i in capacities_wh:
+        seaplane.capacity = i/22.2
+        seaplane.update_plane()
+        print(seaplane.weight/9.81)
+        Lift_c = seaplane.get_lift_coefficient(1.2,20)
+        print(Lift_c)
+        power_landing = seaplane.landing_power
+        power_list.append(power_landing)
+        power_takeoff = seaplane.takeoff_power
+        power_list_takeoff.append(power_takeoff)
 
-    # # plt.plot(capacities_wh,power_list)
+        # endurance = seaplane.capacity * seaplane.voltage/ power
+        # endurance_list.append(endurance)
+
+    plt.plot(capacities_wh,power_list)
+    plt.plot(capacities_wh,power_list_takeoff)
     # plt.plot(capacities_wh,endurance_list)
-    # plt.show()
+    plt.show()

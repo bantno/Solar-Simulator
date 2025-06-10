@@ -1,8 +1,6 @@
 import numpy as np
-from typing import Callable, Union
 from tqdm import tqdm
-from BaseClasses.plotting_utils_base import PlottingUtils
-from BaseClasses.mdp_base import AbstractMDP, stochasticMDP
+from BaseClasses.mdp_base import AbstractMDP,stochasticMDP
 from scipy.stats import beta, weibull_min
 from scipy.special import betainc
 
@@ -191,7 +189,7 @@ class mdpAnalyticalBackwardSolver:
     and fills a future-value table, which can then be visualized.
     """
 
-    def __init__(self, mdp, horizon: int):
+    def __init__(self, mdp:stochasticMDP, horizon: int):
         self.mdp = mdp
         self.horizon = horizon
         self.states = self.mdp._get_states()
@@ -222,40 +220,6 @@ class mdpAnalyticalBackwardSolver:
         expected_future_value = self.expected_future_value(state,a,t,p_f_total)
         value = expected_one_stage_reward + self._GAMMA*expected_future_value
         return value
-    
-    # def _compute_failure_probability(
-    #     self,
-    #     states: np.ndarray,    # shape (n,2): [SoC, mode]
-    #     actions: np.ndarray,   # shape (n,): 0 or 1
-    #     t: int
-    # ) -> np.ndarray:
-    #     """
-    #     Compute overall failure probability p_fail = p_B + p_M - p_B * p_M
-    #     for each (state, action) pair by delegating to helper methods.
-    #     """
-    #     p_B = self._battery_failure_probability(states, actions, t)
-    #     p_M = self._mechanical_failure_probability(states, actions, t)
-    #     return self._combine_failure_probabilities(p_B, p_M)
-
-    # def _battery_failure_probability(
-    #     self,
-    #     states: np.ndarray,
-    #     actions: np.ndarray,
-    #     t: int
-    # ) -> np.ndarray:
-    #     """
-    #     Step 1: Compute p_B = P(battery failure) using a Beta CDF of energy deficit.
-    #     """
-    #     tl = self.mdp.transition_logic
-    #     env = tl.env_provider
-    #     alpha = env.get_solar_alpha(t)
-    #     beta_param = env.get_solar_beta(t)
-    #     scale = self.G_MAX
-    #     solar_dist = beta(a=alpha, b=beta_param, loc=0.0, scale=scale)
-    #     stored = tl.soc_to_energy(states[0,0])
-    #     required = tl._calculate_energy_consumption(states, actions)
-    #     deficit = required - stored
-    #     return solar_dist.cdf(deficit)
 
     def _mechanical_failure_probability(
         self,
@@ -272,8 +236,8 @@ class mdpAnalyticalBackwardSolver:
         shape_param = env.get_wind_shape(t)
         scale_param = env.get_wind_scale(t)
         wind_dist = weibull_min(c=shape_param, loc=0.0, scale=scale_param)
-        grid_size = 200
-        w_max = wind_dist.ppf(0.99999999)
+        grid_size = 100
+        w_max = wind_dist.ppf(0.9999999)
         w = np.linspace(0.0, w_max, grid_size)
         pdf = wind_dist.pdf(w)
         n = states.shape[0]
@@ -284,19 +248,6 @@ class mdpAnalyticalBackwardSolver:
         succ = succ.reshape(grid_size, n)
         fail_cond = 1.0 - succ
         return np.trapz(fail_cond * pdf[:, None], w, axis=0)
-
-    # def _combine_failure_probabilities(
-    #     self,
-    #     p_B: np.ndarray,
-    #     p_M: np.ndarray
-    # ) -> np.ndarray:
-    #     """
-    #     Step 3: Combine independent failure probabilities:
-    #     p_fail = p_B + p_M - (p_B * p_M)
-    #     """
-    #     return p_B + p_M - (p_B * p_M)
-    #     # p_fail = p_B + (1 - p_B) * p_M_conditional
-    #     # return p_fail
 
     def _compute_failure_probability(
         self,
@@ -346,11 +297,10 @@ class mdpAnalyticalBackwardSolver:
         #
 
         # Precompute unconditional mechanical‐fail p_M_uncond[i] for each i:
-        #    (This is exactly what your old code did when it called _mechanical_failure_probability.)
         p_M_uncond = self._mechanical_failure_probability(states, actions, t)
         # Note: p_M_uncond[i] = P{ mech fail } if you attempt the action, regardless of solar.
 
-        # We'll now build p_M_conditional array of length n.
+        # Now build p_M_conditional array of length n.
         p_M_cond = np.zeros(n, dtype=float)
 
         # If required[i] <= C[i], then p_B[i] = 0 and “battery survive” region is G ∈ [0, G_max].
@@ -364,7 +314,7 @@ class mdpAnalyticalBackwardSolver:
         if idx.size > 0:
             # We'll do a Gauss‐Legendre quadrature over G ∈ [0, G_max], but we only integrate
             # from G_min = deficits[i] to G_max.  We'll build a single grid in G and then loop.
-            m = 200   # you can increase to 400 if you need more accuracy
+            m = 200
             # Gauss‐Legendre nodes x_j ∈ [−1, 1], weights w_j ∈ [0,2].
             x, w = leggauss(m)
             # Map to [0, G_max]:
@@ -419,31 +369,6 @@ class mdpAnalyticalBackwardSolver:
         filename = f"future_value_table_{self.mdp.battery_capacity_wh}Wh_{self.horizon}h_{self.mdp.failure_penalty}p.npy"
         np.save(filename, self.future_value_table)
         print("Value function table saved to:", filename)
-
-    # def lookup_future_values(self, states: np.ndarray, stages: np.ndarray) -> np.ndarray:
-    #     """
-    #     Vectorized retrieval of future values for given states and stages.
-    #     Any state with mode==2 is treated as the broken state.
-    #     """
-    #     # find broken-state index
-    #     broken_mask = (self.states[:, 0] == -1.0) & (self.states[:, 1] == 2)
-    #     broken_idx = np.flatnonzero(broken_mask)[0]
-
-    #     # unpack query arrays
-    #     soc_vals = states[:, 0]
-    #     modes    = states[:, 1].astype(int)
-
-    #     # find bin indices for each SoC
-    #     bin_idxs = np.searchsorted(self._soc_grid, soc_vals, side='right') - 1
-    #     bin_idxs = np.clip(bin_idxs, 0, len(self._soc_grid) - 1)
-
-    #     # flat index = bin_idx * num_modes + mode
-    #     state_idxs = bin_idxs * self._num_modes + modes
-
-    #     # override broken-mode entries
-    #     state_idxs[modes == 2] = broken_idx
-
-    #     return self.future_value_table[state_idxs, stages]
 
     def lookup_future_values(self, states: np.ndarray, stages: np.ndarray) -> np.ndarray:
         """
@@ -559,50 +484,6 @@ class mdpAnalyticalBackwardSolver:
         alpha_k = self.mdp.env_provider.get_solar_alpha(stage)
         beta_k = self.mdp.env_provider.get_solar_beta(stage)
         return alpha_k, beta_k
-
-    # @staticmethod
-    # def compute_survival_contribution(
-    #     C_k: float,
-    #     E_k: float,
-    #     G_max: float,
-    #     alpha_k: float,
-    #     beta_k: float,
-    #     p_fail: float,
-    #     V_next: np.ndarray,   # must have shape (101,)
-    #     Δ: float              # = capacity / 100.0
-    # ) -> float:
-    #     """
-    #     Build 101 discrete bins [0%–1%), [1%–2%), …, [99%–100%), [100%–∞), 
-    #     then compute the weighted sum of V_next over those bins.
-    #     """
-
-    #     δ = C_k - E_k   # base energy before solar at stage k
-
-    #     # 1) Build exactly 102 edges: [0·Δ, 1·Δ, …, 100·Δ, +∞]
-    #     edges = np.concatenate((np.arange(0, 101)*Δ, [np.inf]))  # shape (102,)
-
-    #     # 2) Each bin is [edges[n], edges[n+1]) for n=0..100
-    #     e_lower = edges[:-1]   # shape (101,)
-    #     e_upper = edges[1:]    # shape (101,)
-
-    #     # 3) Normalize to [0,1] before Beta‐CDF
-    #     u_lower = np.clip((e_lower - δ) / G_max, 0.0, 1.0)  # shape (101,)
-    #     u_upper = np.clip((e_upper - δ) / G_max, 0.0, 1.0)  # shape (101,)
-
-    #     F_lower = betainc(alpha_k, beta_k, u_lower)  # shape (101,)
-    #     F_upper = betainc(alpha_k, beta_k, u_upper)  # shape (101,)
-
-    #     # 4) Probability that (δ + G) lies in bin n (for n=0..100)
-    #     deltaP = F_upper - F_lower   # shape (101,)
-    #     #    Note: sum(deltaP) == 1  (for δ ≤ 0), or some <1 if δ > 0 (since some mass is “clamped to 0”)
-    #     #    For δ large enough that δ/G_max ≥ 1, all mass goes to the last bin, so
-    #     #      deltaP[100] == 1, all other deltaP[n<100] == 0.
-
-    #     # 5) Multiply by (1 - p_fail) once, then dot with V_next[0..100]
-    #     survival_mass = (1.0 - p_fail) * deltaP  # shape (101,)
-    #     survival_contribution = np.dot(survival_mass, V_next)
-
-    #     return survival_contribution
 
     @staticmethod
     def compute_survival_contribution(

@@ -139,6 +139,7 @@ class SimulationFactory:
             idle_power=params["idle_power"],
             cruise_power=params["cruise_power"],
             takeoff_power=params["takeoff_power"],
+            landing_power=params["landing_power"],
             failure_penalty=self.failure_penalty,
             delta_t=self.delta_t,
             gamma=1.0,

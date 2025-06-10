@@ -753,7 +753,7 @@ class DeterministicTransitionLogic(AbstractTransitionLogic):
 
 class StochasticTransitionLogic(AbstractTransitionLogic):
     def __init__(self, battery_capacity_joules: float, soc_increment: float,
-                 idle_power: float, cruise_power: float, takeoff_power: float,
+                 idle_power: float, cruise_power: float, takeoff_power: float, landing_power: float,
                  delta_t: float,
                  transition_model, env_provider):
         self._battery_capacity_joules = battery_capacity_joules
@@ -761,6 +761,7 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
         self.idle_power = idle_power
         self.cruise_power = cruise_power
         self.takeoff_power = takeoff_power
+        self.landing_power = landing_power
         self.delta_t = delta_t
         self.transition_model = transition_model
         self.env_provider = env_provider
@@ -885,13 +886,13 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
 
     def _calculate_energy_consumption(self, states: np.ndarray, actions: np.ndarray) -> np.ndarray:
         # Calculate energy consumption based on the current state mode and the chosen action.
-        moored_float_energy = self.idle_power * self.min_to_seconds(self.delta_t)
-        takeoff_energy = (self.cruise_power + self.takeoff_power) * self.min_to_seconds(self.delta_t)
-        land_energy = self.cruise_power * self.min_to_seconds(self.delta_t) / 4
+        idle_energy = self.idle_power * self.min_to_seconds(self.delta_t)
+        takeoff_energy = self.takeoff_power * self.min_to_seconds(self.delta_t)
+        land_energy = self.landing_power * self.min_to_seconds(self.delta_t)
         continue_flight_energy = self.cruise_power * self.min_to_seconds(self.delta_t)
         energy_lookup = np.array([
-            [moored_float_energy, takeoff_energy],
-            [land_energy, continue_flight_energy],
+            [idle_energy, takeoff_energy+idle_energy],
+            [land_energy+idle_energy, continue_flight_energy+idle_energy],
             [0, 0]
         ])
         if isinstance(actions, np.ndarray):

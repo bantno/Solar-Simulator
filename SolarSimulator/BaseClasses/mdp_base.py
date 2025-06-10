@@ -9,6 +9,7 @@ class AbstractMDP(ABC):
                  idle_power,
                  cruise_power,
                  takeoff_power,
+                 landing_power,
                  failure_penalty,
                  delta_t,
                  gamma,
@@ -23,6 +24,7 @@ class AbstractMDP(ABC):
         self.idle_power = idle_power
         self.cruise_power = cruise_power
         self.takeoff_power = takeoff_power
+        self.landing_power = landing_power
         self.failure_penalty = failure_penalty
         self.delta_t = delta_t
         self.gamma = gamma
@@ -94,10 +96,10 @@ class AbstractMDP(ABC):
 #         return rewards
 
 class stochasticMDP(AbstractMDP):
-    def __init__(self, battery_capacity_wh, idle_power, cruise_power, takeoff_power,
+    def __init__(self, battery_capacity_wh, idle_power, cruise_power, takeoff_power, landing_power,
                  failure_penalty, delta_t, gamma, transition_model_name: str, soc_increment: float,
                  env_provider: AbstractEnvironmentProvider):
-        super().__init__(battery_capacity_wh, idle_power, cruise_power, takeoff_power,
+        super().__init__(battery_capacity_wh, idle_power, cruise_power, takeoff_power,landing_power,
                          failure_penalty, delta_t, gamma, transition_model_name, soc_increment, env_provider)
         self.transition_logic = StochasticTransitionLogic(
             battery_capacity_joules=self.battery_capacity_joules,
@@ -105,6 +107,7 @@ class stochasticMDP(AbstractMDP):
             idle_power=self.idle_power,
             cruise_power=self.cruise_power,
             takeoff_power=self.takeoff_power,
+            landing_power=self.landing_power,
             delta_t=self.delta_t,
             transition_model=self.transition_model,
             env_provider=self.env_provider

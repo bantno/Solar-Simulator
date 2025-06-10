@@ -126,6 +126,15 @@ class Seaplane:
         C_l = self.weight / (0.5 * rho * U**2 * self.S)
         return C_l
 
+    def get_max_endurance_speed(self):
+        W = self.weight
+        rho = self.rho(self.cruise_altitude)
+        S = self.S
+        k = self.drag_polar_slope
+        C_D0 = self.cd0
+        U_E = np.sqrt(2*W/(rho*S)*np.sqrt(k/(3*C_D0)))
+        return U_E
+
     def get_propulsion_power(self, U: float, rho: float) -> float:
         """Calculates the steady-state propulsion power (Watts) required for level flight at speed U.
         
@@ -166,9 +175,8 @@ class Seaplane:
 
     @property
     def takeoff_power(self) -> float:
-        """Estimate the propulsion power (W) needed during takeoff.
-        
-        For this heuristic, the takeoff power is assumed to be twice the level-flight (cruise) power.
+        """
+        Estimate the propulsion power (W) needed during takeoff.
         """
         if not hasattr(self, "_cached_takeoff_power"):
             self._cached_takeoff_power = self.get_average_takeoff_power()
@@ -279,7 +287,7 @@ class Seaplane:
         
         For this heuristic, the takeoff power is assumed to be twice the level-flight (cruise) power.
         """
-        if not hasattr(self, "_cached_takeoff_power"):
+        if not hasattr(self, "_cached_landing_power"):
             self._cached_landing_power = self.get_average_landing_power()
         return self._cached_landing_power
 
@@ -374,7 +382,6 @@ class Seaplane:
     def get_mdp_power_params(self) -> dict:
         """
         Adapter method to package the power parameters for the MDP.
-        Ensure that units match what your MDP expects (e.g., power vs. energy conversion).
         """
         return {
             "idle_power": self.idle_power,

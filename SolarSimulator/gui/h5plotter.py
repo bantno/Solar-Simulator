@@ -682,8 +682,10 @@ class HDF5RewardPlotter:
 
         fig.supxlabel('Latitude')
         fig.supylabel('Mean Total Reward')
-        fig.suptitle('Mean Total Reward vs Location by Battery Capacity and Thresholds', y=0.92)
+        # fig.suptitle('Mean Total Reward vs Location by Battery Capacity and Thresholds', y=0.90)
         plt.tight_layout(rect=[0, 0, 1, 0.96])
+        fig.subplots_adjust(top=0.90) 
+        fig.suptitle("Mean Total Reward vs Location by Battery Capacity and Thresholds", fontsize=16)
         plt.show()
 
     def plot_reward_vs_capacity_by_location(self):
@@ -744,9 +746,9 @@ class HDF5RewardPlotter:
 
 if __name__ == "__main__":
     plotter = HDF5RewardPlotter(
-        r"sim_1000_eps_20250602_123441.h5"
+        r"simulation_results\sim_5000_eps_20250604_174744.h5"
     )
-    plotter.plot_reward_vs_capacity_by_thresholds()
+    # plotter.plot_reward_vs_capacity_by_thresholds()
     # plotter.plot_reward_vs_horizon_by_thresholds()
     # plotter.plot_reward_vs_capacity_by_thresholds()
     # plotter.plot_failure_percentage_by_thresholds()

@@ -236,8 +236,3 @@ if __name__ == "__main__":
 
     expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
     processor.fit_distributions(resampled_df, expected_data_filename)
-
-    # synthetic_data_directory = rf"Data\SYNTHETIC_DATA\lat{lat}"
-
-    # N = 2500
-    # filenames = generate_yearly_weather_data(resampled_df, N, lat, lon, 1, synthetic_data_directory)

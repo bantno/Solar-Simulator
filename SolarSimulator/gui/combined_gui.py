@@ -278,7 +278,7 @@ class InspectorTab(QWidget):
             'actions',
             'rewards',
         ]
-        self.style_name = 'seaborn-v0_8-darkgrid'
+        self.style_name = 'seaborn-v0_8-whitegrid'
         self.rcparams = {
             'font.size':       10,
             'axes.titlesize':  12,
@@ -290,7 +290,7 @@ class InspectorTab(QWidget):
             'legend.framealpha': 0.9,
             'legend.edgecolor':  'black',
         }
-        self.color_cycle = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+        self.color_cycle = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', "#9fbd67", "#5c3e00e7", "#bd67b1", "#7e1603", "#3108d4"]
         self.toolbar_enabled = True
         self.use_constrained_layout = False
         self.layout_settings = {

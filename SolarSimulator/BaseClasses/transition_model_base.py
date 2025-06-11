@@ -912,7 +912,7 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
         """
         next_energy = np.clip(current_energy + energy_gain - energy_consumption, -1, self.battery_capacity_joules)
         next_soc = np.clip(self.energy_to_soc(next_energy), -1., 100.)
-        next_mode = np.where(next_soc <= 0, 2, np.where(actions == 0, 0, 1))
+        next_mode = np.where(next_soc < 0, 2, np.where(actions == 0, 0, 1))
         next_state = np.column_stack((next_soc, next_mode))
         return next_state, next_energy
 

@@ -61,10 +61,13 @@ class Seaplane:
         self.propeller_efficiency = 0.85 # η_p
 
         self.INSTALLED_PROPULSION_POWER = 4000 # Watts
+        self.cruise_altitude = 300 # meters
+
 
         # Perform initial calculations
         self.calculate_pdc0()
         self.calculate_weight()
+        self.update_plane()
 
     def get_total_mass(self, directory):
         """
@@ -86,8 +89,10 @@ class Seaplane:
         """Update the plane's parameters based on the current state."""
         self.calculate_pdc0()
         self.calculate_weight()
+        self.cruise_speed = self.get_max_endurance_speed()
         self._cached_takeoff_power = self.get_average_takeoff_power()
         self._cached_landing_power = self.get_average_landing_power()
+        
 
 
     def update_location(self, lat):
@@ -130,7 +135,7 @@ class Seaplane:
         W = self.weight
         rho = self.rho(self.cruise_altitude)
         S = self.S
-        k = self.drag_polar_slope
+        k = self.k
         C_D0 = self.cd0
         U_E = np.sqrt(2*W/(rho*S)*np.sqrt(k/(3*C_D0)))
         return U_E
@@ -165,11 +170,10 @@ class Seaplane:
 
     @property
     def cruise_power(self) -> float:
-        """Compute the estimated propulsion power (W) required for level cruise flight.
-        
-        Assumes a representative cruise speed (20 m/s) and sea-level air density (1.2 kg/m³).
         """
-        U_cruise = 20   # m/s
+        Compute the estimated propulsion power (W) required for level cruise flight.
+        """
+        U_cruise = self.cruise_speed   # m/s
         rho = self.rho(300)       # kg/m³ (typical sea-level density)
         return self.get_propulsion_power(U_cruise, rho)
 
@@ -192,7 +196,7 @@ class Seaplane:
         """
         liftoff_energy = self.calculate_liftoff_energy()
         TIMESTEP_MIN = 15
-        climb_energy, climb_time_s = self.climb_energy(20,np.radians(2),0,300,1)
+        climb_energy, climb_time_s = self.climb_energy(self.cruise_speed,np.radians(2),0,300,1)
         cruise_power = self.cruise_power
         cruise_time = TIMESTEP_MIN*60 - climb_time_s
         total_energy = climb_energy + (cruise_power * cruise_time) + liftoff_energy
@@ -298,7 +302,7 @@ class Seaplane:
         """
         
         TIMESTEP_MIN = 15
-        descent_energy, descent_time_s = self.descent_energy(20,np.radians(-2),0,300,1)
+        descent_energy, descent_time_s = self.descent_energy(self.cruise_speed,np.radians(-2),0,300,1)
         cruise_power = self.cruise_power
         cruise_time = TIMESTEP_MIN*60 - descent_time_s
         total_energy = descent_energy + (cruise_power * cruise_time)
@@ -400,13 +404,13 @@ if __name__ == "__main__":
     power_list = []
     power_list_takeoff = []
     endurance_list = []
-    capacities_wh = range(0,2000,100)
+    capacities_wh = range(0,1000,100)
     for i in capacities_wh:
         seaplane.capacity = i/22.2
         seaplane.update_plane()
-        print(seaplane.weight/9.81)
+        # print(seaplane.weight/9.81)
         Lift_c = seaplane.get_lift_coefficient(1.2,20)
-        print(Lift_c)
+        print(Lift_c, seaplane.cruise_speed)
         power_landing = seaplane.landing_power
         power_list.append(power_landing)
         power_takeoff = seaplane.takeoff_power

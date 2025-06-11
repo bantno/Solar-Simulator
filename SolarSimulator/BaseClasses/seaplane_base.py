@@ -299,9 +299,9 @@ class Seaplane:
         
         TIMESTEP_MIN = 15
         descent_energy, descent_time_s = self.descent_energy(20,np.radians(-2),0,300,1)
-        cruise_power = self.cruise_power
-        cruise_time = TIMESTEP_MIN*60 - descent_time_s
-        total_energy = descent_energy + (cruise_power * cruise_time)
+        # cruise_power = self.cruise_power
+        # cruise_time = TIMESTEP_MIN*60 - descent_time_s
+        total_energy = descent_energy # + (cruise_power * cruise_time)
         average_power = total_energy / (TIMESTEP_MIN*60)
         return average_power
 

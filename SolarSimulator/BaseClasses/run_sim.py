@@ -112,6 +112,8 @@ class SimulationFactory:
         self.transition_model = config.get("transition_model", "moderate")
         self.solar_model = config.get("solar_panel_model", "constant")
         self.whale_type = config.get("whale_series", "real")
+        self.soc_increment = config.get("soc_increment", 1.0)
+        self.energy_increment_wh = config.get("energy_increment_wh", None)
 
         loader = EnvironmentLoader(
             data_path=location["data_path"],
@@ -134,6 +136,13 @@ class SimulationFactory:
 
     def build_mdp(self, capacity_wh: float) -> stochasticMDP:
         params = self._compute_power_params(capacity_wh)
+        
+        # Convert absolute Wh‐step to percent, if requested
+        if self.energy_increment_wh is not None:
+            soc_inc = (self.energy_increment_wh / capacity_wh) * 100.0
+        else:
+            soc_inc = self.soc_increment
+
         return stochasticMDP(
             battery_capacity_wh=capacity_wh,
             idle_power=params["idle_power"],
@@ -144,7 +153,7 @@ class SimulationFactory:
             delta_t=self.delta_t,
             gamma=1.0,
             transition_model_name=self.transition_model,
-            soc_increment=1.0,
+            soc_increment=soc_inc,
             env_provider=self.env_provider,
         )
 

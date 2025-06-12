@@ -694,9 +694,20 @@ class AbstractTransitionLogic(ABC):
         return (soc / 100.0) * self.battery_capacity_joules
 
     def energy_to_soc(self, next_energy: np.ndarray) -> np.ndarray:
-        raw_soc = (next_energy / self.battery_capacity_joules) * 100.0
-        floored_soc = np.floor(raw_soc / self.soc_increment) * self.soc_increment
-        return floored_soc
+        # 1) How many bins total?
+        n_bins = int(round(100.0 / self.soc_increment))
+
+        # 2) Energy per bin (Joules)
+        joules_per_bin = self.battery_capacity_joules / n_bins
+
+        # 3) Which bin does each energy value fall into?
+        #    floor to always round down, then clip to [0, n_bins]
+        idx = np.floor(next_energy / joules_per_bin).astype(int)
+        idx = np.clip(idx, 0, n_bins)
+
+        # 4) Back to %SoC
+        return idx * self.soc_increment
+
 
     def min_to_seconds(self, minutes: float) -> float:
         return minutes * 60.

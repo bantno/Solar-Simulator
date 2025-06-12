@@ -192,6 +192,23 @@ class mdpAnalyticalBackwardSolver:
     def __init__(self, mdp:stochasticMDP, horizon: int):
         self.mdp = mdp
         self.horizon = horizon
+        # ─── derive dynamic SoC grid from passed-in soc_increment ───────────────
+        # (this replaces the old 1%/101-bin assumption)
+        self.soc_increment: float = float(self.mdp.soc_increment)
+        # build percent grid [0, Δ%, 2Δ%, …, 100]
+        self.soc_levels: np.ndarray = np.arange(
+            0.0,
+            100.0 + self.soc_increment,
+            self.soc_increment
+        )
+        # number of SoC bins per mode
+        self.n_soc_levels: int = len(self.soc_levels)
+        # energy width of one SoC bin (J)
+        self.Δ_energy: float = (
+            self.mdp.battery_capacity_joules
+            * (self.soc_increment / 100.0)
+        )
+        # ─────────────────────────────────────────────────────────────────────────
         self.states = self.mdp._get_states()
         self._GAMMA = 1.0
         self.future_value_table = self._initialize_future_value_table()
@@ -435,28 +452,25 @@ class mdpAnalyticalBackwardSolver:
         alpha_k,beta_k = self.get_beta_params(stage)
         # Get future values that are possible as a result of action from current state
         ROWS_PER_MODE = int((self.future_value_table.shape[0]-1)/2)
-        # if action == 0:
-        #     possible_future_values = self.future_value_table[:ROWS_PER_MODE,stage+1]
-        #     c_grid = np.arange(0,1.02,.01)*self.mdp.battery_capacity_joules
-        # if action == 1:
-        #     possible_future_values = self.future_value_table[ROWS_PER_MODE:-1,stage+1]
-        #     c_grid = np.arange(0,1.02,.01)*self.mdp.battery_capacity_joules
 
-        # survival_contribution = self.compute_survival_contribution(stored_energy,
-        #                                             required_energy,
-        #                                             self.G_MAX,
-        #                                             alpha_k,beta_k,
-        #                                             p_fail,
-        #                                             possible_future_values, # future value will be at the next stage
-        #                                             c_grid)
+        # Determine how many SoC‐bins per mode from the percent grid:
+        soc_levels = self._soc_grid                    # e.g. [0, 3.33, 6.67, …, 100]
+        n_levels   = len(soc_levels)                   # dynamic number of bins
+        # use dynamic energy‐bin width:
+        Δ: float = self.Δ_energy
+
         
-        Δ = self.mdp.battery_capacity_joules / 100.0       # exactly 1% increments
-
-        # extract the “next-stage” slice of future values for this action:
-        if action == 0: 
-            V_next = self.future_value_table[:101, stage+1]   # “mode 0” states: SoC=0%..100%
-        else:  # action == 1
-            V_next = self.future_value_table[101:202, stage+1] # “mode 1” states: SoC=0%..100%
+        # slice the future‐value table by the dynamic number of bins:
+        if action[0] == 0:
+            V_next = self.future_value_table[
+                0 : self.n_soc_levels,
+                stage + 1
+            ]
+        elif action[0] == 1:
+            V_next = self.future_value_table[
+                self.n_soc_levels : 2 * self.n_soc_levels,
+                stage + 1
+            ]
 
         # Then call (make sure V_next has shape (101,) exactly!)
         survival_contribution = self.compute_survival_contribution(
@@ -469,10 +483,8 @@ class mdpAnalyticalBackwardSolver:
             V_next,                   # array of length 101
             Δ                         # capacity/100
         )
-        # Finally:
-        return (0.0 * p_fail) + survival_contribution
         
-        # return broken_contribution + survival_contribution
+        return (0.0 * p_fail) + survival_contribution
 
     def state_to_energy(self,state):
         return self.mdp.transition_logic.soc_to_energy(state[0,0])
@@ -498,10 +510,14 @@ class mdpAnalyticalBackwardSolver:
         #    To survive (i.e. not battery‐fail), you need (Cₖ + Gₖ) ≥ Eₖ.
         δ = Ck  # “base” before solar
 
-        # 2) Build exactly 101 discrete bins [0·Δ,1·Δ), [1·Δ,2·Δ), …, [99·Δ,100·Δ), [100·Δ,∞)
-        edges = np.concatenate((np.arange(0, 101)*Δ, [np.inf]))  # length = 102
-        e_lower = edges[:-1]   # 101 lower‐edges
-        e_upper = edges[1:]    # 101 upper‐edges
+        # 2) build N bins of width Δ, then a catch‐all upper bin
+        N     = len(V_next)
+        edges = np.concatenate((
+            np.arange(N) * Δ,  # 0·Δ, 1·Δ, …, (N-1)·Δ
+            [np.inf]           # final edge
+        ))
+        e_lower = edges[:-1]
+        e_upper = edges[1:]
 
         # 3) We want P{ n·Δ ≤ (Cₖ + Gₖ − Eₖ) < (n+1)·Δ } for each bin n=0..100.
         #    Equivalently, P{ Gₖ ∈ [ (n·Δ + Eₖ − δ),  ((n+1)·Δ + Eₖ − δ) ) }.
@@ -525,7 +541,6 @@ class mdpAnalyticalBackwardSolver:
 
         return survival_contribution
 
-    
     def value_function(self, stage: int, rewards: np.ndarray, next_states: np.ndarray) -> float:
         """
         Estimate the expected value for a batch of transitions at a given stage.

@@ -16,38 +16,42 @@ class EVTablePlotterPlotly:
         Overlaid moored/flying/broken surfaces in one 3D plot.
         Saves both HTML and PNG versions.
         """
+        # infer number of SoC bins per mode
+        n_rows, T = data.shape
+        if (n_rows - 1) % 2 != 0:
+            raise ValueError(f"Expected total rows of form 2*n_soc + 1, got {n_rows}")
+        n_soc = (n_rows - 1) // 2
+
         # split states
-        moored     = data[:101, :]
-        flying     = data[101:202, :]
-        broken_row = data[202, :]
+        moored     = data[          :n_soc, :]
+        flying     = data[n_soc      :2*n_soc, :]
+        broken_row = data[2*n_soc    , :]
 
         # grids
-        T      = data.shape[1]
         stages = np.arange(T)
-        soc    = np.linspace(0, 100, 101)
+        soc    = np.linspace(0, 100, n_soc)
         X, Y   = np.meshgrid(stages, soc)
-        Zb     = np.tile(broken_row, (101, 1))
+
+        # broken surface at SoC=0 plane
+        Zb = np.tile(broken_row, (n_soc, 1))
 
         # build figure
         fig = go.Figure()
 
-        # moored
         fig.add_trace(go.Surface(
             x=X, y=Y, z=moored,
             colorscale="Blues",
             opacity=1.0,
             name="Moored"
         ))
-        # flying
         fig.add_trace(go.Surface(
             x=X, y=Y, z=flying,
             colorscale="Reds",
             opacity=0.7,
             name="Flying"
         ))
-        # broken at SoC=0 plane
         fig.add_trace(go.Surface(
-            x=X, y=Y*0, z=Zb,
+            x=X, y=Y * 0, z=Zb,
             colorscale="Inferno",
             opacity=0.9,
             name="Broken"
@@ -67,14 +71,8 @@ class EVTablePlotterPlotly:
         # output
         fname_base = f"ev_plotly_overlaid_{int(capacity)}Wh_{horizon}h_{penalty}p"
         html_path = os.path.join(outdir, fname_base + ".html")
-        # png_path  = os.path.join(outdir, fname_base + ".png")
-
         fig.write_html(html_path)
-        # requires kaleido installed
-        # fig.write_image(png_path, width=1200, height=800)
-
         print(f"Saved interactive plot to {html_path}")
-        # print(f"Saved static export to    {png_path}")
 
 
     @staticmethod
@@ -88,20 +86,28 @@ class EVTablePlotterPlotly:
         """
         Single surface Δ = flying − moored.
         """
-        moored = data[:101, :]
-        flying = data[101:202, :]
+        # infer number of SoC bins per mode
+        n_rows, T = data.shape
+        if (n_rows - 1) % 2 != 0:
+            raise ValueError(f"Expected total rows of form 2*n_soc + 1, got {n_rows}")
+        n_soc = (n_rows - 1) // 2
 
-        T      = data.shape[1]
+        # split states
+        moored = data[          :n_soc, :]
+        flying = data[n_soc      :2*n_soc, :]
+
+        # grids
         stages = np.arange(T)
-        soc    = np.linspace(0, 100, 101)
+        soc    = np.linspace(0, 100, n_soc)
         X, Y   = np.meshgrid(stages, soc)
 
         delta = flying - moored
-        vmax = np.max(delta)
+        vmax  = np.max(delta)
+
         fig = go.Figure()
         fig.add_trace(go.Surface(
             x=X, y=Y, z=delta,
-            cmin=vmax-2, cmax=vmax,
+            cmin=vmax - 2, cmax=vmax,
             colorscale="RdBu",
             colorbar=dict(title="Flying–Moored"),
             name="Δ Surface"
@@ -120,13 +126,8 @@ class EVTablePlotterPlotly:
 
         fname_base = f"ev_plotly_delta_{int(capacity)}Wh_{horizon}h_{penalty}p"
         html_path = os.path.join(outdir, fname_base + ".html")
-        # png_path  = os.path.join(outdir, fname_base + ".png")
-
         fig.write_html(html_path)
-        # fig.write_image(png_path, width=1200, height=800)
-
         print(f"Saved interactive delta plot to {html_path}")
-        # print(f"Saved static export to       {png_path}")
 
 
 def parse_filename(filename: str):
@@ -156,7 +157,11 @@ if __name__ == "__main__":
 
     # gather files
     if os.path.isdir(args.path):
-        files = [os.path.join(args.path, f) for f in os.listdir(args.path) if f.endswith(".npy")]
+        files = [
+            os.path.join(args.path, f)
+            for f in os.listdir(args.path)
+            if f.endswith(".npy")
+        ]
     else:
         files = [args.path]
 

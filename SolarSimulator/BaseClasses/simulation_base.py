@@ -301,6 +301,9 @@ class AbstractContinuousEnergySimulation(ABC):
                     'energy_series': energies,
                     'metadata': {'episode_index': episode_index},
                     'total_reward': sum(rews),
+                    'flight_time' : sum(acts),
+                    'failure': traj[-1][1] == 2,
+                    'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
                 }
             else:
                 # summary only
@@ -309,6 +312,7 @@ class AbstractContinuousEnergySimulation(ABC):
                     'failure': traj[-1][1] == 2,
                     'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
                     'total_reward': sum(rews),
+                    'flight_time' : sum(acts),
                 }
 
             yield episode_data

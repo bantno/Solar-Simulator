@@ -631,27 +631,31 @@ class HDF5RewardPlotter:
             if wind_t is None:
                 wind_t = np.nan
 
-            rewards = []
-            total_eps = 0
-            fail_count = 0
-            failure_steps = []
+            # rewards = []
+            # total_eps = 0
+            # fail_count = 0
+            # failure_steps = []
 
-            episodes = grp.get('episodes', {})
-            for ep in episodes.values():
-                if 'total_reward' in ep:
-                    rewards.append(ep['total_reward'][()])
-                if 'failure' in ep and 'failure_step' in ep:
-                    total_eps += 1
-                    if bool(ep['failure'][()]):
-                        fail_count += 1
-                        failure_steps.append(ep['failure_step'][()])
+            # episodes = grp.get('episodes', {})
+            # for ep in episodes.values():
+            #     if 'total_reward' in ep:
+            #         rewards.append(ep['total_reward'][()])
+            #     if 'failure' in ep and 'failure_step' in ep:
+            #         total_eps += 1
+            #         if bool(ep['failure'][()]):
+            #             fail_count += 1
+            #             failure_steps.append(ep['failure_step'][()])
 
-            if not rewards and total_eps == 0 and 'optimal' not in sim_type.lower():
-                continue
+            # if not rewards and total_eps == 0 and 'optimal' not in sim_type.lower():
+            #     continue
 
-            mean_reward = np.mean(rewards) if rewards else np.nan
-            failure_percentage = (fail_count / total_eps * 100) if total_eps else np.nan
-            mean_failure_step = np.mean(failure_steps) if failure_steps else np.nan
+            # mean_reward = np.mean(rewards) if rewards else np.nan
+            # failure_percentage = (fail_count / total_eps * 100) if total_eps else np.nan
+            # mean_failure_step = np.mean(failure_steps) if failure_steps else np.nan
+
+            failure_percentage = grp.attrs.get('failure_percentage', np.nan)
+            mean_reward = grp.attrs.get('average_reward', np.nan)
+            mean_failure_step = grp.attrs.get('average_reward', np.nan)
 
             records.append({
                 'sim_type': sim_type,

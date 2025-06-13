@@ -26,3 +26,4 @@ threshold_values:
 transition_model: moderate
 wind_thresholds:
 - 5.0
+energy_increment_wh: 5

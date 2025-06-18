@@ -2,6 +2,7 @@ import sys
 import os
 import multiprocessing
 import yaml
+import time
 
 from BaseClasses.run_sim import YAMLSimulationRunner
 from BaseClasses.simulation_run_manager import SimulationRunManager
@@ -218,6 +219,7 @@ class SimulationGUI(QWidget):
         use_multiproc = self.multiproc_checkbox.isChecked()
         save_history = self.save_history_checkbox.isChecked()
         full_history_eps = self.full_state_input.value()
+        start_time = time.time()
 
         try:
             runner = YAMLSimulationRunner(config_path)
@@ -244,7 +246,9 @@ class SimulationGUI(QWidget):
             )
             manager.run_simulations(sims, use_multiprocessing=use_multiproc)
 
-            QMessageBox.information(self, "Success", "Simulations completed successfully.")
+            elapsed_time = time.time() - start_time
+            completion_message = f"Simulations completed in {elapsed_time:.2f} seconds ({elapsed_time/3600} hours)."
+            QMessageBox.information(self, "Success", completion_message)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Simulation failed with error:\n{str(e)}")
 

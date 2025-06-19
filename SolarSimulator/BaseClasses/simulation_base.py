@@ -144,6 +144,7 @@ class AbstractSimulation(ABC):
                     'whale_series': whale,
                     'metadata': {'episode_index': episode_index},
                     'total_reward': float(sum(rews)),
+                    'flight_hrs': float(sum(acts)/4.), # TODO: Make this not hardcoded for 15min time step
                 }
             else:
                 # summary only
@@ -152,6 +153,8 @@ class AbstractSimulation(ABC):
                     'failure': bool(traj[-1][1] == 2),
                     'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
                     'total_reward': float(sum(rews)),
+                    'flight_hrs': float(sum(acts)/4.), # TODO: Make this not hardcoded for 15min time step
+
                 }
 
             yield episode_data

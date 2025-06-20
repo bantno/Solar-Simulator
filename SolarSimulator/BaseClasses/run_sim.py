@@ -203,7 +203,8 @@ class YAMLSimulationRunner:
     def __init__(self, config_path: str):
         with open(config_path, "r") as f:
             self.config = yaml.safe_load(f)
-
+        self.start_datetimes = self.config.get("start_datetimes",
+                                       [ self.config.get("start_datetime") ])
         # Hyperparameter lists with fallbacks
         #  — allow multiple horizons
         self.horizons = self.config.get("horizons") or [self.config.get("horizon")]
@@ -233,28 +234,30 @@ class YAMLSimulationRunner:
         thresholds      = self.config.get("threshold_values", [])
         wind_thresholds = self.config.get("wind_thresholds", [])
         params: List[Tuple] = []
+        for start_dt in self.start_datetimes:
+            # temporarily override the single start_datetime
+            self.config["start_datetime"] = start_dt
+            # 1) Threshold-based simulations, now including each failure_penalty:
+            for loc, H, fp, cap, th, wth in product(
+                self.locations,
+                self.horizons,
+                self.failure_penalties,
+                self.config["battery_capacities"],
+                thresholds,
+                wind_thresholds,
+            ):
+                factory = SimulationFactory(self.config, loc, H, fp)
+                params.append((factory, "threshold", cap, th, wth))
 
-        # 1) Threshold-based simulations, now including each failure_penalty:
-        for loc, H, fp, cap, th, wth in product(
-            self.locations,
-            self.horizons,
-            self.failure_penalties,
-            self.config["battery_capacities"],
-            thresholds,
-            wind_thresholds,
-        ):
-            factory = SimulationFactory(self.config, loc, H, fp)
-            params.append((factory, "threshold", cap, th, wth))
-
-        # 2) Optimal-policy simulations, also over each failure_penalty:
-        for loc, H, fp, cap in product(
-            self.locations,
-            self.horizons,
-            self.failure_penalties,
-            self.config["battery_capacities"],
-        ):
-            factory = SimulationFactory(self.config, loc, H, fp)
-            params.append((factory, "optimal", cap, None, None))
+            # 2) Optimal-policy simulations, also over each failure_penalty:
+            for loc, H, fp, cap in product(
+                self.locations,
+                self.horizons,
+                self.failure_penalties,
+                self.config["battery_capacities"],
+            ):
+                factory = SimulationFactory(self.config, loc, H, fp)
+                params.append((factory, "optimal", cap, None, None))
 
         return params
 

@@ -123,4 +123,9 @@ class SimulationRunManager:
             parts.append(f"t{meta['observation_threshold']}")
         if "wind_threshold" in meta:
             parts.append(f"w{meta['wind_threshold']}")
+        if "start_time" in meta:
+            # parse ISO timestamp, get day of year
+            dt = datetime.fromisoformat(meta["start_time"])
+            day_of_year = dt.timetuple().tm_yday
+            parts.append(f"d{day_of_year}")
         return "_".join(parts)

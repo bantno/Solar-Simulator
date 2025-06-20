@@ -304,7 +304,7 @@ class AbstractContinuousEnergySimulation(ABC):
                     'energy_series': energies,
                     'metadata': {'episode_index': episode_index},
                     'total_reward': sum(rews),
-                    'flight_time' : sum(acts),
+                    'flight_hrs' : sum(acts)/4, # TODO: Make this not hardcoded for 15min time step
                     'failure': traj[-1][1] == 2,
                     'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
                 }
@@ -315,7 +315,7 @@ class AbstractContinuousEnergySimulation(ABC):
                     'failure': traj[-1][1] == 2,
                     'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
                     'total_reward': sum(rews),
-                    'flight_time' : sum(acts),
+                    'flight_hrs' : sum(acts)/4, # TODO: Make this not hardcoded for 15min time step
                 }
 
             yield episode_data

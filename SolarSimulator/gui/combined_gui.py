@@ -3,6 +3,7 @@ import os
 import multiprocessing
 import yaml
 import h5py
+import re
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,6 +27,20 @@ from matplotlib.backends.backend_qt5agg import (
 # ------------------------------------------------------------------------------
 # 1) Simulation Runner / Config Creator (from gui.py)
 # ------------------------------------------------------------------------------
+
+def _finish_plot(ax, title):
+    # move legend outside on the right
+    ax.legend(
+        loc='upper left',
+        bbox_to_anchor=(1.02, 1),
+        borderaxespad=0
+    )
+    ax.set_title(title)
+    ax.grid(True)
+
+    # give room for the legend
+    plt.subplots_adjust(right=0.75)
+    plt.tight_layout()
 
 def create_simulation_wrapper(args):
     factory, sim_type, cap, threshold, wind_threshold, save_history, full_history_episodes = args
@@ -623,7 +638,14 @@ class HDF5RewardPlotter:
             cap = grp.attrs.get('battery_capacity', grp.attrs.get('capacity', np.nan))
             horizon = grp.attrs.get('horizon', np.nan)
             fp = grp.attrs.get('failure_penalty', np.nan)
-
+            loc_id = grp.attrs.get('location_id',np.nan)
+            m = re.search(r'lat(?P<lat>[-\d\.]+)_lon(?P<lon>[-\d\.]+)', loc_id)
+            if m:
+                latitude  = float(m.group('lat'))
+                longitude = float(m.group('lon'))
+                print(f"Latitude: {latitude}, Longitude: {longitude}")
+            else:
+                raise ValueError(f"Could not parse coordinates from {loc_id}")
             if (obs_t is None or wind_t is None) and 'optimal' not in sim_type.lower():
                 continue
             if obs_t is None:
@@ -631,31 +653,34 @@ class HDF5RewardPlotter:
             if wind_t is None:
                 wind_t = np.nan
 
-            # rewards = []
-            # total_eps = 0
-            # fail_count = 0
-            # failure_steps = []
 
-            # episodes = grp.get('episodes', {})
-            # for ep in episodes.values():
-            #     if 'total_reward' in ep:
-            #         rewards.append(ep['total_reward'][()])
-            #     if 'failure' in ep and 'failure_step' in ep:
-            #         total_eps += 1
-            #         if bool(ep['failure'][()]):
-            #             fail_count += 1
-            #             failure_steps.append(ep['failure_step'][()])
-
-            # if not rewards and total_eps == 0 and 'optimal' not in sim_type.lower():
-            #     continue
-
-            # mean_reward = np.mean(rewards) if rewards else np.nan
-            # failure_percentage = (fail_count / total_eps * 100) if total_eps else np.nan
-            # mean_failure_step = np.mean(failure_steps) if failure_steps else np.nan
 
             failure_percentage = grp.attrs.get('failure_percentage', np.nan)
             mean_reward = grp.attrs.get('average_reward', np.nan)
             mean_failure_step = grp.attrs.get('average_reward', np.nan)
+
+            if np.isnan(mean_reward):
+                rewards = []
+                total_eps = 0
+                fail_count = 0
+                failure_steps = []
+
+                episodes = grp.get('episodes', {})
+                for ep in episodes.values():
+                    if 'total_reward' in ep:
+                        rewards.append(ep['total_reward'][()])
+                    if 'failure' in ep and 'failure_step' in ep:
+                        total_eps += 1
+                        if bool(ep['failure'][()]):
+                            fail_count += 1
+                            failure_steps.append(ep['failure_step'][()])
+
+                if not rewards and total_eps == 0 and 'optimal' not in sim_type.lower():
+                    continue
+
+                mean_reward = np.mean(rewards) if rewards else np.nan
+                failure_percentage = (fail_count / total_eps * 100) if total_eps else np.nan
+                mean_failure_step = np.mean(failure_steps) if failure_steps else np.nan
 
             records.append({
                 'sim_type': sim_type,
@@ -666,7 +691,9 @@ class HDF5RewardPlotter:
                 'failure_penalty': fp,
                 'mean_reward': mean_reward,
                 'failure_percentage': failure_percentage,
-                'mean_failure_step': mean_failure_step
+                'mean_failure_step': mean_failure_step,
+                'latitude': latitude,
+                'longitude': longitude,
             })
 
         df = pd.DataFrame(records)
@@ -682,87 +709,186 @@ class HDF5RewardPlotter:
             self._load_summary()
         return self._summary
 
-    def plot_mean_by_thresholds(self):
+    def plot_mean_by_thresholds(
+        self,
+        algorithms: list[str] | None = None,
+        obs_thresholds: list[float] | None = None,
+        wind_thresholds: list[float] | None = None
+    ):
         df = self._get_summary()
         df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+
+        if algorithms:
+            df_main = df_main[df_main['sim_type'].isin(algorithms)]
+
+        if obs_thresholds:
+            df_main = df_main[df_main['observation_threshold'].isin(obs_thresholds)]
+        if wind_thresholds:
+            df_main = df_main[df_main['wind_threshold'].isin(wind_thresholds)]
+
+        if df_main.empty:
+            raise ValueError("No data left after filtering. Check your selections.")
+
         pivot = df_main.pivot(
             index='observation_threshold',
             columns='wind_threshold',
             values='mean_reward'
         )
 
-        plt.figure()
+        fig, ax = plt.subplots(figsize=(8, 6))
         for w in pivot.columns:
-            plt.plot(pivot.index, pivot[w], marker='x', label=f"Wind {w}")
+            ax.plot(pivot.index, pivot[w], marker='x', label=f"Wind {w}")
 
         if self.opt_reward is not None:
-            plt.axhline(
+            ax.axhline(
                 self.opt_reward,
                 linestyle='--',
                 label=f"Optimal Mean Reward ({self.opt_reward:.3f})"
             )
 
-        plt.xlabel("Observation Threshold")
-        plt.ylabel("Mean Total Reward")
-        plt.title("Mean Total Reward for each (Obs, Wind) Threshold Combination")
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
+        ax.set_xlabel("Observation Threshold")
+        ax.set_ylabel("Mean Total Reward")
+        _finish_plot(ax, "Mean Total Reward by Threshold Combination")
         plt.show()
 
-    def plot_mean_failure_step_by_thresholds(self):
+    def plot_mean_failure_step_by_thresholds(
+        self,
+        algorithms: list[str] | None = None,
+        obs_thresholds: list[float] | None = None,
+        wind_thresholds: list[float] | None = None
+    ):
+        """
+        Plot the mean failure step (time to failure) for each
+        combination of observation and wind thresholds.
+
+        Parameters:
+            algorithms: list of sim_type names to include (None = all non-optimal)
+            obs_thresholds: list of observation thresholds to include (None = all)
+            wind_thresholds: list of wind thresholds to include (None = all)
+        """
+        # 1) Load and filter out any 'optimal' simulations
         df = self._get_summary()
-        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
-        pivot = df_main.pivot(
+        df = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+
+        # 2) Apply user filters
+        if algorithms:
+            df = df[df['sim_type'].isin(algorithms)]
+        if obs_thresholds:
+            df = df[df['observation_threshold'].isin(obs_thresholds)]
+        if wind_thresholds:
+            df = df[df['wind_threshold'].isin(wind_thresholds)]
+
+        if df.empty:
+            raise ValueError("No data left after filtering. Check your selections.")
+
+        # 3) Pivot into a matrix: rows=obs_thresh, cols=wind_thresh
+        pivot = df.pivot(
             index='observation_threshold',
             columns='wind_threshold',
             values='mean_failure_step'
         )
 
-        plt.figure()
+        # 4) Create the plot
+        fig, ax = plt.subplots(figsize=(8, 6))
         for w in pivot.columns:
-            plt.plot(pivot.index, pivot[w], marker='x', label=f"Wind {w}")
-
-        if self.opt_failure_step is not None:
-            plt.axhline(
-                self.opt_failure_step,
-                linestyle='--',
-                label=f"Optimal Mean Failure Step ({self.opt_failure_step:.2f})"
+            ax.plot(
+                pivot.index,
+                pivot[w],
+                marker='o',
+                label=f"Wind {w}"
             )
 
-        plt.xlabel("Observation Threshold")
-        plt.ylabel("Mean Failure Step")
-        plt.title("Mean Failure Step by Threshold Combination")
-        plt.legend()
-        plt.grid(True)
+        # 5) Optional optimal baseline
+        if hasattr(self, 'opt_failure_step') and self.opt_failure_step is not None:
+            ax.axhline(
+                self.opt_failure_step,
+                linestyle='--',
+                label=f"Optimal Mean Failure Step ({self.opt_failure_step:.1f})"
+            )
+
+        # 6) Label axes
+        ax.set_xlabel("Observation Threshold")
+        ax.set_ylabel("Mean Failure Step")
+
+        # 7) Move legend outside to the right
+        ax.legend(
+            loc='upper left',         # anchor point for the legend
+            bbox_to_anchor=(1.02, 1), # position just outside the axes
+            borderaxespad=0
+        )
+        plt.subplots_adjust(right=0.75)  # make room on the right
+        ax.grid(True)
         plt.tight_layout()
         plt.show()
 
-    def plot_failure_percentage_by_thresholds(self):
+    def plot_failure_percentage_by_thresholds(
+        self,
+        algorithms: list[str] | None = None,
+        obs_thresholds: list[float] | None = None,
+        wind_thresholds: list[float] | None = None
+    ):
+        """
+        Plot the failure percentage for each combination of observation and wind thresholds.
+
+        Parameters:
+            algorithms: list of sim_type names to include (None = all non-optimal)
+            obs_thresholds: list of observation thresholds to include (None = all)
+            wind_thresholds: list of wind thresholds to include (None = all)
+        """
+        # 1) Load and filter out any 'optimal' simulations
         df = self._get_summary()
-        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
-        pivot = df_main.pivot(
+        df_opt = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
+        df = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+
+        # 2) Apply user filters
+        if algorithms:
+            df = df[df['sim_type'].isin(algorithms)]
+        if obs_thresholds:
+            df = df[df['observation_threshold'].isin(obs_thresholds)]
+        if wind_thresholds:
+            df = df[df['wind_threshold'].isin(wind_thresholds)]
+
+        if df.empty:
+            raise ValueError("No data left after filtering. Check your selections.")
+
+        # 3) Pivot into a matrix: rows=obs_thresh, cols=wind_thresh
+        pivot = df.pivot(
             index='observation_threshold',
             columns='wind_threshold',
             values='failure_percentage'
         )
 
-        plt.figure()
+        # 4) Create the plot
+        fig, ax = plt.subplots(figsize=(8, 6))
         for w in pivot.columns:
-            plt.plot(pivot.index, pivot[w], marker='x', label=f"Wind {w}")
-
-        if self.opt_failure_pct is not None:
-            plt.axhline(
-                self.opt_failure_pct,
-                linestyle='--',
-                label=f"Optimal Failure % ({self.opt_failure_pct:.1f}%)"
+            ax.plot(
+                pivot.index,
+                pivot[w],
+                marker='s',
+                label=f"Wind {w}"
             )
 
-        plt.xlabel("Observation Threshold")
-        plt.ylabel("Failure Percentage (%)")
-        plt.title("Failure Percentage by Threshold Combination")
-        plt.legend()
-        plt.grid(True)
+        # 5) Optional optimal baseline
+        failure_percentage = df_opt["failure_percentage"].values[0]
+        if df_opt is not None:
+            ax.axhline(
+                failure_percentage,
+                linestyle='--',
+                label=f"Optimal Failure % ({failure_percentage:.1f})"
+            )
+
+        # 6) Label axes
+        ax.set_xlabel("Observation Threshold")
+        ax.set_ylabel("Failure Percentage")
+
+        # 7) Move legend outside to the right
+        ax.legend(
+            loc='upper left',
+            bbox_to_anchor=(1.02, 1),
+            borderaxespad=0
+        )
+        plt.subplots_adjust(right=0.75)  # make room on the right
+        ax.grid(True)
         plt.tight_layout()
         plt.show()
 
@@ -807,46 +933,212 @@ class HDF5RewardPlotter:
         plt.tight_layout()
         plt.show()
 
-    def plot_reward_vs_horizon_by_thresholds(self):
+    def plot_reward_vs_horizon_by_thresholds(
+        self,
+        algorithms: list[str] | None = None,
+        obs_thresholds: list[float] | None = None,
+        wind_thresholds: list[float] | None = None,
+        penalties: list[float] | None = None
+    ):
+        """
+        Plot Average Reward per Timestep vs Days for each (obs, wind) threshold combination,
+        optionally filtering by algorithm, thresholds, and failure penalties.
+        """
+        # 1) Load summary and split out optimal vs main
         df = self._get_summary()
         df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
-        df_opt = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
+        df_opt  = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
 
-        obs_vals = sorted(df_main['observation_threshold'].dropna().unique())
+        # 2) Apply filters
+        if algorithms:
+            df_main = df_main[df_main['sim_type'].isin(algorithms)]
+        if obs_thresholds:
+            df_main = df_main[df_main['observation_threshold'].isin(obs_thresholds)]
+        if wind_thresholds:
+            df_main = df_main[df_main['wind_threshold'].isin(wind_thresholds)]
+        if penalties:
+            df_main = df_main[df_main['failure_penalty'].isin(penalties)]
+            df_opt  = df_opt[df_opt['failure_penalty'].isin(penalties)]
+
+        if df_main.empty:
+            raise ValueError("No data left after filtering. Check your selections.")
+
+        # 3) Time‐step conversion: assume 15 minutes per step
+        minutes_per_step = 15
+        steps_per_day     = 24 * 60 / minutes_per_step
+
+        # 4) Identify unique thresholds
+        obs_vals  = sorted(df_main['observation_threshold'].dropna().unique())
         wind_vals = sorted(df_main['wind_threshold'].dropna().unique())
 
-        n = len(obs_vals)
-        cols = int(np.ceil(np.sqrt(n)))
-        rows = int(np.ceil(n / cols))
-        fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4*rows), squeeze=False)
+        # 5) Prepare subplots grid
+        n_cols = int(np.ceil(np.sqrt(len(obs_vals))))
+        n_rows = int(np.ceil(len(obs_vals) / n_cols))
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(5*n_cols, 4*n_rows), squeeze=False)
 
+        # 6) Plot each obs threshold as its own subplot
         for idx, obs in enumerate(obs_vals):
-            ax = axes[idx//cols][idx%cols]
+            ax = axes[idx // n_cols][idx % n_cols]
             subset = df_main[df_main['observation_threshold'] == obs]
+
             for w in wind_vals:
                 series = subset[subset['wind_threshold'] == w]
                 if series.empty:
                     continue
-                series = series.sort_values('horizon')
-                ax.plot(series['horizon'], series['mean_reward'], marker='o', label=f"Wind {w}")
 
+                # compute average reward per step
+                avg_per_step = series['mean_reward'] / series['horizon']
+
+                # convert horizon to days
+                days = series['horizon'] / steps_per_day
+
+                # sort by days
+                order = days.argsort()
+                ax.plot(
+                    days.iloc[order],
+                    avg_per_step.iloc[order],
+                    marker='o',
+                    label=f"Wind {w}"
+                )
+
+            # overlay optimal-policy baseline if available
             if not df_opt.empty:
-                opt_series = df_opt.dropna(subset=['horizon', 'mean_reward'])
-                opt_series = opt_series.sort_values('horizon')
-                ax.plot(opt_series['horizon'], opt_series['mean_reward'],
-                        linestyle='--', marker='s', label='Optimal')
+                opt_avg = df_opt['mean_reward'] / df_opt['horizon']
+                opt_days = df_opt['horizon'] / steps_per_day
+                order = opt_days.argsort()
+                ax.plot(
+                    opt_days.iloc[order],
+                    opt_avg.iloc[order],
+                    linestyle='--',
+                    marker='s',
+                    label='Optimal'
+                )
 
             ax.set_title(f"Obs Threshold = {obs}")
-            ax.set_xlabel("Horizon")
-            ax.set_ylabel("Mean Total Reward")
+            ax.set_xlabel("Days")
+            ax.set_ylabel("Average Reward per Timestep")
             ax.grid(True)
             ax.legend()
 
-        for idx in range(n, rows*cols):
+        # 7) Remove any unused axes
+        total_plots = n_rows * n_cols
+        for idx in range(len(obs_vals), total_plots):
             fig.delaxes(axes.flatten()[idx])
 
         plt.tight_layout()
         plt.show()
+
+
+    def plot_metric_by_location(
+        self,
+        metric: str = "mean_reward",
+        algorithms: list[str] | None = None,
+        obs_thresholds: list[float] | None = None,
+        wind_thresholds: list[float] | None = None,
+        penalties: list[float] | None = None,
+        battery_capacity: float = 300,
+    ):
+        """
+        Line‐plot of <metric> vs latitude for a single battery capacity,
+        with one line per (obs, wind) threshold combo plus the optimal policy.
+
+        Parameters:
+            battery_capacity: the capacity (Wh) to plot
+            metric: one of the summary columns, e.g. "mean_reward",
+                    "failure_percentage" or "mean_failure_step"
+            algorithms: list of sim_type names to include (None = all non-optimal)
+            obs_thresholds: list of obs thresholds to include (None = all)
+            wind_thresholds: list of wind thresholds to include (None = all)
+            penalties: list of failure_penalty values to include (None = all)
+        """
+        df = self._get_summary()
+
+        # split into main and optimal runs
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+        df_opt  = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
+
+        # 1) filter by the specified battery capacity
+        df_main = df_main[df_main['battery_capacity'] == battery_capacity]
+        df_opt  = df_opt[df_opt['battery_capacity'] == battery_capacity]
+
+        # 2) apply the other filters
+        if algorithms:
+            df_main = df_main[df_main['sim_type'].isin(algorithms)]
+        if obs_thresholds:
+            df_main = df_main[df_main['observation_threshold'].isin(obs_thresholds)]
+        if wind_thresholds:
+            df_main = df_main[df_main['wind_threshold'].isin(wind_thresholds)]
+        if penalties:
+            df_main = df_main[df_main['failure_penalty'].isin(penalties)]
+            df_opt  = df_opt[df_opt['failure_penalty'].isin(penalties)]
+
+        if df_main.empty:
+            raise ValueError(f"No data for capacity={battery_capacity} after filtering.")
+
+        # 3) aggregate metric by latitude and threshold combo
+        loc_df = (
+            df_main
+            .groupby(['latitude','observation_threshold','wind_threshold'])[metric]
+            .mean()
+            .reset_index()
+        )
+        loc_df['combo_label'] = loc_df.apply(
+            lambda r: f"Obs {r['observation_threshold']}, Wind {r['wind_threshold']}",
+            axis=1
+        )
+
+        # 4) pivot so index=latitude, columns=combo_label
+        pivot = (
+            loc_df
+            .pivot(index='latitude', columns='combo_label', values=metric)
+            .sort_index()
+        )
+
+        # 5) prepare optimal series (if present)
+        opt_series = None
+        if not df_opt.empty:
+            opt_series = (
+                df_opt
+                .groupby('latitude')[metric]
+                .mean()
+                .reindex(pivot.index)
+            )
+
+        # 6) plot
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for combo in pivot.columns:
+            ax.plot(
+                pivot.index,
+                pivot[combo],
+                marker='o',
+                label=combo
+            )
+
+        if opt_series is not None:
+            ax.plot(
+                pivot.index,
+                opt_series.values,
+                linestyle='--',
+                marker='s',
+                label='Optimal Policy'
+            )
+
+        ax.set_xlabel("Latitude")
+        ax.set_ylabel(metric.replace('_', ' ').title())
+        ax.set_title(
+            f"{metric.replace('_', ' ').title()} by Latitude\n"
+            f"(Capacity = {battery_capacity} Wh)"
+        )
+        ax.legend(
+            loc='upper left',
+            bbox_to_anchor=(1.02, 1),
+            borderaxespad=0
+        )
+        ax.grid(True)
+        plt.subplots_adjust(right=0.75)
+        plt.tight_layout()
+        plt.show()
+
 
     def plot_reward_vs_penalty(self):
         df = self._get_summary()
@@ -1228,15 +1520,43 @@ class RewardPlotterTab(QWidget):
             "Optimal Reward Distribution by Penalty (Overlay)",
             "Optimal Reward Distribution by Penalty (Subplots)",
             "Optimal Failure Step Distribution by Penalty (Overlay)",
-            "Optimal Failure Step Distribution by Penalty (Subplots)"
+            "Optimal Failure Step Distribution by Penalty (Subplots)",
+            "Metric by Location"
         ])
         layout.addWidget(QLabel("Select Plot Type:"))
         layout.addWidget(self.plot_combo)
+
+        layout.addWidget(QLabel("Select Algorithms to Plot:"))
+        self.algo_list = QListWidget()
+        self.algo_list.setSelectionMode(QListWidget.MultiSelection)
+        layout.addWidget(self.algo_list)
+
+        # Obs‐threshold list
+        layout.addWidget(QLabel("Observation Thresholds:"))
+        self.obs_list = QListWidget()
+        self.obs_list.setSelectionMode(QListWidget.MultiSelection)
+        layout.addWidget(self.obs_list)
+
+        # Wind‐threshold list
+        layout.addWidget(QLabel("Wind Thresholds:"))
+        self.wind_list = QListWidget()
+        self.wind_list.setSelectionMode(QListWidget.MultiSelection)
+        layout.addWidget(self.wind_list)
 
         # Optional: For the “distribution by penalty” charts, allow specifying a comma‐separated list of penalties
         self.penalty_input = QLineEdit()
         self.penalty_input.setPlaceholderText("Penalties (comma-separated, or leave blank)")
         layout.addWidget(self.penalty_input)
+
+        # 1b) Metric selector
+        layout.addWidget(QLabel("Select Metric:"))
+        self.metric_combo = QComboBox()
+        self.metric_combo.addItems([
+            "mean_reward",
+            "failure_percentage",
+            "mean_failure_step"
+        ])
+        layout.addWidget(self.metric_combo)
 
         # “Generate Plot” button
         btn_plot = QPushButton("Generate Plot")
@@ -1254,6 +1574,33 @@ class RewardPlotterTab(QWidget):
         self.file_path = path
         self.file_line.setText(path)
         self.plotter = HDF5RewardPlotter(path)
+        # populate algorithm list from summary
+        df = self.plotter._get_summary()
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+        sims = sorted(
+            set(df['sim_type']) - {s for s in df['sim_type'] if 'optimal' in s.lower()}
+        )
+        self.algo_list.clear()
+        for sim in sims:
+            item = QListWidgetItem(sim)
+            item.setSelected(True)
+            self.algo_list.addItem(item)
+
+        obs_vals  = sorted(df_main['observation_threshold'].unique())
+        wind_vals = sorted(df_main['wind_threshold'].unique())
+        self.obs_list.clear()
+        for o in obs_vals:
+            item = QListWidgetItem(f"{o:.2f}")
+            item.setData(Qt.UserRole, o)
+            item.setSelected(True)
+            self.obs_list.addItem(item)
+
+        self.wind_list.clear()
+        for w in wind_vals:
+            item = QListWidgetItem(f"{w:.2f}")
+            item.setData(Qt.UserRole, w)
+            item.setSelected(True)
+            self.wind_list.addItem(item)
 
     def generate_plot(self):
         if self.plotter is None:
@@ -1263,24 +1610,55 @@ class RewardPlotterTab(QWidget):
         choice = self.plot_combo.currentText()
         penalties = None
         text = self.penalty_input.text().strip()
+        algos = [i.text() for i in self.algo_list.selectedItems()]
+        obs   = [i.data(Qt.UserRole) for i in self.obs_list.selectedItems()]
+        wind  = [i.data(Qt.UserRole) for i in self.wind_list.selectedItems()]
         if text:
             try:
                 penalties = [float(x.strip()) for x in text.split(",") if x.strip()]
             except:
                 QMessageBox.critical(self, "Error", "Invalid penalty list.")
                 return
-
+        metric = self.metric_combo.currentText()
         try:
             if choice == "Mean Reward by Thresholds":
-                self.plotter.plot_mean_by_thresholds()
+                self.plotter.plot_mean_by_thresholds(
+                    algorithms     = algos,
+                    obs_thresholds = obs,
+                    wind_thresholds= wind
+                )
             elif choice == "Mean Failure Step by Thresholds":
-                self.plotter.plot_mean_failure_step_by_thresholds()
+                self.plotter.plot_mean_failure_step_by_thresholds(
+                    algorithms     = algos,
+                    obs_thresholds = obs,
+                    wind_thresholds= wind
+                )
+            elif choice == "Metric by Location":
+                self.plotter.plot_metric_by_location(
+                    metric         = metric,
+                    algorithms     = algos,
+                    obs_thresholds = obs,
+                    wind_thresholds= wind,
+                    penalties      = penalties
+                )
+
             elif choice == "Failure % by Thresholds":
-                self.plotter.plot_failure_percentage_by_thresholds()
+                self.plotter.plot_failure_percentage_by_thresholds(
+                    algorithms     = algos,
+                    obs_thresholds = obs,
+                    wind_thresholds= wind
+                )
             elif choice == "Reward vs Capacity by Thresholds":
                 self.plotter.plot_reward_vs_capacity_by_thresholds()
+
             elif choice == "Reward vs Horizon by Thresholds":
-                self.plotter.plot_reward_vs_horizon_by_thresholds()
+                self.plotter.plot_reward_vs_horizon_by_thresholds(
+                    algorithms      = algos,
+                    obs_thresholds  = obs,
+                    wind_thresholds = wind,
+                    penalties       = penalties
+                )
+
             elif choice == "Reward vs Penalty":
                 self.plotter.plot_reward_vs_penalty()
             elif choice == "Failure % by Penalty (Subplots)":

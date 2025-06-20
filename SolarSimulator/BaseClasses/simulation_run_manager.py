@@ -13,11 +13,13 @@ def _run_one_sim(args):
     total_reward = 0
     failure_step = 0
     failure = 0
+    flight_hrs = 0
     for episode in sim.simulate_multiple_episodes(episodes_per_simulation):
         # Ensure total_reward is set
         # episode["total_reward"] = episode.get(
         #     "total_reward", sum(episode.get("rewards", []))
         # )
+        flight_hrs += episode["flight_hrs"]
         total_reward += episode["total_reward"]
         failure += episode["failure"]
         failure_step += episode["failure_step"]
@@ -35,6 +37,7 @@ def _run_one_sim(args):
         "average_failure_step": failure_step/episodes_per_simulation,
         "failure_percentage": failure/episodes_per_simulation,
         "average_reward": total_reward/episodes_per_simulation,
+        "average_flight_hrs": flight_hrs/episodes_per_simulation,
     }
     if hasattr(sim, "observation_threshold"):
         simulation_metadata["observation_threshold"] = sim.observation_threshold

@@ -141,18 +141,17 @@ class SimulationGUI(QWidget):
         self.episodes_input.setRange(1, 100000)
         self.episodes_input.setValue(3000)
 
-        self.start_date_input = QDateTimeEdit(self)
-        self.start_date_input.setCalendarPopup(True)
-        self.start_date_input.setDisplayFormat("yyyy-MM-dd HH:mm")
+        self.start_dates_input = QLineEdit("2025-06-20 08:00, 2025-06-21 09:30")
+        self.start_dates_input.setPlaceholderText("YYYY-MM-DD HH:MM, comma-separated")
         dt = QDateTime.currentDateTime()
         dt.setTime(QTime(0, 0))
-        self.start_date_input.setDateTime(dt)
+        # self.start_dates_input.setDateTime(dt)
         self.failure_penalty_input = QLineEdit("5, 10, 15")
 
         form_layout = QVBoxLayout()
         form_layout.setSpacing(8)
-        form_layout.addWidget(QLabel("Start Date & Time:"))
-        form_layout.addWidget(self.start_date_input)
+        form_layout.addWidget(QLabel("Mission Start Dates:"))
+        form_layout.addWidget(self.start_dates_input)
         form_layout.addWidget(QLabel("Battery Capacities (Wh, comma-separated):"))
         form_layout.addWidget(self.battery_input)
         form_layout.addWidget(QLabel("Observation Thresholds (comma-separated):"))
@@ -261,7 +260,14 @@ class SimulationGUI(QWidget):
             penalties = [float(x.strip()) for x in self.failure_penalty_input.text().split(",") if x.strip()]
             episodes = int(self.episodes_input.value())
             horizons = [int(x.strip()) for x in self.horizons_input.text().split(",") if x.strip()]
-            start_dt = self.start_date_input.dateTime().toString(Qt.ISODate)
+            raw = [s.strip() for s in self.start_dates_input.text().split(",") if s.strip()]
+            start_list = []
+            for s in raw:
+                dt = QDateTime.fromString(s, "yyyy-MM-dd HH:mm")
+                if not dt.isValid():
+                    QMessageBox.critical(self, "Error", f"Invalid date/time: {s}")
+                    return
+                start_list.append(dt.toString(Qt.ISODate))
             out_path = self.output_path_input.text().strip()
 
             lats = [float(x.strip()) for x in self.lat_input.text().split(",") if x.strip()]
@@ -280,7 +286,7 @@ class SimulationGUI(QWidget):
                 })
 
             config = {
-                "start_datetime": start_dt,
+                "start_datetimes": start_list,
                 "battery_capacities": batteries,
                 "threshold_values": thresholds,
                 "wind_thresholds": winds,

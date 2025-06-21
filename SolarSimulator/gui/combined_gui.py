@@ -293,6 +293,14 @@ class InspectorTab(QWidget):
             'actions',
             'rewards',
         ]
+        self.y_axis_labels = [
+            r'$G_k$ (Wh)',
+            r'$w_k$ (m/s)',
+            r'$O_k$',
+            r'$E_k$ (Wh)',
+            r'$a_k$',
+            r'$r_k$',
+        ]
         self.style_name = 'seaborn-v0_8-whitegrid'
         self.rcparams = {
             'font.size':       10,
@@ -573,33 +581,41 @@ class InspectorTab(QWidget):
         self.spin_window.setMaximum(total)
         self.slider.setMaximum(max(1, total - self.window_size + 1))
 
-        for idx, (ax, ds) in enumerate(zip(self.axes, self.dataset_names)):
-            for sim, data in loaded.items():
+        for idx, (ax, ds, y_axis_label) in enumerate(zip(self.axes, self.dataset_names, self.y_axis_labels)):
+            for jdx, (sim, data) in enumerate(loaded.items()):
                 y = data[ds]
-                x = np.arange(1, len(y) + 1)
+                # compute x in days
+                x_days = np.arange(len(y)) * self.time_step_min / (60 * 24)
                 if np.issubdtype(y.dtype, np.integer) or set(np.unique(y)).issubset({0, 1}):
-                    ax.step(x, y, where='mid', label=sim)
+                    ax.step(x_days, y, where='mid', label=sim)
+                elif idx == 0:
+                    ax.plot(x_days, y/3600, color='black')
+                elif idx == 3:
+                    ax.plot(x_days, y/3600)
+                elif idx == 1 or idx == 2:
+                    ax.plot(x_days, y, color='black')
                 else:
-                    ax.plot(x, y, label=sim)
-            ax.set_ylabel(ds)
+                    ax.plot(x_days, y, label=sim)
+            ax.set_ylabel(y_axis_label)
             if idx == 0:
                 ax.legend(loc='upper right', frameon=True)
 
-        # Cumulative flight-time subplot
+        # cumulative flight‐time subplot
         cf_ax = self.axes[-1]
         for sim, data in loaded.items():
             flight_flag = (data['actions'] != 0).astype(int)
-            cum = np.cumsum(flight_flag) * self.time_step_min / 60  # convert to hours
-            stages = np.arange(1, len(cum) + 1)
-            cf_ax.plot(stages, cum, label=sim)
-        cf_ax.set_ylabel('Cumulative Flight Time (hours)')
-        cf_ax.set_xlabel('Decision Stage')
+            cum = np.cumsum(flight_flag) * self.time_step_min / 60  # hours
+            x_days = np.arange(len(cum)) * self.time_step_min / (60 * 24)
+            cf_ax.plot(x_days, cum, label=sim)
+        cf_ax.set_ylabel('Total Flight (hrs)')
+        cf_ax.set_xlabel('Time (days)')
 
         self.fig.suptitle(f"Episode {episode_name} across simulations")
         if not self.use_constrained_layout:
             self.fig.subplots_adjust(**self.layout_settings)
         self.canvas.draw()
         self.update_line_slider_range()
+        self.fig.tight_layout(pad=2.0)
 
 # ------------------------------------------------------------------------------
 # 3) HDF5 Reward Plotter (from h5plotter.py)

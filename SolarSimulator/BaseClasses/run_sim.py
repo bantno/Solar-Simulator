@@ -186,6 +186,8 @@ class SimulationFactory:
         if sim_type == "optimal":
             # solver = mdpBackwardSolver(mdp, self.horizon)
             solver = mdpAnalyticalBackwardSolver(mdp,self.horizon)
+            solver.set_start_date(start_str)
+            # solver.set_location(self.location)
             sim = OptimalContinuousAnalyticalPolicySimulation(
                 solver, self.horizon, state0,
                 start_datetime=start_str,

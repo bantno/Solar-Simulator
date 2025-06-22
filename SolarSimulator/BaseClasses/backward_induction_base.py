@@ -88,7 +88,7 @@ class mdpBackwardSolver:
                     value = max(float_val, fly_val)
 
                 self.future_value_table[i, stage] = value
-        filename = f"future_value_table_{self.mdp.battery_capacity_wh}Wh_{self.horizon}h_{self.mdp.failure_penalty}p.npy"
+        filename = f"future_value_table_{self.mdp.battery_capacity_wh}Wh_{self.horizon}h_{self.mdp.failure_penalty}p_{self.mdp.env_provider.lat}lat.npy"
         np.save(filename, self.future_value_table)
         print("Value function table saved to:", filename)
         # PlottingUtils.plot_surface_plotly(self.future_value_table, self.mdp.battery_capacity_wh, filename)
@@ -221,6 +221,13 @@ class mdpAnalyticalBackwardSolver:
     def _initialize_future_value_table(self) -> np.ndarray:
         num_states = self.states.shape[0]
         return np.zeros((num_states, self.horizon))
+
+
+    def set_start_date(self,start_date):
+        self.start_date = start_date
+
+    def set_location(self,location):
+        self.location = location
 
     def _value(
         self,
@@ -383,7 +390,7 @@ class mdpAnalyticalBackwardSolver:
  
                 self.future_value_table[i, t] = max(values)
                 # self.optimal_action_table[i,t] = np.argmax(values)
-        filename = f"future_value_table_{self.mdp.battery_capacity_wh}Wh_{self.horizon}h_{self.mdp.failure_penalty}p.npy"
+        filename = f"future_value_table_{self.mdp.battery_capacity_wh}Wh_{self.horizon}h_{self.mdp.failure_penalty}p_{self.start_date[0:12]}.npy"
         np.save(filename, self.future_value_table)
         print("Value function table saved to:", filename)
 

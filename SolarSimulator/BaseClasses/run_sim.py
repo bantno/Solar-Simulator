@@ -116,7 +116,7 @@ class SimulationFactory:
         self.transition_model = config.get("transition_model", "moderate")
         self.solar_model = config.get("solar_panel_model", "constant")
         self.whale_type = config.get("whale_series", "real")
-        self.soc_increment = config.get("soc_increment", 1.0)
+        # self.soc_increment = config.get("soc_increment", 1.0)
         self.energy_increment_wh = config.get("energy_increment_wh", None)
 
         loader = EnvironmentLoader(
@@ -144,8 +144,8 @@ class SimulationFactory:
         # Convert absolute Wh‐step to percent, if requested
         if self.energy_increment_wh is not None:
             soc_inc = (self.energy_increment_wh / capacity_wh) * 100.0
-        else:
-            soc_inc = self.soc_increment
+        # else:
+        #     soc_inc = self.soc_increment
 
         return stochasticMDP(
             battery_capacity_wh=capacity_wh,
@@ -187,7 +187,11 @@ class SimulationFactory:
                 )
             sim.location = self.location
             sim.failure_penalty = self.failure_penalty
+            if self.energy_increment_wh is not None:
+                soc_inc = (self.energy_increment_wh / cap) * 100.0
+                sim.soc_increment = soc_inc
             return sim
+
         if sim_type == "optimal":
             # solver = mdpBackwardSolver(mdp, self.horizon)
             solver = mdpAnalyticalBackwardSolver(mdp,self.horizon, sim_name_prefix=self.config_name)
@@ -202,6 +206,9 @@ class SimulationFactory:
             )
             sim.location = self.location
             sim.failure_penalty = self.failure_penalty
+            if self.energy_increment_wh is not None:
+                soc_inc = (self.energy_increment_wh / cap) * 100.0
+                sim.soc_increment = soc_inc
             return sim
         raise ValueError(f"Unknown simulation type: {sim_type}")
 

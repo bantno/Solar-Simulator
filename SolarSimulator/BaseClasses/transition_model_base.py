@@ -701,12 +701,16 @@ class AbstractTransitionLogic(ABC):
         joules_per_bin = self.battery_capacity_joules / n_bins
 
         # 3) Which bin does each energy value fall into?
-        #    floor to always round down, then clip to [0, n_bins]
         idx = np.floor(next_energy / joules_per_bin).astype(int)
         idx = np.clip(idx, 0, n_bins)
 
         # 4) Back to %SoC
-        return idx * self.soc_increment
+        soc = idx * self.soc_increment
+
+        # 5) Override negatives
+        soc[next_energy < 0] = -1
+
+        return soc.astype(int)
 
 
     def min_to_seconds(self, minutes: float) -> float:

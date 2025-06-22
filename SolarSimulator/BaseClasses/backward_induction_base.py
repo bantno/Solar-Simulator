@@ -234,6 +234,7 @@ class mdpAnalyticalBackwardSolver:
         state: np.ndarray, # shape (n,2): [SoC, mode]
         a: np.ndarray,     # shape (n,): 0 or 1
         t: int,
+        last_stage: bool = False
     ):
         """
         Compute the value of a state-action pair at a given time step.
@@ -241,6 +242,8 @@ class mdpAnalyticalBackwardSolver:
         p_f_total = self._compute_failure_probability(state,a,t)
         observation_k = self.mdp.get_obs(t)
         expected_one_stage_reward = self.expected_reward(a,observation_k,self.mdp.failure_penalty,p_f_total)
+        if last_stage:
+            return expected_one_stage_reward
         expected_future_value = self.expected_future_value(state,a,t,p_f_total)
         value = expected_one_stage_reward + self._GAMMA*expected_future_value
         return value
@@ -273,6 +276,110 @@ class mdpAnalyticalBackwardSolver:
         fail_cond = 1.0 - succ
         return np.trapz(fail_cond * pdf[:, None], w, axis=0)
 
+    # def _compute_failure_probability(
+    #     self,
+    #     states: np.ndarray,    # shape (n,2): [SoC (in %), mode]
+    #     actions: np.ndarray,   # shape (n,), each 0 or 1
+    #     t: int
+    # ) -> np.ndarray:
+    #     """
+    #     Compute the true p_fail = p_B + (1 - p_B)*p_{M|B=0} for each (state,action).
+    #     This matches the MCS order: (1) draw solar G -> check battery -> if survive, check wind.
+    #     """
+
+    #     n = states.shape[0]
+    #     p_fail = np.zeros(n, dtype=float)
+
+    #     # 1) Extract current stored energy (joules) and required energy (joules)
+    #     #    for each state,action at time t.
+    #     #    Note: state[:,0] is SoC in percent; we must convert to joules.
+    #     C_joules = self.mdp.transition_logic.soc_to_energy(states[:, 0])
+    #     required = self.mdp.transition_logic.get_required_energy(states, actions)
+
+    #     # 2) Build the Beta distribution for solar at time t:
+    #     α = self.mdp.env_provider.get_solar_alpha(t)
+    #     β = self.mdp.env_provider.get_solar_beta(t)
+    #     G_max = self.G_MAX  # maximum possible solar gain in joules
+
+    #     solar_dist = beta(a=α, b=β, loc=0.0, scale=G_max)
+
+    #     # 3) For each i, compute p_B[i] = P{ G < (required - C) }.
+    #     #    If (required[i] - C[i]) <= 0, then p_B[i] = 0 (no battery fail possible).
+    #     deficits = required - C_joules   # shape = (n,)
+    #     # To avoid negative arguments to Beta CDF, clip:
+    #     u = np.clip(deficits / G_max, 0.0, 1.0)  # dimensionless
+    #     p_B = solar_dist.cdf(u)                  # shape = (n,)
+    #     p_B = np.where(deficits>G_max,1.0,deficits)
+
+    #     # 4) Now compute p_M_conditional[i] = P{ mech fail | G >= (required[i] - C[i]) }.
+    #     #    If required[i] <= C[i], then debthreshold = 0, i.e. G >= 0 always, so p_M_conditional = p_M_uncond.
+    #     #    If required[i] > C[i], then battery only survives if G >= (required - C).  We must reweight wind‐fail over that region.
+    #     #
+    #     #    We will do a 2D numerical integral:
+    #     #      numerator_i   = ∫_{G = max(0, required[i]-C[i])}^{G_max} [P(mech fail | action, state)] * f_G(G) dG
+    #     #      denominator_i = ∫_{G = max(0, required[i]-C[i])}^{G_max} f_G(G) dG   = 1 - p_B[i]
+    #     #
+    #     #    Since mechanical failure prob does NOT depend on G, but DOES depend on the original state,
+    #     #    we can actually factor out “∫f_G(G) dG” if (required[i] <= C[i]) OR if we assume independence.
+    #     #    But to mirror exactly what MC does, we explicitly exclude the region G < (required-C).
+    #     #
+
+    #     # Precompute unconditional mechanical‐fail p_M_uncond[i] for each i:
+    #     p_M_uncond = self._mechanical_failure_probability(states, actions, t)
+    #     # Note: p_M_uncond[i] = P{ mech fail } if you attempt the action, regardless of solar.
+
+    #     # Now build p_M_conditional array of length n.
+    #     p_M_cond = np.zeros(n, dtype=float)
+
+    #     # If required[i] <= C[i], then p_B[i] = 0 and “battery survive” region is G ∈ [0, G_max].
+    #     # So p_M_cond[i] = p_M_uncond[i].
+    #     surv_all = (deficits <= 0)   # boolean mask
+    #     p_M_cond[surv_all] = p_M_uncond[surv_all]
+
+    #     # For the indices where deficits > 0, the battery‐survive region is G ≥ deficits[i].
+    #     # Then mechanical_fail only “counts” over that tail of the Beta.
+    #     idx = np.nonzero(deficits > 0)[0]
+    #     if idx.size > 0:
+    #         # We'll do a Gauss‐Legendre quadrature over G ∈ [0, G_max], but we only integrate
+    #         # from G_min = deficits[i] to G_max.  We'll build a single grid in G and then loop.
+    #         m = 200
+    #         # Gauss‐Legendre nodes x_j ∈ [−1, 1], weights w_j ∈ [0,2].
+    #         x, w = leggauss(m)
+    #         # Map to [0, G_max]:
+    #         G_nodes = 0.5 * (x + 1) * G_max      # shape (m,)
+    #         pdf_G   = solar_dist.pdf(G_nodes)   # shape (m,)
+
+    #         for i_ in idx:
+    #             thr = deficits[i_]            # the cutoff = (E_i - C_i)
+    #             if thr >= G_max:
+    #                 # Then no G ∈ [thr, G_max] exists except measure zero, so the denominator→0,
+    #                 # and effectively p_M_cond[i_] = 0 (since you never survive battery).
+    #                 p_M_cond[i_] = 0.0
+    #                 continue
+
+    #             # Build a mask of which G_nodes lie in [thr, G_max].
+    #             survive_mask = (G_nodes >= thr)
+    #             if not survive_mask.any():
+    #                 p_M_cond[i_] = 0.0
+    #                 continue
+
+    #             # ∫_{G=thr}^{G_max} f_G(G) dG  ≈  sum_{j: G_j≥thr}  pdf_G[j] * (w_j * (G_max/2))
+    #             denom = np.sum(pdf_G[survive_mask] * w[survive_mask]) * (G_max / 2.0)
+
+    #             # For ∫ P(mech fail) * f_G(G) dG over G ∈ [thr, G_max]:
+    #             # Since mechanical‐fail(i_) does NOT depend on G (it only depends on (state[i_], action[i_])),
+    #             # we can just multiply p_M_uncond[i_] by denom.  (Wind‐failure and solar are independent.)
+    #             num = p_M_uncond[i_] * denom
+
+    #             # Finally:
+    #             p_M_cond[i_] = num / (denom + 1e-16)  # = p_M_uncond[i_] (but ensures denominator>0)
+    #             # In fact, p_M_cond[i_] == p_M_uncond[i_], because wind‐fail is independent of G.
+    #             # We do this explicitly only to illustrate the conditioning.
+
+    #     # Now build the final p_fail array:
+    #     p_fail = p_B + (1.0 - p_B) * p_M_cond
+    #     return p_fail
+
     def _compute_failure_probability(
         self,
         states: np.ndarray,    # shape (n,2): [SoC (in %), mode]
@@ -280,100 +387,31 @@ class mdpAnalyticalBackwardSolver:
         t: int
     ) -> np.ndarray:
         """
-        Compute the true p_fail = p_B + (1 - p_B)*p_{M|B=0} for each (state,action).
-        This matches the MCS order: (1) draw solar G -> check battery -> if survive, check wind.
+        Vectorized analytic p_fail = p_B + (1 - p_B)*p_M,
+        where p_B = Beta-CDF((required - C)/G_MAX),
+        and p_M is the unconditional mechanical-failure prob.
         """
 
-        n = states.shape[0]
-        p_fail = np.zeros(n, dtype=float)
-
-        # 1) Extract current stored energy (joules) and required energy (joules)
-        #    for each state,action at time t.
-        #    Note: state[:,0] is SoC in percent; we must convert to joules.
+        # 1) Energy terms
         C_joules = self.mdp.transition_logic.soc_to_energy(states[:, 0])
         required = self.mdp.transition_logic.get_required_energy(states, actions)
+        deficits = required - C_joules  # shape = (n,)
 
-        # 2) Build the Beta distribution for solar at time t:
+        # 2) Normalized deficit ∈ [0,1]
+        u = np.clip(deficits / self.G_MAX, 0.0, 1.0)
+
+        # 3) Solar-failure probability p_B
         α = self.mdp.env_provider.get_solar_alpha(t)
         β = self.mdp.env_provider.get_solar_beta(t)
-        G_max = self.G_MAX  # maximum possible solar gain in joules
+        solar_dist = beta(a=α, b=β, loc=0.0)
+        p_B = solar_dist.cdf(u)  # shape = (n,)
 
-        solar_dist = beta(a=α, b=β, loc=0.0, scale=G_max)
+        # 4) Mechanical-failure probability p_M (vectorized)
+        p_M = self._mechanical_failure_probability(states, actions, t)  # shape = (n,)
 
-        # 3) For each i, compute p_B[i] = P{ G < (required - C) }.
-        #    If (required[i] - C[i]) <= 0, then p_B[i] = 0 (no battery fail possible).
-        deficits = required - C_joules   # shape = (n,)
-        # To avoid negative arguments to Beta CDF, clip:
-        u = np.clip(deficits / G_max, 0.0, 1.0)  # dimensionless
-        p_B = solar_dist.cdf(u)                  # shape = (n,)
+        # 5) Total failure
+        p_fail = p_B + (1.0 - p_B) * p_M
 
-        # 4) Now compute p_M_conditional[i] = P{ mech fail | G >= (required[i] - C[i]) }.
-        #    If required[i] <= C[i], then debthreshold = 0, i.e. G >= 0 always, so p_M_conditional = p_M_uncond.
-        #    If required[i] > C[i], then battery only survives if G >= (required - C).  We must reweight wind‐fail over that region.
-        #
-        #    We will do a 2D numerical integral:
-        #      numerator_i   = ∫_{G = max(0, required[i]-C[i])}^{G_max} [P(mech fail | action, state)] * f_G(G) dG
-        #      denominator_i = ∫_{G = max(0, required[i]-C[i])}^{G_max} f_G(G) dG   = 1 - p_B[i]
-        #
-        #    Since mechanical failure prob does NOT depend on G, but DOES depend on the original state,
-        #    we can actually factor out “∫f_G(G) dG” if (required[i] <= C[i]) OR if we assume independence.
-        #    But to mirror exactly what MC does, we explicitly exclude the region G < (required-C).
-        #
-
-        # Precompute unconditional mechanical‐fail p_M_uncond[i] for each i:
-        p_M_uncond = self._mechanical_failure_probability(states, actions, t)
-        # Note: p_M_uncond[i] = P{ mech fail } if you attempt the action, regardless of solar.
-
-        # Now build p_M_conditional array of length n.
-        p_M_cond = np.zeros(n, dtype=float)
-
-        # If required[i] <= C[i], then p_B[i] = 0 and “battery survive” region is G ∈ [0, G_max].
-        # So p_M_cond[i] = p_M_uncond[i].
-        surv_all = (deficits <= 0)   # boolean mask
-        p_M_cond[surv_all] = p_M_uncond[surv_all]
-
-        # For the indices where deficits > 0, the battery‐survive region is G ≥ deficits[i].
-        # Then mechanical_fail only “counts” over that tail of the Beta.
-        idx = np.nonzero(deficits > 0)[0]
-        if idx.size > 0:
-            # We'll do a Gauss‐Legendre quadrature over G ∈ [0, G_max], but we only integrate
-            # from G_min = deficits[i] to G_max.  We'll build a single grid in G and then loop.
-            m = 200
-            # Gauss‐Legendre nodes x_j ∈ [−1, 1], weights w_j ∈ [0,2].
-            x, w = leggauss(m)
-            # Map to [0, G_max]:
-            G_nodes = 0.5 * (x + 1) * G_max      # shape (m,)
-            pdf_G   = solar_dist.pdf(G_nodes)   # shape (m,)
-
-            for i_ in idx:
-                thr = deficits[i_]            # the cutoff = (E_i - C_i)
-                if thr >= G_max:
-                    # Then no G ∈ [thr, G_max] exists except measure zero, so the denominator→0,
-                    # and effectively p_M_cond[i_] = 0 (since you never survive battery).
-                    p_M_cond[i_] = 0.0
-                    continue
-
-                # Build a mask of which G_nodes lie in [thr, G_max].
-                survive_mask = (G_nodes >= thr)
-                if not survive_mask.any():
-                    p_M_cond[i_] = 0.0
-                    continue
-
-                # ∫_{G=thr}^{G_max} f_G(G) dG  ≈  sum_{j: G_j≥thr}  pdf_G[j] * (w_j * (G_max/2))
-                denom = np.sum(pdf_G[survive_mask] * w[survive_mask]) * (G_max / 2.0)
-
-                # For ∫ P(mech fail) * f_G(G) dG over G ∈ [thr, G_max]:
-                # Since mechanical‐fail(i_) does NOT depend on G (it only depends on (state[i_], action[i_])),
-                # we can just multiply p_M_uncond[i_] by denom.  (Wind‐failure and solar are independent.)
-                num = p_M_uncond[i_] * denom
-
-                # Finally:
-                p_M_cond[i_] = num / (denom + 1e-16)  # = p_M_uncond[i_] (but ensures denominator>0)
-                # In fact, p_M_cond[i_] == p_M_uncond[i_], because wind‐fail is independent of G.
-                # We do this explicitly only to illustrate the conditioning.
-
-        # Now build the final p_fail array:
-        p_fail = p_B + (1.0 - p_B) * p_M_cond
         return p_fail
 
     def solve(self) -> None:
@@ -383,10 +421,13 @@ class mdpAnalyticalBackwardSolver:
         states = self.states
         action_list = [np.array(0)[np.newaxis],np.array(1)[np.newaxis]]
         values = np.zeros(2)
-        for t in tqdm(range(self.horizon-2, -1, -1)):
+        for t in tqdm(range(self.horizon-1, -1, -1)):
             for i, s in enumerate(states[:-1]):
                 for a in action_list:
-                    values[a] = self._value(s[np.newaxis],a,t)
+                    if t == self.horizon-1:
+                        values[a] = self._value(s[np.newaxis],a,t,True)
+                    else:
+                        values[a] = self._value(s[np.newaxis],a,t)
  
                 self.future_value_table[i, t] = max(values)
                 # self.optimal_action_table[i,t] = np.argmax(values)

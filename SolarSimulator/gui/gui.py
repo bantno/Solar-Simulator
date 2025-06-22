@@ -231,8 +231,10 @@ class SimulationGUI(QWidget):
             job_args = [(*args, save_history, full_history_eps) for args in param_list]
 
             # create simulations (parallel or serial)
+            num_cores = multiprocessing.cpu_count()-1
             if use_multiproc:
-                with multiprocessing.Pool() as pool:
+                print(f"Starting simulation with multiprocessing using {num_cores} cores.")
+                with multiprocessing.Pool(processes=num_cores) as pool:
                     sims = pool.map(create_simulation_wrapper, job_args)
             else:
                 sims = [create_simulation_wrapper(arg) for arg in job_args]

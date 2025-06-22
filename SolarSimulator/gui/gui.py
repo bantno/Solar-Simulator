@@ -243,7 +243,8 @@ class SimulationGUI(QWidget):
             total_episodes = config.get("episodes", full_history_eps)
             manager = SimulationRunManager(
                 episodes_per_simulation=total_episodes,
-                storage_dir="simulation_results"
+                storage_dir="simulation_results",
+                sim_name_prefix=runner.config_basename
             )
             manager.run_simulations(sims, use_multiprocessing=use_multiproc)
 

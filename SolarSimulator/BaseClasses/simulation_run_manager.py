@@ -1,6 +1,7 @@
 import os
 import multiprocessing
 from datetime import datetime
+from typing import Optional
 from BaseClasses.simulation_storage import SimulationStorageHDF5
 
 def _run_one_sim(args):
@@ -57,21 +58,25 @@ class SimulationRunManager:
     A generic manager for running multiple simulations and storing each simulation run's
     episodes together as a batch in one file (all_simulations.h5).
     """
-    def __init__(self, episodes_per_simulation: int, storage_dir: str):
+    def __init__(self,
+             episodes_per_simulation: int,
+             storage_dir: str,
+             sim_name_prefix: Optional[str] = None):
         """
         Parameters:
             episodes_per_simulation (int): Number of episodes to run for each simulation instance.
             storage_dir (str): Directory where the batch HDF5 file will be stored.
         """
+        self.sim_name_prefix = sim_name_prefix
         self.episodes_per_simulation = episodes_per_simulation
         # Get current timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         # Example metadata – you can substitute or extend this
-        sim_name = f"sim_{episodes_per_simulation}_eps"
+        prefix = self.sim_name_prefix or f"sim_{episodes_per_simulation}_eps"
 
         # Create unique filename
-        unique_filename = f"{sim_name}_{timestamp}.h5"
+        unique_filename = f"{prefix}_{timestamp}.h5"
 
         # Join with the storage directory
         batch_path = os.path.join(storage_dir, unique_filename)

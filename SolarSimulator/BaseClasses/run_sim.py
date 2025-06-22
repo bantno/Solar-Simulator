@@ -2,6 +2,8 @@ import argparse
 import multiprocessing
 from typing import List, Dict, Tuple, Optional
 from itertools import product
+import os
+
 
 import yaml
 import numpy as np
@@ -10,7 +12,7 @@ import pandas as pd
 from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.environment_provider_base import StochasticWindSolarEnvironmentProvider
 from BaseClasses.mdp_base import stochasticMDP
-from BaseClasses.backward_induction_base import mdpBackwardSolver, mdpAnalyticalBackwardSolver
+from BaseClasses.backward_induction_base import mdpAnalyticalBackwardSolver
 from BaseClasses.simulation_base import (
     OptimalContinuousAnalyticalPolicySimulation,
     UnifiedThresholdContinuousSimulation,
@@ -97,12 +99,14 @@ class SimulationFactory:
         config: Dict,
         location: Dict,
         horizon: int,
-        failure_penalty: float
+        failure_penalty: float,
+        config_name: Optional[str] = None,
     ):
         """
         Factory to set up MDP parameters and simulations
         for given config, location, horizon, and penalty.
         """
+        self.config_name = config_name
         self.config = config
         self.location = location
         self.horizon = horizon
@@ -166,6 +170,7 @@ class SimulationFactory:
         save_states: bool = False,
         full_history_episodes: Optional[int] = None,
     ):
+        
         state0 = np.array([100.0, 0])
         start_str = self.start_dt.strftime("%Y-%m-%d %H:%M:%S")
         mdp = self.build_mdp(cap)
@@ -185,7 +190,7 @@ class SimulationFactory:
             return sim
         if sim_type == "optimal":
             # solver = mdpBackwardSolver(mdp, self.horizon)
-            solver = mdpAnalyticalBackwardSolver(mdp,self.horizon)
+            solver = mdpAnalyticalBackwardSolver(mdp,self.horizon, sim_name_prefix=self.config_name)
             solver.set_start_date(start_str)
             # solver.set_location(self.location)
             sim = OptimalContinuousAnalyticalPolicySimulation(
@@ -207,6 +212,7 @@ class YAMLSimulationRunner:
             self.config = yaml.safe_load(f)
         self.start_datetimes = self.config.get("start_datetimes",
                                        [ self.config.get("start_datetime") ])
+        self.config_basename = os.path.splitext(os.path.basename(config_path))[0]
         # Hyperparameter lists with fallbacks
         #  — allow multiple horizons
         self.horizons = self.config.get("horizons") or [self.config.get("horizon")]
@@ -258,7 +264,7 @@ class YAMLSimulationRunner:
                 self.failure_penalties,
                 self.config["battery_capacities"],
             ):
-                factory = SimulationFactory(self.config, loc, H, fp)
+                factory = SimulationFactory(self.config, loc, H, fp,config_name=self.config_basename)
                 params.append((factory, "optimal", cap, None, None))
 
         return params
@@ -288,6 +294,7 @@ class YAMLSimulationRunner:
         manager = SimulationRunManager(
             episodes_per_simulation=self.config.get("episodes", 3000),
             storage_dir=self.config.get("storage_dir", "."),
+            sim_name_prefix=self.config_basename
         )
         manager.run_simulations(sims, use_multiprocessing=use_multiprocessing)
 

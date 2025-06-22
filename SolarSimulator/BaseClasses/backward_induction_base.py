@@ -1,6 +1,7 @@
 import numpy as np
 from tqdm import tqdm
 from BaseClasses.mdp_base import AbstractMDP,stochasticMDP
+from typing import Optional
 from scipy.stats import beta, weibull_min
 from scipy.special import betainc
 
@@ -189,9 +190,15 @@ class mdpAnalyticalBackwardSolver:
     and fills a future-value table, which can then be visualized.
     """
 
-    def __init__(self, mdp:stochasticMDP, horizon: int):
+    def __init__(
+        self,
+        mdp: stochasticMDP,
+        horizon: int,
+        sim_name_prefix: Optional[str] = None,
+    ):
         self.mdp = mdp
         self.horizon = horizon
+        self.sim_name_prefix = sim_name_prefix
         # ─── derive dynamic SoC grid from passed-in soc_increment ───────────────
         # (this replaces the old 1%/101-bin assumption)
         self.soc_increment: float = float(self.mdp.soc_increment)
@@ -431,7 +438,14 @@ class mdpAnalyticalBackwardSolver:
  
                 self.future_value_table[i, t] = max(values)
                 # self.optimal_action_table[i,t] = np.argmax(values)
-        filename = f"future_value_table_{self.mdp.battery_capacity_wh}Wh_{self.horizon}h_{self.mdp.failure_penalty}p_{self.start_date[0:12]}.npy"
+        prefix = self.sim_name_prefix or "future_value_table"
+        filename = (
+            f"{prefix}_"
+            f"{self.mdp.battery_capacity_wh}Wh_"
+            f"{self.horizon}h_"
+            f"{self.mdp.failure_penalty}p_"
+            f"{self.start_date[0:12]}.npy"
+        )
         np.save(filename, self.future_value_table)
         print("Value function table saved to:", filename)
 

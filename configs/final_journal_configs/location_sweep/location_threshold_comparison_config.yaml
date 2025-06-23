@@ -51,4 +51,4 @@ wind_thresholds:
 - 4.0
 - 6.0
 - 8.0
-
+energy_increment_wh: 5

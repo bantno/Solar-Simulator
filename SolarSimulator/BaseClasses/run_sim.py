@@ -265,14 +265,15 @@ class YAMLSimulationRunner:
                 params.append((factory, "threshold", cap, th, wth))
 
             # 2) Optimal-policy simulations, also over each failure_penalty:
-            for loc, H, fp, cap in product(
-                self.locations,
-                self.horizons,
-                self.failure_penalties,
-                self.config["battery_capacities"],
-            ):
-                factory = SimulationFactory(self.config, loc, H, fp,config_name=self.config_basename)
-                params.append((factory, "optimal", cap, None, None))
+            if self.config.get("include_optimal", True):
+                for loc, H, fp, cap in product(
+                    self.locations,
+                    self.horizons,
+                    self.failure_penalties,
+                    self.config["battery_capacities"],
+                ):
+                    factory = SimulationFactory(self.config, loc, H, fp,config_name=self.config_basename)
+                    params.append((factory, "optimal", cap, None, None))
 
         return params
 

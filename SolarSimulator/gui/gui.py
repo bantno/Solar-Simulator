@@ -94,9 +94,13 @@ class SimulationGUI(QWidget):
         config_layout.addWidget(self.config_input)
         config_layout.addWidget(self.browse_button)
 
+        # Checkboxes
         self.multiproc_checkbox = QCheckBox("Use Multiprocessing")
+        self.multiproc_checkbox.setChecked(True)
         self.save_history_checkbox = QCheckBox("Save Full State Info")
         self.save_history_checkbox.setChecked(False)
+        self.optimal_checkbox = QCheckBox("Include Optimal Algorithm")
+        self.optimal_checkbox.setChecked(True)
 
         self.full_state_label = QLabel("Number of Full History Episodes:")
         self.full_state_input = QSpinBox()
@@ -107,6 +111,7 @@ class SimulationGUI(QWidget):
         self.run_button.clicked.connect(self.run_simulation)
 
         layout.addLayout(config_layout)
+        layout.addWidget(self.optimal_checkbox)
         layout.addWidget(self.multiproc_checkbox)
         layout.addWidget(self.save_history_checkbox)
         layout.addWidget(self.full_state_label)
@@ -226,6 +231,9 @@ class SimulationGUI(QWidget):
 
             # build parameter list including all locations and horizons
             param_list = runner._build_param_list()
+            
+            # teach the runner whether to generate optimal-policy jobs
+            config["include_optimal"] = self.optimal_checkbox.isChecked()
 
             # prepare arguments for simulation creation
             job_args = [(*args, save_history, full_history_eps) for args in param_list]

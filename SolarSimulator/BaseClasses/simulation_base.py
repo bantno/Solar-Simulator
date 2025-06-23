@@ -86,10 +86,6 @@ class AbstractSimulation(ABC):
 
             # Check for failure condition.
             if state[1] == 2:
-                # print("Failure at time step", t)
-                # print("State:", state)
-                # print("Trajectory:", trajectory[t])  # prints the state before the failure state
-                # Return only the slices corresponding to completed steps.
                 return (trajectory[:t + 2],
                         actions[:t + 1],
                         rewards[:t + 1],
@@ -334,162 +330,6 @@ class AlwaysFloatSimulation(AbstractSimulation):
     
 
 ####################################################################################
-# State based transition simulation classes
-####################################################################################
-
-class ObservationThresholdSimulation(AbstractSimulation):
-    def __init__(self, mdp, horizon: int, initial_state: np.ndarray, observation_threshold: float, wind_threshold: float, env_provider=None):
-        super().__init__(mdp, horizon, initial_state, env_provider)
-        self.observation_threshold = observation_threshold
-        self.wind_threshold = wind_threshold
-        self.low_battery_threshold = 30.
-
-    def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
-        action = 0
-        is_wind_acceptable = wind_sample_ms < self.wind_threshold
-        is_observation_sufficient = whale_observation > self.observation_threshold
-        is_battery_sufficient = state[0] > self.low_battery_threshold
-        if is_wind_acceptable and is_observation_sufficient and is_battery_sufficient:
-            action = 1
-        return action
-
-class DeterministicOptimalSimulation(AbstractSimulation):
-    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray, env_provider=None):
-        super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
-        mdp_solver.solve()
-        self.mdp_solver = mdp_solver
-
-    def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
-        value_list = [-10000, -10000]
-        for action in [0, 1]:
-            next_state, reward = self.mdp.step(np.array([state]), np.array([action]), t)
-            value = self.mdp_solver.value_function(t, reward, next_state)
-            value_list[action] = value
-        return int(np.argmax(value_list))
-
-class OptimalPolicySimulation(AbstractSimulation):
-    """
-    Simulation class that selects the optimal action by evaluating the Bellman value 
-    for each action (0 or 1) using a backward induction solver.
-    
-    This class fits into the same framework as AlwaysFlySimulation and AlwaysFloatSimulation.
-    """
-
-    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray, env_provider=None):
-        """
-        Parameters:
-            mdp_solver: A backward induction solver that has computed the value function.
-                        It must have attributes `mdp` and a method `value_function(t, reward, next_state)`.
-            horizon (int): Total number of simulation time steps.
-            initial_state (np.ndarray): Starting state (e.g. [SoC, mode]).
-            env_provider: (Optional) An environment provider to sample solar, wind, and whale data.
-        """
-        # Initialize the simulation using the MDP from the solver.
-        super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
-        # Pre-solve the MDP (compute the value function using backward induction).
-        mdp_solver.solve()
-        self.mdp_solver = mdp_solver
-
-    def choose_action(self, state, solar_sample_j, wind_sample_ms, whale_observation, t) -> int:
-        """
-        For the current state and time t, simulate both possible actions (0 and 1)
-        using the MDP's step function, then evaluate the Bellman value (reward + γ * future value)
-        via the solver's value_function. The action with the highest value is returned.
-        """
-        # TODO: Ensure that this uses the samples provided to the method.
-        value_list = [-np.inf, -np.inf]
-        N=10000
-        states = np.full((N,2),state)
-        solar_samples = np.full((N,),solar_sample_j)
-        wind_samples = np.full((N,),wind_sample_ms)
-        
-        for action in [0, 1]:
-            # Roll forward one time step with the candidate action.
-            actions = np.full((N,),action)
-            next_states = self.mdp.transition_logic.transition_with_wind_and_energy(
-                states,
-                actions,
-                solar_samples,
-                wind_samples,
-                )
-            
-            rewards = self.mdp.reward(states, actions, next_states, t)
-            # Compute the value using the backward induction solver's value function.
-            value = self.mdp_solver.value_function(t, rewards, next_states)
-            value_list[action] = value
-        # Return the action that yields the highest value.
-        return int(np.argmax(value_list))
-    
-class OptimalAnalyticalPolicySimulation(AbstractSimulation):
-    """
-    Simulation class that selects the optimal action by evaluating the Bellman value 
-    for each action (0 or 1) using a backward induction solver.
-    """
-
-    def __init__(self, mdp_solver, horizon: int, initial_state: np.ndarray, env_provider=None):
-        # Initialize the simulation using the MDP from the solver.
-        super().__init__(mdp_solver.mdp, horizon, initial_state, env_provider)
-        # Pre-solve the MDP (compute the value function using backward induction).
-        mdp_solver.solve()
-        self.mdp_solver = mdp_solver
-
-    def choose_action(self, state, solar_sample_j, wind_sample_ms, whale_observation, t) -> int:
-        """
-        For the current state and time t, for each candidate action (0 or 1) we compute
-        the success probability and then use a two-outcome integration:
-        - With probability p_success, the transition is successful.
-        - With probability (1 - p_success), the transition fails (yielding a failure state).
-        The expected value is the weighted average of these two outcomes.
-        """
-
-        # List to hold the integrated value for each candidate action.
-        value_list = [None, None]
-        # Convert state to a numpy array (if not already) and compute current energy.
-        current_energy = self.mdp.transition_logic.soc_to_energy(np.array([state[0]]))[0]
-        # Define the failure state (typically a state indicating a crash/failure).
-        failure_state = np.array([[-1.0, 2]])
-
-        for action in [0, 1]:
-            # Compute the success probability for this action.
-            # (Assuming the transition model returns an array; take the first element.)
-            p_success = self.mdp.transition_logic.transition_model.compute_probability(
-                np.array([wind_sample_ms]),
-                np.array([action]),
-                np.array([state])
-            )[0]
-
-            # --- Compute the "successful" outcome ---
-            # Prepare inputs as one-sample arrays.
-            states_arr = np.array([state])
-            actions_arr = np.array([action])
-            # Use the energy gain (solar_sample_w) as given.
-            energy_gain = np.array([solar_sample_j])
-            # Calculate energy consumption for the given state and action.
-            energy_consumption = self.mdp.transition_logic._calculate_energy_consumption(states_arr, actions_arr)
-            # Determine the next state (and energy) if the transition succeeds.
-            next_state_success = self.mdp.transition_logic._update_energy_and_state(
-                states_arr,
-                energy_gain,
-                energy_consumption,
-                actions_arr
-            )
-            # Compute rewards for the successful outcome.
-            reward_success = self.mdp.reward(states_arr, actions_arr, next_state_success, t)[0]
-            # Evaluate the value function for the successful outcome.
-            value_success = self.mdp_solver.value_function(t, np.array([reward_success]), next_state_success)
-
-            # --- Compute the "failure" outcome ---
-            # Here, we define the failure state's reward and value.
-            reward_failure = self.mdp.reward(states_arr, actions_arr, failure_state, t)[0]
-
-            # --- Combine outcomes according to the success probability ---
-            expected_value = p_success * value_success + (1.0 - p_success) * reward_failure
-            value_list[action] = expected_value
-
-        # Return the action with the highest expected value.
-        return int(np.argmax(value_list))
-
-####################################################################################
 # Continuous Energy Simulation Classes
 ####################################################################################
 class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimulation):
@@ -584,7 +424,19 @@ class UnifiedThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
         
         self.observation_threshold = observation_threshold
         self.wind_threshold = wind_threshold
-        self.low_battery_threshold = 15.
+        self.low_battery_threshold = self.calculate_low_battery_threshold(mdp)
+
+    def calculate_low_battery_threshold(self, mdp):
+        """
+        Calculate the low battery threshold based on the MDP's transition logic.
+        This is a placeholder for a more complex calculation if needed.
+        """
+        timestep = 15*60 # 15 minutes in seconds TODO: make this not hardcoded
+        cruise_power = mdp.cruise_power
+        landing_power = mdp.landing_power
+        total_reserve_energy = (cruise_power + landing_power) * timestep
+        cutoff_soc = total_reserve_energy / mdp.transition_logic.battery_capacity_joules * 100  # Convert to percentage
+        return cutoff_soc
 
     def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
         

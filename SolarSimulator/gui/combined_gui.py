@@ -7,6 +7,7 @@ import re
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import math
 
 from cycler import cycler
 from numpy.polynomial.legendre import leggauss
@@ -356,6 +357,12 @@ class InspectorTab(QWidget):
         self.sim_list_widget.itemChanged.connect(self.on_sim_selection_changed)
         central.addWidget(self.sim_list_widget)
 
+        # Unselect All button
+        btn_unselect_all = QPushButton("Unselect All")
+        btn_unselect_all.clicked.connect(self.unselect_all_simulations)
+        central.addWidget(btn_unselect_all)
+
+
         # 3) Episode selector
         ctl = QHBoxLayout()
         ctl.addWidget(QLabel("Episode:"))
@@ -437,6 +444,17 @@ class InspectorTab(QWidget):
         ctl_line.addWidget(self.btn_toggle_line)
         ctl_line.addStretch()
         central.addLayout(ctl_line)
+
+    def unselect_all_simulations(self):
+        """
+        Uncheck every item in the simulation list
+        and trigger a plot update.
+        """
+        for i in range(self.sim_list_widget.count()):
+            item = self.sim_list_widget.item(i)
+            item.setCheckState(Qt.Unchecked)
+        self.on_sim_selection_changed()
+
 
     def open_file(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -587,7 +605,7 @@ class InspectorTab(QWidget):
                 # compute x in days
                 x_days = np.arange(len(y)) * self.time_step_min / (60 * 24)
                 if np.issubdtype(y.dtype, np.integer) or set(np.unique(y)).issubset({0, 1}):
-                    ax.step(x_days, y, where='mid', label=sim)
+                    ax.step(x_days, y, where='mid', label=self._legend_label(sim))
                 elif idx == 0:
                     ax.plot(x_days, y/3600, color='black')
                 elif idx == 3:
@@ -595,10 +613,8 @@ class InspectorTab(QWidget):
                 elif idx == 1 or idx == 2:
                     ax.plot(x_days, y, color='black')
                 else:
-                    ax.plot(x_days, y, label=sim)
+                    ax.plot(x_days, y, label=self._legend_label(sim))
             ax.set_ylabel(y_axis_label)
-            if idx == 0:
-                ax.legend(loc='upper right', frameon=True)
 
         # cumulative flight‐time subplot
         cf_ax = self.axes[-1]
@@ -610,12 +626,32 @@ class InspectorTab(QWidget):
         cf_ax.set_ylabel('Total Flight (hrs)')
         cf_ax.set_xlabel('Time (days)')
 
+        # only one legend, on the last axes, placed outside to the right
+        cf_ax.legend(loc='upper left',
+                    bbox_to_anchor=(1.02, 1.00),
+                    borderaxespad=0,
+                    frameon=True)
+
+        # make room on the right for that legend
+        self.fig.subplots_adjust(right=0.80)
+
         self.fig.suptitle(f"Episode {episode_name} across simulations")
         if not self.use_constrained_layout:
             self.fig.subplots_adjust(**self.layout_settings)
         self.canvas.draw()
         self.update_line_slider_range()
         self.fig.tight_layout(pad=2.0)
+    @staticmethod
+    def _legend_label(sim: str) -> str:
+        if sim.lower().startswith("optimal"):
+            return "Optimal"
+        # look for two floats after “Threshold_”
+        m = re.search(r"Threshold[_-]([\d\.]+)[_,-]([\d\.]+)", sim, re.IGNORECASE)
+        if m:
+            wind_th, obs_th = m.groups()
+            return f"Threshold ({wind_th}, {obs_th})"
+        # fallback
+        return sim
 
 # ------------------------------------------------------------------------------
 # 3) HDF5 Reward Plotter (from h5plotter.py)
@@ -673,7 +709,7 @@ class HDF5RewardPlotter:
 
             failure_percentage = grp.attrs.get('failure_percentage', np.nan)
             mean_reward = grp.attrs.get('average_reward', np.nan)
-            mean_failure_step = grp.attrs.get('average_reward', np.nan)
+            mean_failure_step = grp.attrs.get('average_failure_step', np.nan)
 
             if np.isnan(mean_reward):
                 rewards = []
@@ -753,7 +789,7 @@ class HDF5RewardPlotter:
 
         fig, ax = plt.subplots(figsize=(8, 6))
         for w in pivot.columns:
-            ax.plot(pivot.index, pivot[w], marker='x', label=f"Wind {w}")
+            ax.plot(pivot.index, pivot[w], marker='x', label=f"Wind Threshold {w} m/s")
 
         if self.opt_reward is not None:
             ax.axhline(
@@ -806,25 +842,27 @@ class HDF5RewardPlotter:
 
         # 4) Create the plot
         fig, ax = plt.subplots(figsize=(8, 6))
-        for w in pivot.columns:
-            ax.plot(
-                pivot.index,
-                pivot[w],
-                marker='o',
-                label=f"Wind {w}"
-            )
-
-        # 5) Optional optimal baseline
+        
+        # 5) Optimal baseline
         if hasattr(self, 'opt_failure_step') and self.opt_failure_step is not None:
             ax.axhline(
                 self.opt_failure_step,
                 linestyle='--',
+                color = "black",
                 label=f"Optimal Mean Failure Step ({self.opt_failure_step:.1f})"
             )
 
         # 6) Label axes
         ax.set_xlabel("Observation Threshold")
         ax.set_ylabel("Mean Failure Step")
+        
+        for w in pivot.columns:
+            ax.plot(
+                pivot.index,
+                pivot[w],
+                marker='o',
+                label=f"Wind Threshold {w} m/s"
+            )
 
         # 7) Move legend outside to the right
         ax.legend(
@@ -836,6 +874,7 @@ class HDF5RewardPlotter:
         ax.grid(True)
         plt.tight_layout()
         plt.show()
+
 
     def plot_failure_percentage_by_thresholds(
         self,
@@ -881,7 +920,7 @@ class HDF5RewardPlotter:
                 pivot.index,
                 pivot[w],
                 marker='s',
-                label=f"Wind {w}"
+                label=f"Wind Threshold {w} m/s"
             )
 
         # 5) Optional optimal baseline
@@ -1052,7 +1091,7 @@ class HDF5RewardPlotter:
         obs_thresholds: list[float] | None = None,
         wind_thresholds: list[float] | None = None,
         penalties: list[float] | None = None,
-        battery_capacity: float = 300,
+        battery_capacity: float = 350,
     ):
         """
         Line‐plot of <metric> vs latitude for a single battery capacity,
@@ -1155,6 +1194,128 @@ class HDF5RewardPlotter:
         plt.tight_layout()
         plt.show()
 
+
+    def plot_metric_surface_by_location(
+        self,
+        metric: str = "mean_reward",
+        algorithms: list[str] | None = None,
+        obs_thresholds: list[float] | None = None,
+        wind_thresholds: list[float] | None = None,
+        penalties: list[float] | None = None,
+        battery_capacity: float = 350,
+    ):
+        """
+        3D surface plots of <metric> vs (obs_threshold, wind_threshold) for each latitude,
+        arranged in rows of up to 3 subplots. Overlays the optimal‐policy as a flat plane.
+
+        Parameters:
+            metric:             summary column to plot (e.g. "mean_reward")
+            algorithms:         list of non-optimal sim_types to include (None = all)
+            obs_thresholds:     list of obs_thresholds to include (None = all)
+            wind_thresholds:    list of wind_thresholds to include (None = all)
+            penalties:          list of failure_penalty values to include (None = all)
+            battery_capacity:   battery capacity (Wh) to restrict to
+        """
+        # --- 1) Load data & split optimal vs thresholds ---
+        df = self._get_summary()
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)].copy()
+        df_opt  = df[ df['sim_type'].str.contains('optimal', case=False, na=False)].copy()
+
+        # --- 2) Apply filters ---
+        df_main = df_main[df_main['battery_capacity'] == battery_capacity]
+        df_opt  = df_opt [df_opt ['battery_capacity'] == battery_capacity]
+
+        if algorithms:
+            df_main = df_main[df_main['sim_type'].isin(algorithms)]
+
+        # thresholds lists
+        if obs_thresholds:
+            df_main = df_main[df_main['observation_threshold'].isin(obs_thresholds)]
+        else:
+            obs_thresholds = sorted(df_main['observation_threshold'].unique())
+
+        if wind_thresholds:
+            df_main = df_main[df_main['wind_threshold'].isin(wind_thresholds)]
+        else:
+            wind_thresholds = sorted(df_main['wind_threshold'].unique())
+
+        if penalties:
+            df_main = df_main[df_main['failure_penalty'].isin(penalties)]
+            df_opt  = df_opt [df_opt ['failure_penalty'].isin(penalties)]
+
+        if df_main.empty:
+            raise ValueError("No data after filtering; check your thresholds & filters.")
+
+        # --- 3) Prepare optimal‐policy lookup ---
+        latitudes = sorted(df_main['latitude'].unique())
+        opt_lookup = {}
+        if not df_opt.empty:
+            opt_series = (
+                df_opt
+                .groupby('latitude')[metric]
+                .mean()
+                .reindex(latitudes)
+            )
+            opt_lookup = opt_series.to_dict()
+
+        # --- 4) Create subplot grid ---
+        n_lat   = len(latitudes)
+        n_cols  = min(3, n_lat)
+        n_rows  = math.ceil(n_lat / n_cols)
+        fig = plt.figure(figsize=(6 * n_cols, 5 * n_rows))
+
+        for idx, lat in enumerate(latitudes):
+            ax = fig.add_subplot(n_rows, n_cols, idx + 1, projection='3d')
+            df_lat = df_main[df_main['latitude'] == lat]
+
+            # 5) Pivot to obs×wind grid
+            loc = (
+                df_lat
+                .groupby(['observation_threshold','wind_threshold'])[metric]
+                .mean()
+                .reset_index()
+                .pivot(index='observation_threshold',
+                    columns='wind_threshold',
+                    values=metric)
+                .reindex(index=obs_thresholds, columns=wind_thresholds)
+            )
+
+            OBS, WIND = np.meshgrid(obs_thresholds, wind_thresholds, indexing='ij')
+            Z = loc.values  # shape (len(obs), len(wind))
+
+            # 6) Plot threshold‐policy surface
+            surf = ax.plot_surface(
+                OBS, WIND, Z,
+                cmap='viridis',
+                edgecolor='k',
+                alpha=0.8,
+                linewidth=0.5
+            )
+
+            # 7) Overlay optimal‐policy plane if available
+            if lat in opt_lookup and not np.isnan(opt_lookup[lat]):
+                z0     = opt_lookup[lat]
+                Zplane = np.full_like(Z, z0)
+                ax.plot_surface(
+                    OBS, WIND, Zplane,
+                    color='red',
+                    alpha=0.3,
+                    linewidth=0,
+                    label='_nolegend_'
+                )
+
+            # 8) Labels & title
+            ax.set_title(f"Latitude = {lat}")
+            ax.set_xlabel("Obs threshold")
+            ax.set_ylabel("Wind threshold")
+            ax.set_zlabel(metric.replace('_',' ').title())
+            ax.view_init(elev=25, azim=-60)
+
+        # 9) Shared colorbar
+        fig.colorbar(surf, ax=fig.get_axes(), shrink=0.6, aspect=20,
+                    label=metric.replace('_',' ').title())
+        plt.tight_layout()
+        plt.show()
 
     def plot_reward_vs_penalty(self):
         df = self._get_summary()

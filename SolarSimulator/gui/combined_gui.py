@@ -1092,95 +1092,101 @@ class HDF5RewardPlotter:
         plt.tight_layout()
         plt.show()
 
-
-    def plot_metric_by_start_date(
+    def plot_metric_by_penalty(
         self,
         metric: str = "mean_reward",
         algorithms: list[str] | None = None,
         obs_thresholds: list[float] | None = None,
         wind_thresholds: list[float] | None = None,
-        penalties: list[float] | None = None,
         battery_capacity: float = 300,
     ):
         """
-        Line‐plot of <metric> vs mission start date for a single battery capacity,
+        Line‐plot of <metric> vs failure penalty for a single battery capacity,
         with one line per (obs, wind) threshold combo plus the optimal policy.
 
         Supported metrics:
-        • "mean_reward"
-        • "mean_failure_step"   — plotted as % completed before failure
-        • "failure_percentage"
-        • "flight_hours_per_day"
+          • "mean_reward"                  — average total reward
+          • "mean_failure_step"            — % mission completed before failure
+          • "flight_hours_per_day"         — average flight‐hours per day
         """
         df = self._get_summary()
-        df['start_time'] = pd.to_datetime(df['start_time'])
-
+        # split into threshold and optimal runs
         df_main = df[~df['sim_type'].str.contains('optimal', case=False)]
-        df_opt  = df[ df['sim_type'].str.contains('optimal', case=False)]
+        df_opt  = df[df['sim_type'].str.contains('optimal', case=False)]
 
-        # apply filters...
+        # 1) filter by capacity
         df_main = df_main[df_main['battery_capacity'] == battery_capacity]
         df_opt  = df_opt [df_opt ['battery_capacity'] == battery_capacity]
+
+        # 2) apply other filters
         if algorithms:
             df_main = df_main[df_main['sim_type'].isin(algorithms)]
         if obs_thresholds:
             df_main = df_main[df_main['observation_threshold'].isin(obs_thresholds)]
+            df_opt   = df_opt  [df_opt  ['observation_threshold'].isin(obs_thresholds)]
         if wind_thresholds:
             df_main = df_main[df_main['wind_threshold'].isin(wind_thresholds)]
-        if penalties:
-            df_main = df_main[df_main['failure_penalty'].isin(penalties)]
-            df_opt  = df_opt [df_opt ['failure_penalty'].isin(penalties)]
+            df_opt   = df_opt  [df_opt  ['wind_threshold'].isin(wind_thresholds)]
+
         if df_main.empty:
             raise ValueError(f"No data for capacity={battery_capacity} after filtering.")
 
-        # compute plot_val and ylabel
-        minutes_per_step = 15
-        steps_per_day    = 24 * 60 / minutes_per_step
-        if metric == "mean_failure_step":
-            df_main['plot_val'] = 100.0 * df_main['mean_failure_step'] / df_main['horizon']
-            ylabel = "% Completed Before Failure"
-        elif metric == "flight_hours_per_day":
-            df_main['duration_days'] = df_main['horizon'] / steps_per_day
-            df_main['plot_val'] = df_main['average_flight_hrs'] / df_main['duration_days']
-            ylabel = "Flight Hours per Day"
-        else:
-            df_main['plot_val'] = df_main[metric]
-            ylabel = metric.replace('_',' ').title()
+        # 3) prepare the temporary DataFrame with plot_val and combo_label
+        steps_per_day = 24 * 60 / 15  # for flight_hours_per_day case
 
-        # prepare pivot
-        df_main['start_date'] = df_main['start_time'].dt.normalize()
-        df_main['combo'] = df_main.apply(
+        if metric == "flight_hours_per_day":
+            tmp = df_main[['failure_penalty','average_flight_hrs','horizon',
+                           'observation_threshold','wind_threshold']].copy()
+            tmp['duration_days'] = tmp['horizon'] / steps_per_day
+            tmp['plot_val'] = tmp['average_flight_hrs'] / tmp['duration_days']
+            ylabel = "Flight Hours per Day"
+        elif metric == "mean_failure_step":
+            tmp = df_main[['failure_penalty','mean_failure_step','horizon',
+                           'observation_threshold','wind_threshold']].copy()
+            tmp['plot_val'] = tmp.apply(
+                lambda r: (r['mean_failure_step'] / r['horizon']) * 100.0,
+                axis=1
+            )
+            ylabel = "% Mission Completed Before Failure"
+        else:  # mean_reward or any other raw metric
+            tmp = df_main[['failure_penalty', metric,
+                           'observation_threshold','wind_threshold']].copy()
+            tmp['plot_val'] = tmp[metric]
+            ylabel = metric.replace('_', ' ').title()
+
+        tmp['combo_label'] = tmp.apply(
             lambda r: f"Obs {r['observation_threshold']}, Wind {r['wind_threshold']}",
             axis=1
         )
-        pivot = (
-            df_main
-            .groupby(['start_date','combo'])['plot_val']
-            .mean()
-            .unstack('combo')
-            .sort_index()
-        )
 
-        # optimal baseline
+        pivot = tmp.pivot(
+            index='failure_penalty',
+            columns='combo_label',
+            values='plot_val'
+        ).sort_index()
+
+        # 4) build the optimal‐policy baseline series (if any)
         opt_series = None
         if not df_opt.empty:
-            df_opt['start_date'] = pd.to_datetime(df_opt['start_time']).dt.normalize()
-            if metric == "mean_failure_step":
-                df_opt['plot_val'] = 100.0 * df_opt['mean_failure_step'] / df_opt['horizon']
-            elif metric == "flight_hours_per_day":
-                df_opt['duration_days'] = df_opt['horizon'] / steps_per_day
-                df_opt['plot_val'] = df_opt['average_flight_hrs'] / df_opt['duration_days']
+            if metric == "flight_hours_per_day":
+                o = df_opt[['failure_penalty','average_flight_hrs','horizon']].copy()
+                o['duration_days'] = o['horizon'] / steps_per_day
+                o['plot_val'] = o['average_flight_hrs'] / o['duration_days']
+            elif metric == "mean_failure_step":
+                o = df_opt[['failure_penalty','mean_failure_step','horizon']].copy()
+                o['plot_val'] = o.apply(
+                    lambda r: (r['mean_failure_step'] / r['horizon']) * 100.0,
+                    axis=1
+                )
             else:
-                df_opt['plot_val'] = df_opt[metric]
-            opt_series = (
-                df_opt
-                .groupby('start_date')['plot_val']
-                .mean()
-                .reindex(pivot.index)
-            )
+                o = df_opt[['failure_penalty', metric]].copy()
+                o['plot_val'] = o[metric]
 
-        # plotting
-        fig, ax = plt.subplots(figsize=(6,6))
+            opt_series = o.groupby('failure_penalty')['plot_val'] \
+                          .mean().reindex(pivot.index)
+
+        # 5) actually plot
+        fig, ax = plt.subplots(figsize=(6, 6))
         for combo in pivot.columns:
             ax.plot(
                 pivot.index,
@@ -1191,29 +1197,22 @@ class HDF5RewardPlotter:
 
         if opt_series is not None:
             ax.plot(
-                pivot.index,
+                opt_series.index,
                 opt_series.values,
                 linestyle='--',
                 marker='s',
-                color='k',
                 label='Optimal'
             )
 
-        ax.set_xlabel("Mission Start Date")
+        ax.set_xlabel("Failure Penalty")
         ax.set_ylabel(ylabel)
-        ax.set_title(f"{ylabel} vs Start Date (Capacity = {battery_capacity} Wh)")
+        ax.set_title(f"{ylabel} by Failure Penalty (Capacity = {battery_capacity} Wh)")
         ax.legend(loc='best')
         ax.grid(True)
-
-        # format the date axis
-        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-        fig.autofmt_xdate()
-
         plt.tight_layout()
         plt.show()
 
-
+    
     def plot_metric_surface_by_location(
         self,
         metric: str = "mean_reward",
@@ -1720,6 +1719,7 @@ class RewardPlotterTab(QWidget):
             "Metric by Location",
             "Metric by Duration",
             "Metric by Mission Start Date",
+            "Metric by Penalty",
         ])
         layout.addWidget(QLabel("Select Plot Type:"))
         layout.addWidget(self.plot_combo)
@@ -1831,6 +1831,15 @@ class RewardPlotterTab(QWidget):
                     algorithms     = algos,
                     obs_thresholds = obs,
                     wind_thresholds= wind
+                )
+            
+            elif choice == "Metric by Penalty":
+                self.plotter.plot_metric_by_penalty(
+                    metric         = metric,
+                    algorithms     = algos,
+                    obs_thresholds = obs,
+                    wind_thresholds= wind,
+                    # battery_capacity will default to 300 Wh unless you add a UI for it
                 )
             elif choice == "Metric by Location":
                 self.plotter.plot_metric_by_location(

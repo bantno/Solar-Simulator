@@ -136,12 +136,11 @@ def parse_filename(filename: str):
     """
     base = os.path.basename(filename)
     pattern = (
-        r"future_value_table_"
         r"(?P<cap>[\d\.]+)Wh_"
         r"(?P<horizon>\d+)h_"
         r"(?P<pen>[\d\.]+)p\.npy$"
     )
-    m = re.match(pattern, base)
+    m = re.search(pattern, base)
     if not m:
         raise ValueError(f"Filename '{base}' does not match.")
     return float(m.group("cap")), int(m.group("horizon")), float(m.group("pen"))

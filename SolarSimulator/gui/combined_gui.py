@@ -962,6 +962,107 @@ class HDF5RewardPlotter:
         plt.tight_layout()
         plt.show()
 
+    def plot_metric_by_capacity_by_location(
+        self,
+        metric: str = "mean_reward",
+        algorithms: list[str] | None = None,
+        obs_thresholds: list[float] | None = None,
+        wind_thresholds: list[float] | None = None,
+        penalties: list[float] | None = None,
+    ):
+        """
+        Line‐plot of <metric> vs battery capacity for each location,
+        with one line per (obs, wind) threshold combo plus the optimal policy.
+
+        Parameters:
+            metric:           summary column to plot (e.g. "mean_reward",
+                              "failure_percentage", "mean_failure_step")
+            algorithms:       list of sim_type names to include (None = all non-optimal)
+            obs_thresholds:   list of observation thresholds to include (None = all)
+            wind_thresholds:  list of wind thresholds to include (None = all)
+            penalties:        list of failure_penalty values to include (None = all)
+        """
+        # 1) Load and split out optimal vs threshold‐policy runs
+        df = self._get_summary()
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)].copy()
+        df_opt  = df[ df['sim_type'].str.contains('optimal', case=False, na=False)].copy()
+
+        # 2) Apply filters
+        if algorithms:
+            df_main = df_main[df_main['sim_type'].isin(algorithms)]
+        if obs_thresholds:
+            df_main = df_main[df_main['observation_threshold'].isin(obs_thresholds)]
+        if wind_thresholds:
+            df_main = df_main[df_main['wind_threshold'].isin(wind_thresholds)]
+        if penalties:
+            df_main = df_main[df_main['failure_penalty'].isin(penalties)]
+            df_opt  = df_opt [df_opt ['failure_penalty'].isin(penalties)]
+
+        if df_main.empty:
+            raise ValueError("No data left after filtering for plotting.")
+
+        # 3) Identify unique locations (by latitude & longitude)
+        locs = (
+            df_main[['latitude','longitude']]
+            .drop_duplicates()
+            .sort_values(['latitude','longitude'])
+            .to_records(index=False)
+        )
+        n = len(locs)
+        cols = min(3, int(np.ceil(np.sqrt(n))))
+        rows = int(np.ceil(n / cols))
+        fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4*rows), squeeze=False)
+
+        # 4) Plot each location
+        for idx, (lat, lon) in enumerate(locs):
+            ax = axes[idx//cols][idx%cols]
+            sub = df_main[(df_main['latitude']==lat) & (df_main['longitude']==lon)]
+
+            # plot each threshold combo
+            combos = sub[['observation_threshold','wind_threshold']] \
+                        .drop_duplicates() \
+                        .to_records(index=False)
+            for obs, w in combos:
+                ser = (sub[(sub['observation_threshold']==obs) & (sub['wind_threshold']==w)]
+                       .sort_values('battery_capacity'))
+                ax.plot(
+                    ser['battery_capacity'],
+                    ser[metric],
+                    marker='o',
+                    label=f"Obs {obs}, Wind {w}"
+                )
+
+            # overlay optimal baseline if available
+            opt_sub = df_opt[(df_opt['latitude']==lat) & (df_opt['longitude']==lon)] \
+                        .sort_values('battery_capacity')
+            if not opt_sub.empty:
+                ax.plot(
+                    opt_sub['battery_capacity'],
+                    opt_sub[metric],
+                    linestyle='--',
+                    marker='s',
+                    label='Optimal'
+                )
+
+            ax.set_title(f"Location ({lat:.2f}, {lon:.2f})")
+            ax.set_xlabel("Battery Capacity (Wh)")
+            ax.set_ylabel(metric.replace('_',' ').title())
+            ax.grid(True)
+            ax.legend(
+                loc='upper left',
+                bbox_to_anchor=(1.02, 1),
+                borderaxespad=0
+            )
+
+        # 5) Clean up unused axes
+        for i in range(n, rows*cols):
+            fig.delaxes(axes.flatten()[i])
+
+        plt.subplots_adjust(right=0.75)
+        plt.tight_layout()
+        plt.show()
+
+
     def plot_metric_by_duration(
         self,
         metric: str = "mean_reward",
@@ -1720,6 +1821,7 @@ class RewardPlotterTab(QWidget):
             "Metric by Duration",
             "Metric by Mission Start Date",
             "Metric by Penalty",
+            "Metic vs Capacity by Location",
         ])
         layout.addWidget(QLabel("Select Plot Type:"))
         layout.addWidget(self.plot_combo)
@@ -1898,6 +2000,14 @@ class RewardPlotterTab(QWidget):
             elif choice == "Optimal Reward Distribution by Penalty (Overlay)":
                 self.plotter.plot_optimal_reward_distribution_by_penalty(
                     penalties=penalties, subplots=False
+                )
+            elif choice == "Metic vs Capacity by Location":
+                self.plotter.plot_metric_by_capacity_by_location(
+                    metric         = metric,
+                    algorithms     = algos,
+                    obs_thresholds = obs,
+                    wind_thresholds= wind,
+                    penalties      = penalties
                 )
             elif choice == "Optimal Reward Distribution by Penalty (Subplots)":
                 self.plotter.plot_optimal_reward_distribution_by_penalty(

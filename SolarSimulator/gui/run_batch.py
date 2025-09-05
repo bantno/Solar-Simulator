@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
 """
-CLI runner that behaves like the GUI:
-- Builds simulations via YAMLSimulationRunner._build_param_list() and create_simulation_wrapper(...)
-- Runs SIMULATIONS in parallel (process pool), EPISODES serially inside each sim
-- Stores one HDF5 per config (timestamped), with each sim as its own group
+run_batch.py — CLI runner that mirrors the GUI flow and scales well.
 
-Usage:
-  python run_batch.py path/to/config.yaml
-  python run_batch.py path/to/configs_dir --pattern "*.yaml" --workers 8
+Behavior:
+- Builds simulations exactly like the GUI:
+    YAMLSimulationRunner._build_param_list() -> create_simulation_wrapper(job_args)
+- Runs SIMULATIONS in parallel (processes), EPISODES serially inside each sim
+- Writes ONE HDF5 per CONFIG (timestamped), with each simulation as its own group
+- Dynamic scheduling (when supported by SimulationRunManager): chunksize=1 keeps cores busy
+- Gracefully handles older SimulationRunManager without chunk_size/maxtasksperchild
+
+Usage examples:
+  python run_batch.py ./configs                         # run all *.y*ml in a dir
+  python run_batch.py ./configs --pattern "case*.yaml"  # filter
+  python run_batch.py ./configs/case1.yaml              # single config
+  python run_batch.py ./configs --workers 20 --chunksize 1 --maxtasksperchild 1
 """
+
 import argparse
 import glob
+import inspect
 import multiprocessing as mp
 import os
 import sys
@@ -18,139 +27,195 @@ import time
 import traceback
 
 # --- match the GUI wiring ---
-from gui import create_simulation_wrapper                   # :contentReference[oaicite:0]{index=0}
-from BaseClasses.run_sim import YAMLSimulationRunner                    # :contentReference[oaicite:1]{index=1}
-from BaseClasses.simulation_run_manager import SimulationRunManager     # :contentReference[oaicite:2]{index=2}
+from gui import create_simulation_wrapper
+from BaseClasses.run_sim import YAMLSimulationRunner
+from BaseClasses.simulation_run_manager import SimulationRunManager
 
 
 def _build_sims_like_gui(runner: YAMLSimulationRunner,
-                         use_multiproc: bool,
-                         workers: int,
+                         build_workers: int,
                          save_history: bool,
                          full_history_eps: int):
     """
     Replicates the GUI's path:
       param_list = runner._build_param_list()
       job_args   = [(*args, save_history, full_history_eps)]
-      sims       = pool.map(create_simulation_wrapper, job_args)  (if use_multiproc)
+      sims       = map(create_simulation_wrapper, job_args)
+    If build_workers > 1, use a process pool to parallelize SIM CREATION
+    (this pushes optimal value-function solves into worker processes).
     """
-    # Build parameter list including all locations/horizons/etc.  (GUI behavior)
-    param_list = runner._build_param_list()  # (factory, sim_type, cap, th, wth) :contentReference[oaicite:3]{index=3}
+    # (factory, sim_type, cap, th, wth)
+    param_list = runner._build_param_list()
 
-    # Append flags for create_simulation_wrapper(...) (GUI behavior)
-    job_args = [(*args, save_history, full_history_eps) for args in param_list]  # :contentReference[oaicite:4]{index=4}
+    # append flags expected by create_simulation_wrapper(...)
+    job_args = [(*args, save_history, full_history_eps) for args in param_list]
 
-    if use_multiproc:
-        # Parallelize SIM CREATION like the GUI (this also parallelizes optimal value-function builds)
-        num_cores = max(1, workers)
-        print(f"[info] creating simulations with multiprocessing (workers={num_cores})")
-        with mp.Pool(processes=num_cores) as pool:
+    if build_workers > 1:
+        print(f"[info] creating simulations with multiprocessing (workers={build_workers})")
+        with mp.Pool(processes=build_workers) as pool:
             sims = pool.map(create_simulation_wrapper, job_args)
     else:
-        # Serial creation
         sims = [create_simulation_wrapper(arg) for arg in job_args]
 
+    # Filter out any failed creations (None) defensively
+    sims = [s for s in sims if s is not None]
     return sims
+
+
+def _call_manager_run(mgr: SimulationRunManager,
+                      sims: list,
+                      use_multiproc: bool,
+                      run_workers: int,
+                      chunk_size: int | None,
+                      maxtasksperchild: int | None):
+    """
+    Call SimulationRunManager.run_simulations with best-available signature.
+    Older versions may not support chunk_size / maxtasksperchild: fall back cleanly.
+    """
+    sig = inspect.signature(mgr.run_simulations)
+    kwargs = dict(
+        simulation_list=sims,
+        use_multiprocessing=use_multiproc,
+        num_workers=max(1, run_workers),
+    )
+    if "chunk_size" in sig.parameters and chunk_size is not None:
+        kwargs["chunk_size"] = max(1, int(chunk_size))
+    if "maxtasksperchild" in sig.parameters and maxtasksperchild is not None:
+        kwargs["maxtasksperchild"] = int(maxtasksperchild)
+
+    return mgr.run_simulations(**kwargs)
 
 
 def _run_one_config(config_path: str,
                     out_dir: str | None,
-                    use_multiproc: bool,
-                    workers: int,
                     include_optimal: str,
+                    build_workers: int,
+                    run_workers: int,
+                    use_multiproc: bool,
+                    chunk_size: int | None,
+                    maxtasksperchild: int | None,
                     save_history: bool,
                     full_history_eps: int):
     cfg_base = os.path.splitext(os.path.basename(config_path))[0]
     print(f"[run] config: {cfg_base}")
 
     try:
-        runner = YAMLSimulationRunner(config_path)  # loads YAML and preps fields  :contentReference[oaicite:5]{index=5}
+        runner = YAMLSimulationRunner(config_path)
         config = runner.config
     except Exception as e:
         print(f"[WARN] skip '{cfg_base}': failed to load config: {e}", file=sys.stderr)
         traceback.print_exc()
         return
 
-    # Teach the runner whether to generate optimal-policy jobs.
-    # (GUI sets this from a checkbox; default True.)
+    # Mirror GUI checkbox behavior for including optimal sims
     if include_optimal != "auto":
         config["include_optimal"] = (include_optimal == "yes")
 
-    # Build sims exactly like the GUI path
-    sims = _build_sims_like_gui(
-        runner=runner,
-        use_multiproc=use_multiproc,
-        workers=workers,
-        save_history=save_history,
-        full_history_eps=full_history_eps,
-    )
+    # Build sims (optionally in parallel) exactly like the GUI path
+    try:
+        sims = _build_sims_like_gui(
+            runner=runner,
+            build_workers=max(1, build_workers),
+            save_history=save_history,
+            full_history_eps=full_history_eps,
+        )
+    except Exception as e:
+        print(f"[WARN] skip '{cfg_base}': simulation creation failed: {e}", file=sys.stderr)
+        traceback.print_exc()
+        return
+
     if not sims:
         print(f"[info] no simulations to run for '{cfg_base}'")
         return
 
-    # Episodes per simulation: GUI uses config['episodes'] with a fallback to the full-history spin value
+    # Episodes per simulation from config; fallback to full-history value (GUI spirit)
     episodes = int(config.get("episodes", full_history_eps))
-    storage_dir = out_dir or "simulation_results"  # GUI hard-codes this directory  :contentReference[oaicite:6]{index=6}
-
+    storage_dir = out_dir or config.get("storage_dir") or "simulation_results"
     os.makedirs(storage_dir, exist_ok=True)
+
+    # One HDF5 per CONFIG; groups per simulation inside
     manager = SimulationRunManager(
         episodes_per_simulation=episodes,
         storage_dir=storage_dir,
-        sim_name_prefix=runner.config_basename,  # prefix for the timestamped HDF5 filename  :contentReference[oaicite:7]{index=7}
+        sim_name_prefix=runner.config_basename,  # recognizable, timestamped by manager
     )
 
-    # Run SIMULATIONS in parallel (processes) or serial; EPISODES remain serial inside _run_one_sim  :contentReference[oaicite:8]{index=8}
-    start = time.time()
-    manager.run_simulations(
-        sims,
-        use_multiprocessing=use_multiproc,
-        num_workers=max(1, workers),
+    t0 = time.time()
+    _call_manager_run(
+        mgr=manager,
+        sims=sims,
+        use_multiproc=use_multiproc,
+        run_workers=run_workers,
+        chunk_size=chunk_size,
+        maxtasksperchild=maxtasksperchild,
     )
-    elapsed = time.time() - start
-    print(f"[done] {cfg_base}: {elapsed:.2f}s ({elapsed/3600:.2f}h)")
+    dt = time.time() - t0
+    print(f"[done] {cfg_base}: {dt:.2f}s ({dt/3600:.2f}h)")
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Batch-run simulations like the GUI (sims parallel, episodes serial).")
-    ap.add_argument("path", help="YAML file or directory containing YAML configs")
-    ap.add_argument("--pattern", default="*.y*ml", help="Glob pattern when 'path' is a directory (default: *.y*ml)")
-    ap.add_argument("--out", default=None, help="Output directory (default: simulation_results)")
+    ap = argparse.ArgumentParser(
+        description="Batch-run simulations like the GUI: SIMS parallel, EPISODES serial."
+    )
+    ap.add_argument("path", help="YAML file or directory of YAMLs")
+    ap.add_argument("--pattern", default="*.y*ml",
+                    help="Glob pattern when 'path' is a directory (default: *.y*ml)")
+    ap.add_argument("--out", default=None,
+                    help="Output directory (default: config['storage_dir'] or ./simulation_results)")
+
+    # Parallelism knobs
     ap.add_argument("--workers", type=int, default=max(1, mp.cpu_count() - 1),
-                    help="Worker processes for parallel SIMULATIONS (default: CPU-1)")
+                    help="Worker processes for running SIMULATIONS (default: CPU-1)")
+    ap.add_argument("--build-workers", type=int, default=None,
+                    help="Worker processes for SIM CREATION (default: equals --workers)")
     ap.add_argument("--no-multiproc", action="store_true",
-                    help="Disable multiprocessing (forces serial across sims)")
+                    help="Disable multiprocessing during run (serial across sims)")
+
+    # Load-balancing / hygiene (used if your SimulationRunManager supports them)
+    ap.add_argument("--chunksize", type=int, default=1,
+                    help="Tasks per worker pull for run phase (1 = best load balancing).")
+    ap.add_argument("--maxtasksperchild", type=int, default=None,
+                    help="Recycle a worker after N sims (optional hygiene).")
+
+    # GUI-like toggles
     ap.add_argument("--include-optimal", choices=["auto", "yes", "no"], default="auto",
-                    help="Force inclusion of optimal-policy sims (default: auto -> use config/default True)")
+                    help="Force inclusion of optimal-policy sims (default: auto -> use config).")
     ap.add_argument("--save-history", action="store_true",
-                    help="Save full state info for episodes (passed through to sim creation)")
+                    help="Pass save_history=True to simulations.")
     ap.add_argument("--full-history-eps", type=int, default=1,
-                    help="Number of episodes to save full history for; also used as fallback for 'episodes' if not in config (GUI behavior)")
+                    help="Episodes to record full history for; also used as fallback for 'episodes' if not set.")
+
     args = ap.parse_args()
 
-    # Windows-friendly multiprocessing
+    # Windows-friendly multiprocessing setup
     try:
         mp.set_start_method("spawn", force=True)
     except RuntimeError:
         pass
     mp.freeze_support()
 
+    build_workers = args.build_workers if args.build_workers is not None else args.workers
     use_multiproc = not args.no_multiproc
-    paths: list[str]
+
+    # Resolve input paths
     if os.path.isdir(args.path):
-        paths = sorted(glob.glob(os.path.join(args.path, args.pattern)))
-        if not paths:
+        cfg_files = sorted(glob.glob(os.path.join(args.path, args.pattern)))
+        if not cfg_files:
             print(f"[error] no configs matched {args.pattern} in {args.path}", file=sys.stderr)
             sys.exit(1)
     else:
-        paths = [args.path]
+        cfg_files = [args.path]
 
-    for cfg in paths:
+    for cfg in cfg_files:
         _run_one_config(
             config_path=cfg,
             out_dir=args.out,
-            use_multiproc=use_multiproc,
-            workers=args.workers,
             include_optimal=args.include_optimal,
+            build_workers=max(1, build_workers),
+            run_workers=max(1, args.workers),
+            use_multiproc=use_multiproc,
+            chunk_size=args.chunksize,
+            maxtasksperchild=args.maxtasksperchild,
             save_history=args.save_history,
             full_history_eps=args.full_history_eps,
         )

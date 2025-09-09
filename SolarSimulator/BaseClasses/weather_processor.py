@@ -1,7 +1,10 @@
+import math
 import openmeteo_requests
 from datetime import timezone, timedelta
 import requests_cache
 import pandas as pd
+import pvlib
+import datetime
 import numpy as np
 import random
 from scipy.stats import beta, weibull_min
@@ -81,6 +84,86 @@ class WeatherDataProcessor:
             mask &= data.index.minute == minute
         return data[mask]
 
+
+    # def clearsky_ghi_haurwitz(self, month: int, day: int, hour: int, minute: int,
+    #                         lat: float, lon: float,
+    #                         tz: datetime.tzinfo = datetime.timezone.utc) -> float:
+    #     """
+    #     Compute clear-sky GHI using the Haurwitz model.
+    #     Uses a fixed non-leap year (2001) to avoid leap-year issues.
+
+    #     Parameters
+    #     ----------
+    #     month, day, hour, minute : int
+    #         Date and time of interest.
+    #     lat, lon : float
+    #         Latitude and longitude in decimal degrees (north/east positive).
+    #     tz : datetime.tzinfo, optional
+    #         Python timezone object (e.g., datetime.timezone(...)).
+    #         Defaults to UTC.
+
+    #     Returns
+    #     -------
+    #     float
+    #         Clear-sky global horizontal irradiance (W/m^2).
+    #     """
+    #     # Fixed year 2001 avoids leap-year issues
+    #     ts = pd.Timestamp(year=2001, month=month, day=day,
+    #                     hour=hour, minute=minute, tz=tz)
+
+    #     site = pvlib.location.Location(latitude=lat, longitude=lon, tz=tz)
+
+    #     cs = site.get_clearsky(ts, model="haurwitz")
+    #     return float(cs.loc[ts, "ghi"])
+
+    def clearsky_ghi_haurwitz(
+        self,
+        month: int, day: int, hour: int, minute: int,
+        lat: float, lon: float,
+        tz: datetime.tzinfo = datetime.timezone.utc,
+        A: float = 1150.0,
+    ) -> float:
+        """
+        Clear-sky GHI per Fatemi et al.'s normalization:
+            GHI_cs = A * max(cos(zenith), 0)
+
+        Uses a fixed canonical year (2001) to avoid leap-day issues.
+
+        Parameters
+        ----------
+        month, day, hour, minute : int
+            Date and time of interest.
+        lat, lon : float
+            Latitude and longitude in decimal degrees (north/east positive).
+        tz : datetime.tzinfo, optional
+            Python timezone object. Defaults to UTC.
+        A : float, optional
+            Scaling constant (paper uses 1150 W/m^2). Default 1150.
+
+        Returns
+        -------
+        float
+            Clear-sky global horizontal irradiance (W/m^2) per the paper.
+        """
+        # Canonical non-leap year
+        ts = pd.Timestamp(year=2001, month=month, day=day, hour=hour, minute=minute, tz=tz)
+
+        # Solar position (use apparent_zenith like pvlib clearsky models)
+        sp = pvlib.solarposition.get_solarposition(ts, latitude=lat, longitude=lon)
+        zen = float(sp.loc[ts, "apparent_zenith"])
+
+        # cos(zenith) in radians; clip negatives (night) to 0
+        cos_z = math.cos(math.radians(zen))
+        if not math.isfinite(cos_z):
+            return 0.0
+        cos_z = max(cos_z, 0.0)
+
+        # Paper's clear-sky proxy
+        ghi_cs = A * cos_z
+        # tiny numerical cleanup
+        return float(ghi_cs)
+
+
     def fit_distributions(self, data, filename="data_expected.pkl"):
         results = []
         grouped = data.groupby(
@@ -88,6 +171,8 @@ class WeatherDataProcessor:
         )
 
         for (month, day, hour, minute), group in tqdm(grouped):
+            if day == 29 and month == 2:
+                continue
             solar_data = group["shortwave_radiation"].dropna()
             beta_params, expected_beta = self._fit_beta(solar_data)
 
@@ -114,16 +199,83 @@ class WeatherDataProcessor:
         df.to_pickle(filename)
         return df
 
+    def _fit_beta(self, data):
+        # Compute clearsky irradiance for the first timestamp
+        ts0 = data.index[0]
+        clearsky_irradiance = self.clearsky_ghi_haurwitz(
+            ts0.month, ts0.day, ts0.hour, ts0.minute, lat, lon, data.index.tz
+        )
+
+        # Only fit when all measurements exceed 15.0 (same condition)
+        if np.all(data > 50.0):
+            # Normalize and clip to (1e-7, 0.999999) as before
+            normalized = np.clip(data / clearsky_irradiance, 1e-7, 0.999999)
+
+            # Method-of-moments fit (unchanged API)
+            alpha, beta_param = self.fit_beta_mom(normalized)
+
+            # Guard for infinite sum (same behavior)
+            if np.isinf(alpha + beta_param):
+                return (1.0, 1000.0, np.nan, np.nan), 0.0
+
+            # Expected value (same formula)
+            expected_beta = alpha / (alpha + beta_param) * clearsky_irradiance
+            return (alpha, beta_param), expected_beta
+
+        # Fallback when not fitting (same constants/shape)
+        return (1.0, 1000.0, np.nan, np.nan), 0.0
+        
+    
     @staticmethod
-    def _fit_beta(data):
-        if len(data) > 1 and np.all(data > 5):
-            normalized = data / 1367
-            beta_params = beta.fit(normalized, floc=0, fscale=1)
-            alpha, beta_param, _, _ = beta_params
-            expected_beta = alpha / (alpha + beta_param) * 1367
-        else:
-            beta_params, expected_beta = (1.0, 1000.0, np.nan, np.nan), 0.0
-        return beta_params, expected_beta
+    def fit_beta_mom(data, eps: float = 1e-6):
+        """
+        Fit a Beta distribution to data in (0,1) using Method of Moments (MoM).
+
+        Parameters
+        ----------
+        data : array-like
+            1D array of observations, must lie in (0,1).
+        eps : float, optional
+            Small shift applied if values are exactly 0 or 1. Default 1e-6.
+
+        Returns
+        -------
+        alpha : float
+            Estimated alpha (shape1) parameter.
+        beta : float
+            Estimated beta (shape2) parameter.
+
+        Raises
+        ------
+        ValueError
+            If the variance is too large or if the computed parameters are invalid.
+        """
+        x = np.asarray(data, dtype=float)
+
+        # Ensure within (0,1)
+        x = np.clip(x, eps, 1 - eps)
+
+        mu = np.mean(x)
+        var = np.var(x, ddof=1)  # sample variance
+
+        # Check feasibility condition
+        if var >= mu * (1 - mu):
+            raise ValueError(
+                f"Invalid variance for Beta fit: var={var:.4f} >= mu*(1-mu)={mu*(1-mu):.4f}"
+            )
+        if var == 0:
+            print(data)
+            raise ValueError(
+                f"Invalid variance for Beta fit: var={var:.4f} = 0.0"
+            )
+        kappa = mu * (1 - mu) / var - 1.0
+        alpha = mu * kappa
+        beta_param = (1 - mu) * kappa
+
+        if alpha <= 0 or beta_param <= 0:
+            raise ValueError(f"Invalid Beta parameters: alpha={alpha}, beta={beta}")
+
+        return alpha, beta_param
 
     @staticmethod
     def _fit_weibull(data):

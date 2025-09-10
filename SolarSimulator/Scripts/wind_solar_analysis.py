@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 data_folder = r'Data\EXPECTED_DATA'  # ← change to your folder path
 
 # Latitudes and longitudes to include
-lat_list = [35,58,20,40]
-lon_list = [14,-161,-159,138]   # ← change to desired longitudes
+lat_list = [20,30,35,40,58]
+lon_list = [-159,-75,14,138,-161]   # ← change to desired longitudes
 
 # Time step in seconds (15 minutes)
 dt_seconds = 15 * 60
@@ -24,26 +24,27 @@ file_paths = [
 wind_means      = {}
 solar_totals_mj = {}
 
-for file in file_paths:
-    # Extract latitude and longitude from filename
-    m_lat = re.search(r'lat([-0-9.]+)', file)
-    m_lon = re.search(r'lon([-0-9.]+)', file)
-    if not (m_lat and m_lon):
-        continue
-    lat = float(m_lat.group(1))
-    lon = float(m_lon.group(1))
+for i in range(len(lat_list)):
+    for file in file_paths:
+        # Extract latitude and longitude from filename
+        m_lat = re.search(r'lat([-0-9.]+)', file)
+        m_lon = re.search(r'lon([-0-9.]+)', file)
+        if not (m_lat and m_lon):
+            continue
+        lat = float(m_lat.group(1))
+        lon = float(m_lon.group(1))
 
-    # Skip if not in our lists
-    if lat not in lat_list or lon not in lon_list:
-        continue
+        # Skip if not in our lists
+        if not lat == lat_list[i] or not lon == lon_list[i]:
+            continue
 
-    df = pd.read_pickle(file)
-    monthly = df.groupby('month')
+        df = pd.read_pickle(file)
+        monthly = df.groupby('month')
 
-    # Store by (lat, lon) tuple
-    wind_means     [(lat, lon)] = monthly['expected_wind_speed'].mean()
-    total_joules               = monthly['expected_solar_rad'].sum() * dt_seconds
-    solar_totals_mj[(lat, lon)] = total_joules / 1e6
+        # Store by (lat, lon) tuple
+        wind_means     [(lat, lon)] = monthly['expected_wind_speed'].mean()
+        total_joules               = monthly['expected_solar_rad'].sum() * dt_seconds
+        solar_totals_mj[(lat, lon)] = total_joules / 1e6
 
 # Now plot
 fig, axes = plt.subplots(2, 1, sharex=True, figsize=(10, 8))

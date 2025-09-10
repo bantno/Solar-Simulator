@@ -68,12 +68,15 @@ class ActionSuccessProbabilityModel(ABC):
         for action in actions:
             for state in states:
                 probabilities = self.compute_probability(wind_speeds, action, np.array([state] * len(wind_speeds)))
-                plt.plot(wind_speeds, probabilities, label=labels[i])
+                if i == 3:
+                    plt.plot(wind_speeds,1-probabilities, label=labels[i],ls="-.")
+                else:
+                    plt.plot(wind_speeds,1-probabilities, label=labels[i],)
                 i+=1
-
+        plt.xlim((max(wind_speeds),min(wind_speeds)))
         plt.xlabel("Wind Speed [m/s]")
-        plt.ylabel("Success Probability")
-        plt.title("Success Probability vs Wind Speed for Different Actions and States")
+        plt.ylabel("Failure Probability")
+        plt.title("Failure Probability vs Wind Speed for Different Actions and States")
         plt.legend()
         plt.grid(True)
         plt.show()

@@ -1808,6 +1808,17 @@ class RewardPlotterTab(QWidget):
         file_layout.addWidget(btn_browse)
         layout.addLayout(file_layout)
 
+        # Export buttons
+        export_layout = QHBoxLayout()
+        self.btn_save_csv = QPushButton("Save Summary as CSV")
+        self.btn_save_csv.clicked.connect(self.save_summary_csv)
+        export_layout.addWidget(self.btn_save_csv)
+
+        self.btn_export_latex = QPushButton("Export LaTeX Table…")
+        self.btn_export_latex.clicked.connect(self.export_latex_table)
+        export_layout.addWidget(self.btn_export_latex)
+        layout.addLayout(export_layout)
+
         # Dropdown of available plot functions
         self.plot_combo = QComboBox()
         self.plot_combo.addItems([
@@ -2031,6 +2042,121 @@ class RewardPlotterTab(QWidget):
                 )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Plotting failed:\n{str(e)}")
+
+    def save_summary_csv(self):
+        if not getattr(self, "plotter", None):
+            QMessageBox.warning(self, "No file selected", "Open an HDF5 file first.")
+            return
+
+        try:
+            df = self.plotter._get_summary()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load summary:\n{e}")
+            return
+
+        if df is None or df.empty:
+            QMessageBox.warning(self, "No data", "No summary data is available to save.")
+            return
+
+        # Clean up start_time if it may be bytes from HDF5 attrs
+        df_to_save = df.copy()
+        if "start_time" in df_to_save.columns:
+            def _clean_time(v):
+                if isinstance(v, (bytes, bytearray, np.bytes_)):
+                    try:
+                        v = v.decode()
+                    except Exception:
+                        pass
+                return v
+            df_to_save["start_time"] = df_to_save["start_time"].map(_clean_time)
+            # Optional: make it ISO if parseable
+            df_to_save["start_time"] = pd.to_datetime(df_to_save["start_time"], errors="ignore")
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Summary CSV", "summary.csv", "CSV files (*.csv)"
+        )
+        if not path:
+            return
+
+        try:
+            df_to_save.to_csv(path, index=False)
+            QMessageBox.information(self, "Saved", f"Summary saved to:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save CSV:\n{e}")
+
+    def export_latex_table(self):
+        if not self.plotter:
+            QMessageBox.warning(self, "No file selected", "Open an HDF5 file first.")
+            return
+
+        try:
+            df = self.plotter._get_summary()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load summary:\n{e}")
+            return
+
+        if df is None or df.empty:
+            QMessageBox.warning(self, "No data", "No summary data is available to export.")
+            return
+
+        # Clean start_time if bytes
+        if "start_time" in df.columns:
+            def _clean_time(v):
+                if isinstance(v, (bytes, bytearray, np.bytes_)):
+                    try:
+                        v = v.decode()
+                    except Exception:
+                        pass
+                return v
+            df["start_time"] = df["start_time"].map(_clean_time)
+
+        # Select + rename columns for publication-ready table
+        col_map = {
+            "sim_type": "Sim",
+            "battery_capacity": r"$C$ (Ah)",
+            "horizon": r"$H$ (days)",
+            "threshold": "Obs Thr.",
+            "wind_threshold": "Wind Thr.",
+            "failure_penalty": r"Penalty $\lambda$",
+            "latitude": "Lat (\\textdegree)",
+            "longitude": "Lon (\\textdegree)",
+            "mean_reward": r"$\bar{R}$",
+            "failure_percentage": r"$p_{\\mathrm{fail}}$ (\\%)",
+        }
+
+        df_out = df[list(col_map.keys())].rename(columns=col_map)
+
+        # Rounding
+        df_out[r"$C$ (Ah)"] = df_out[r"$C$ (Ah)"].round(0).astype("Int64")
+        df_out[r"$H$ (days)"] = df_out[r"$H$ (days)"].round(0).astype("Int64")
+        df_out["Obs Thr."] = df_out["Obs Thr."].round(2)
+        df_out["Wind Thr."] = df_out["Wind Thr."].round(2)
+        df_out[r"Penalty $\lambda$"] = df_out[r"Penalty $\lambda$"].round(2)
+        df_out["Lat (\\textdegree)"] = df_out["Lat (\\textdegree)"].round(2)
+        df_out["Lon (\\textdegree)"] = df_out["Lon (\\textdegree)"].round(2)
+        df_out[r"$\bar{R}$"] = df_out[r"$\bar{R}$"].round(3)
+        df_out[r"$p_{\\mathrm{fail}}$ (\\%)"] = (100 * df_out[r"$p_{\\mathrm{fail}}$ (\\%)"]).round(1)
+
+        # Sort rows for consistency
+        df_out = df_out.sort_values(
+            by=["Sim", r"$C$ (Ah)", r"$H$ (days)", "Obs Thr.", "Wind Thr.", r"Penalty $\lambda$",
+                "Lat (\\textdegree)", "Lon (\\textdegree)"],
+            kind="stable"
+        )
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export LaTeX Table", "summary_table.tex", "TeX files (*.tex)"
+        )
+        if not path:
+            return
+
+        try:
+            latex_str = df_out.to_latex(index=False, escape=False, column_format="l" + "r"*(df_out.shape[1]-1))
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(latex_str)
+            QMessageBox.information(self, "Saved", f"LaTeX table saved to:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save LaTeX table:\n{e}")
 
 # ------------------------------------------------------------------------------
 # 4) Combined Main Window

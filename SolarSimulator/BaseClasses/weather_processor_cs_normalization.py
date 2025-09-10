@@ -34,6 +34,8 @@ class WeatherDataProcessor:
             "wind_speed_unit": "ms",
             "cell_selection": "sea",
         }
+        self.lat = latitude
+        self.lon = longitude
         self.response = self.client.weather_api(
             "https://archive-api.open-meteo.com/v1/archive", params=params
         )[0]
@@ -84,84 +86,44 @@ class WeatherDataProcessor:
             mask &= data.index.minute == minute
         return data[mask]
 
-
-    # def clearsky_ghi_haurwitz(self, month: int, day: int, hour: int, minute: int,
-    #                         lat: float, lon: float,
-    #                         tz: datetime.tzinfo = datetime.timezone.utc) -> float:
-    #     """
-    #     Compute clear-sky GHI using the Haurwitz model.
-    #     Uses a fixed non-leap year (2001) to avoid leap-year issues.
-
-    #     Parameters
-    #     ----------
-    #     month, day, hour, minute : int
-    #         Date and time of interest.
-    #     lat, lon : float
-    #         Latitude and longitude in decimal degrees (north/east positive).
-    #     tz : datetime.tzinfo, optional
-    #         Python timezone object (e.g., datetime.timezone(...)).
-    #         Defaults to UTC.
-
-    #     Returns
-    #     -------
-    #     float
-    #         Clear-sky global horizontal irradiance (W/m^2).
-    #     """
-    #     # Fixed year 2001 avoids leap-year issues
-    #     ts = pd.Timestamp(year=2001, month=month, day=day,
-    #                     hour=hour, minute=minute, tz=tz)
-
-    #     site = pvlib.location.Location(latitude=lat, longitude=lon, tz=tz)
-
-    #     cs = site.get_clearsky(ts, model="haurwitz")
-    #     return float(cs.loc[ts, "ghi"])
-
-    def clearsky_ghi_haurwitz(
-        self,
-        month: int, day: int, hour: int, minute: int,
-        lat: float, lon: float,
-        tz: datetime.tzinfo = datetime.timezone.utc,
-        A: float = 1150.0,
-    ) -> float:
+    @staticmethod
+    def clearsky_ghi_fatemi(times, lat, lon, A=1150.0):
         """
-        Clear-sky GHI per Fatemi et al.'s normalization:
-            GHI_cs = A * max(cos(zenith), 0)
-
-        Uses a fixed canonical year (2001) to avoid leap-day issues.
+        Clear-sky GHI per Fatemi–Kuh–Fripp (2018):
+            GHI_cs(t) = A * cos(zenith(t))
+        where 'A' is a fixed scale (paper uses ~1150 W/m^2) and
+        zenith is the apparent solar zenith angle.
 
         Parameters
         ----------
-        month, day, hour, minute : int
-            Date and time of interest.
+        times : pandas.DatetimeIndex or pd.Timestamp
+            TZ-aware timestamps (local or UTC). If you pass naive times,
+            pvlib will treat them as naive; prefer tz-aware.
         lat, lon : float
-            Latitude and longitude in decimal degrees (north/east positive).
-        tz : datetime.tzinfo, optional
-            Python timezone object. Defaults to UTC.
-        A : float, optional
-            Scaling constant (paper uses 1150 W/m^2). Default 1150.
+            Latitude [deg], Longitude [deg] (east positive).
+        A : float, default 1150.0
+            Scaling constant so that normalized irradiance r/(A cos z) lies in (0,1).
 
         Returns
         -------
-        float
-            Clear-sky global horizontal irradiance (W/m^2) per the paper.
+        pandas.Series
+            Clear-sky GHI [W/m^2], clipped at 0 at night.
         """
-        # Canonical non-leap year
-        ts = pd.Timestamp(year=2001, month=month, day=day, hour=hour, minute=minute, tz=tz)
+        # Ensure we always work with a DatetimeIndex
+        if isinstance(times, pd.Timestamp):
+            times = pd.DatetimeIndex([times])
+        elif not isinstance(times, pd.DatetimeIndex):
+            times = pd.DatetimeIndex(times)
 
-        # Solar position (use apparent_zenith like pvlib clearsky models)
-        sp = pvlib.solarposition.get_solarposition(ts, latitude=lat, longitude=lon)
-        zen = float(sp.loc[ts, "apparent_zenith"])
+        sp = pvlib.solarposition.get_solarposition(times, lat, lon)
+        zen = sp["apparent_zenith"].to_numpy()  # degrees
 
-        # cos(zenith) in radians; clip negatives (night) to 0
-        cos_z = math.cos(math.radians(zen))
-        if not math.isfinite(cos_z):
-            return 0.0
-        cos_z = max(cos_z, 0.0)
+        # cos(zenith) with zenith in degrees; negative at night -> 0
+        cosz = np.cos(np.deg2rad(zen))
+        cosz = np.clip(cosz, 0.0, None)
 
-        # Paper's clear-sky proxy
-        ghi_cs = A * cos_z
-        # tiny numerical cleanup
-        return float(ghi_cs)
+        ghi_cs = A * cosz
+        return ghi_cs[0]
 
 
     def fit_distributions(self, data, filename="data_expected.pkl"):
@@ -174,7 +136,7 @@ class WeatherDataProcessor:
             if day == 29 and month == 2:
                 continue
             solar_data = group["shortwave_radiation"].dropna()
-            beta_params, expected_beta = self._fit_beta(solar_data)
+            beta_params, expected_beta, clearsky_irradiance = self._fit_beta(solar_data)
 
             wind_data = group["wind_speed_10m"].dropna()
             weibull_params, expected_weibull = self._fit_weibull(wind_data)
@@ -188,6 +150,7 @@ class WeatherDataProcessor:
                     "beta_alpha": beta_params[0],
                     "beta_beta": beta_params[1],
                     "expected_solar_rad": expected_beta,
+                    "clearsky_irradiance": clearsky_irradiance,
                     "weibull_k": weibull_params[0],
                     "weibull_loc": weibull_params[1],
                     "weibull_scale": weibull_params[2],
@@ -202,12 +165,10 @@ class WeatherDataProcessor:
     def _fit_beta(self, data):
         # Compute clearsky irradiance for the first timestamp
         ts0 = data.index[0]
-        clearsky_irradiance = self.clearsky_ghi_haurwitz(
-            ts0.month, ts0.day, ts0.hour, ts0.minute, lat, lon, data.index.tz
-        )
+        clearsky_irradiance = self.clearsky_ghi_fatemi(ts0, self.lat, self.lon)
 
         # Only fit when all measurements exceed 15.0 (same condition)
-        if np.all(data > 50.0):
+        if clearsky_irradiance > 50:
             # Normalize and clip to (1e-7, 0.999999) as before
             normalized = np.clip(data / clearsky_irradiance, 1e-7, 0.999999)
 
@@ -216,14 +177,14 @@ class WeatherDataProcessor:
 
             # Guard for infinite sum (same behavior)
             if np.isinf(alpha + beta_param):
-                return (1.0, 1000.0, np.nan, np.nan), 0.0
+                return (1.0, 1000.0, np.nan, np.nan), 0.0, clearsky_irradiance
 
             # Expected value (same formula)
             expected_beta = alpha / (alpha + beta_param) * clearsky_irradiance
-            return (alpha, beta_param), expected_beta
+            return (alpha, beta_param), expected_beta, clearsky_irradiance
 
         # Fallback when not fitting (same constants/shape)
-        return (1.0, 1000.0, np.nan, np.nan), 0.0
+        return (1.0, 1000.0, np.nan, np.nan), 0.0, clearsky_irradiance
         
     
     @staticmethod
@@ -261,12 +222,12 @@ class WeatherDataProcessor:
         # Check feasibility condition
         if var >= mu * (1 - mu):
             raise ValueError(
-                f"Invalid variance for Beta fit: var={var:.4f} >= mu*(1-mu)={mu*(1-mu):.4f}"
+                f"Invalid variance for Beta fit: var={var:.4f} >= mu*(1-mu)={mu*(1-mu):.4f}. TS={data.index[0]}"
             )
         if var == 0:
             print(data)
             raise ValueError(
-                f"Invalid variance for Beta fit: var={var:.4f} = 0.0"
+                f"Invalid variance for Beta fit: var={var:.4f} = 0.0. TS={data.index[0]}"
             )
         kappa = mu * (1 - mu) / var - 1.0
         alpha = mu * kappa
@@ -287,93 +248,10 @@ class WeatherDataProcessor:
             params, expected = (np.nan, np.nan, np.nan), np.nan
         return params, expected
 
-def generate_single_synthetic_year_worker(args):
-    # Unpack the tuple into individual arguments
-    dataset_number, historical_data, years, timestep, points_per_week, save_path, latitude, longitude, seed = args
-    
-    # Call the original function with the unpacked arguments
-    return generate_single_synthetic_year(dataset_number, historical_data, years, timestep, points_per_week, save_path, latitude, longitude, seed)
-
-def generate_single_synthetic_year(
-    dataset_number,
-    historical_data,
-    years,
-    timestep,
-    points_per_week,
-    save_path,
-    latitude,
-    longitude,
-    seed=None,
-):
-    
-    if seed is not None:
-        random.seed(seed + dataset_number)
-    synthetic_year = []
-    original_timezone = historical_data.index.tz if historical_data.index.tz is not None else "UTC"
-    for week_number in range(52):
-        while True:
-            selected_year = random.choice(years)
-            weekly_data = historical_data[historical_data.index.year == selected_year]
-            start, end = (
-                week_number * points_per_week,
-                (week_number + 1) * points_per_week,
-            )
-            if len(weekly_data.iloc[start:end]) == points_per_week:
-                synthetic_year.append(weekly_data.iloc[start:end])
-                break
-            print("Trying again...")
-
-    synthetic_year_data = pd.concat(synthetic_year)
-    synthetic_year_data.index = pd.date_range(
-        start="2025-01-01",
-        periods=len(synthetic_year_data),
-        tz=original_timezone,
-        freq=pd.Timedelta(seconds=timestep),
-    )
-    file_path = f"{save_path}/data_lat{latitude}_lon{longitude}_{int(timestep / 60)}min_{dataset_number}.pkl"
-    synthetic_year_data.to_pickle(file_path)
-    return file_path
-
-
-def generate_yearly_weather_data(historical_data, N, latitude, longitude, seed=None, save_path="."):
-    if not isinstance(historical_data.index, pd.DatetimeIndex):
-        raise ValueError("historical_data must have a DatetimeIndex.")
-
-    timestep = int((historical_data.index[1] - historical_data.index[0]).total_seconds())
-    points_per_week = int((7 * 24 * 3600) / timestep)
-    years = historical_data.index.year.unique()
-
-    try:
-        with Pool() as pool:
-            results = tqdm(pool.imap_unordered(
-                generate_single_synthetic_year_worker,
-                [
-                    (
-                        i,
-                        historical_data,
-                        years,
-                        timestep,
-                        points_per_week,
-                        save_path,
-                        latitude,
-                        longitude,
-                        seed,
-                    )
-                    for i in range(N)
-                ],
-            ), total=N, desc="Generating Synthetic Years")
-            return list(results)
-    except KeyboardInterrupt:
-        print("Process interrupted by user. Cleaning up...")
-        pool.terminate()  # Immediately terminate workers
-        pool.join()  # Ensure all worker processes are cleaned up
-        raise  # Re-raise the exception for visibility
-
-
 # Example usage
 if __name__ == "__main__":
     processor = WeatherDataProcessor()
-    lat, lon = 30, -90
+    lat, lon = 30, -75
     timestep_min = 15
     processor.fetch_weather_data(
         lat,
@@ -383,8 +261,8 @@ if __name__ == "__main__":
         ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
     )
     hourly_df = processor.process_hourly_data()
-    hourly_df.to_pickle(rf"Data\HISTORICAL_DATA\data_{lat}_{lon}")
+    hourly_df.to_pickle(rf"Data\HISTORICAL_DATA\data_{lat}_{lon}.pkl")
     resampled_df = processor.resample_data(timestep_min)
 
-    expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat}_lon{lon}_{timestep_min}min.pkl"
+    expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat:.1f}_lon{lon:.1f}_{timestep_min}min.pkl"
     processor.fit_distributions(resampled_df, expected_data_filename)

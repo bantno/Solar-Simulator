@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 class WhaleRewardSeries:
     """Abstract base class for creating whale reward series."""
@@ -70,3 +71,22 @@ class WhaleRewardSeriesFactory:
         except KeyError:
             raise ValueError(f"Unknown whale reward series type: {series_type}")
         return series_class().create_series(horizon)
+    
+if __name__ == "__main__":
+    # Generate one day's series (96 timesteps of 15 minutes each)
+    horizon = 96
+    series = WhaleRewardSeriesFactory.create_series('real', horizon)
+
+    # Convert each timestep to hours of day
+    hours = np.arange(horizon) * 0.25  # 0.25 hours per timestep
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(hours, series, marker='.')
+    plt.xlabel('Hour of Day')
+    plt.ylabel('Whale Observation Probability')
+    plt.title('Real Whale Observation Probability Over 24 Hours')
+    plt.xticks(np.arange(0, 25, 2))
+    plt.xlim(0, 24)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()

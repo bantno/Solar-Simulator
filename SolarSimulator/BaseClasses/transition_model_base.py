@@ -81,6 +81,35 @@ class ActionSuccessProbabilityModel(ABC):
         plt.grid(True)
         plt.show()
 
+    def visualize_failure_probability(self):
+        """
+        Visualize the success probability for wind speeds from 0-40 for all combinations of action and state.
+        """
+        wind_speeds = np.linspace(0, 40, 400)
+        actions = [0, 1]
+        states = [(0, 0), (0, 1)]
+        labels = [
+            "Float",
+            "Land",
+            "Takeoff",
+            "Fly"
+        ]
+
+        plt.figure(figsize=(12, 8))
+        i=0
+        for action in actions:
+            for state in states:
+                probabilities = self.compute_probability(wind_speeds, action, np.array([state] * len(wind_speeds)))
+                plt.plot(wind_speeds,1-probabilities, label=labels[i])
+                i+=1
+
+        plt.xlabel("Wind Speed [m/s]")
+        plt.ylabel("Success Probability")
+        plt.title("Success Probability vs Wind Speed for Different Actions and States")
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
 class SigmoidSuccessProbability(ActionSuccessProbabilityModel):
     """Abstract base class for probability models using a sigmoid function."""
 
@@ -973,4 +1002,4 @@ if __name__ == "__main__":
         "moderate",
     )
     print(model)
-    model.visualize_success_probability()
+    model.visualize_failure_probability()

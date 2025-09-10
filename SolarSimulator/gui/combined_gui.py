@@ -622,11 +622,12 @@ class HDF5RewardPlotter:
 
         df = pd.DataFrame(records)
         self._summary = df
-        # opt_df = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
-        # # if not opt_df.empty:
-        # #     self.opt_reward = opt_df['mean_reward'].mean()
-        # #     self.opt_failure_step = opt_df['mean_failure_step'].mean()
-        # #     self.opt_failure_pct = opt_df['failure_percentage'].mean()
+        opt_df = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
+        if not opt_df.empty:
+            self.opt_reward = opt_df['mean_reward'].mean()
+            self.opt_failure_step = opt_df['mean_failure_step'].mean()
+            self.opt_failure_pct = opt_df['failure_percentage'].mean()
+        print(df)
 
     def _get_summary(self):
         if self._summary is None:

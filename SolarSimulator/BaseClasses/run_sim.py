@@ -64,8 +64,9 @@ class EnvironmentLoader:
         wind_scale = window["weibull_scale"].values
         solar_a = window["beta_alpha"].values
         solar_b = window["beta_beta"].values
+        cs = window["clearsky_irradiance"].values
         wind_dist = np.column_stack(tup=(wind_k, wind_scale))
-        solar_dist = np.column_stack(tup=(solar_a, solar_b))
+        solar_dist = np.column_stack(tup=(solar_a, solar_b, cs))
         whale_series = WhaleRewardSeriesFactory.create_series(
             self.whale_type, self.horizon
         )

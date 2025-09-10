@@ -4,7 +4,6 @@ from BaseClasses.mdp_base import AbstractMDP,stochasticMDP
 from typing import Optional
 from scipy.stats import beta, weibull_min
 from scipy.special import betainc
-from BaseClasses.plotting_utils_base import PlottingUtils
 
 from numpy.polynomial.legendre import leggauss
 
@@ -93,7 +92,7 @@ class mdpBackwardSolver:
         filename = f"future_value_table_{self.mdp.battery_capacity_wh}Wh_{self.horizon}h_{self.mdp.failure_penalty}p_{self.mdp.env_provider.lat}lat.npy"
         np.save(filename, self.future_value_table)
         print("Value function table saved to:", filename)
-        PlottingUtils.plot_surface_plotly(self.future_value_table, self.mdp.battery_capacity_wh, filename)
+        # PlottingUtils.plot_surface_plotly(self.future_value_table, self.mdp.battery_capacity_wh, filename)
 
     def value_function(self, stage: int, rewards: np.ndarray, next_states: np.ndarray) -> float:
         """
@@ -221,7 +220,7 @@ class mdpAnalyticalBackwardSolver:
         self._GAMMA = 1.0
         self.future_value_table = self._initialize_future_value_table()
         self.optimal_action_table = np.zeros_like(self.future_value_table)
-        # self.G_MAX = self.mdp.env_provider._energy_gain_from_solar(1.)
+        self.G_MAX = self.mdp.env_provider._energy_gain_from_solar(1.)
         soc_values = self.states[:-1, 0]  # exclude the 'broken' terminal state
         self._soc_grid = np.array(sorted(set(np.round(soc_values, 6))))
         self._num_modes = 2  # assume modes 0 and 1, mode==2 is broken
@@ -300,12 +299,9 @@ class mdpAnalyticalBackwardSolver:
         C_joules = self.mdp.transition_logic.soc_to_energy(states[:, 0])
         required = self.mdp.transition_logic.get_required_energy(states, actions)
         deficits = required - C_joules  # shape = (n,)
-        G_MAX = np.max((self.mdp.env_provider.get_solar_cs_joules(t),10))
 
         # 2) Normalized deficit ∈ [0,1]
-        u = np.clip(deficits / G_MAX, 0.0, 1.0)
-        # if deficits/G_MAX > 1.0:
-        #     print(f"{G_MAX}")
+        u = np.clip(deficits / self.G_MAX, 0.0, 1.0)
 
         # 3) Solar-failure probability p_B
         α = self.mdp.env_provider.get_solar_alpha(t)
@@ -347,7 +343,6 @@ class mdpAnalyticalBackwardSolver:
             f"{self.start_date[0:12]}.npy"
         )
         np.save(filename, self.future_value_table)
-        # PlottingUtils.plot_surface_plotly(self.future_value_table, self.mdp.battery_capacity_wh, filename)
         print("Value function table saved to:", filename)
 
     def lookup_future_values(self, states: np.ndarray, stages: np.ndarray) -> np.ndarray:
@@ -434,17 +429,17 @@ class mdpAnalyticalBackwardSolver:
                 self.n_soc_levels : 2 * self.n_soc_levels,
                 stage + 1
             ]
-        max_collected_energy_J = self.mdp.env_provider.get_solar_cs_joules(stage)
+
         # Then call (make sure V_next has shape (101,) exactly!)
         survival_contribution = self.compute_survival_contribution(
-            stored_energy,                               # C_k
-            required_energy,                             # E_k
-            max_collected_energy_J,   # G_max
-            alpha_k,                                     # Beta α
-            beta_k,                                      # Beta β
-            p_fail,                                      # failure probability
-            V_next,                                      # array of length 101
-            Δ                                            # capacity/100
+            stored_energy,            # C_k
+            required_energy,          # E_k
+            self.G_MAX,               # G_max
+            alpha_k,                  # Beta α
+            beta_k,                   # Beta β
+            p_fail,                   # failure probability
+            V_next,                   # array of length 101
+            Δ                         # capacity/100
         )
         
         return (0.0 * p_fail) + survival_contribution
@@ -485,7 +480,6 @@ class mdpAnalyticalBackwardSolver:
         # 3) We want P{ n·Δ ≤ (Cₖ + Gₖ − Eₖ) < (n+1)·Δ } for each bin n=0..100.
         #    Equivalently, P{ Gₖ ∈ [ (n·Δ + Eₖ − δ),  ((n+1)·Δ + Eₖ − δ) ) }.
         #    So we shift edges by +Eₖ−δ:
-        G_max = np.max((G_max,10.))
         u_lower = (e_lower + Ek - δ) / G_max
         u_upper = (e_upper + Ek - δ) / G_max
 

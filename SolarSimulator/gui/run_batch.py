@@ -7,14 +7,14 @@ Behavior:
     YAMLSimulationRunner._build_param_list() -> create_simulation_wrapper(job_args)
 - Runs SIMULATIONS in parallel (processes), EPISODES serially inside each sim
 - Writes ONE HDF5 per CONFIG (timestamped), with each simulation as its own group
-- Dynamic scheduling (when supported by SimulationRunManager): chunksize=1 keeps cores busy
-- Gracefully handles older SimulationRunManager without chunk_size/maxtasksperchild
+- Dynamic scheduling when supported by SimulationRunManager (chunksize=1 keeps cores busy)
+- Optional verbose per-worker START/DONE messages when SimulationRunManager supports 'verbose'
 
 Usage examples:
   python run_batch.py ./configs                         # run all *.y*ml in a dir
   python run_batch.py ./configs --pattern "case*.yaml"  # filter
   python run_batch.py ./configs/case1.yaml              # single config
-  python run_batch.py ./configs --workers 20 --chunksize 1 --maxtasksperchild 1
+  python run_batch.py ./configs --workers 20 --chunksize 1 --maxtasksperchild 1 --verbose-workers
 """
 
 import argparse
@@ -32,10 +32,12 @@ from BaseClasses.run_sim import YAMLSimulationRunner
 from BaseClasses.simulation_run_manager import SimulationRunManager
 
 
-def _build_sims_like_gui(runner: YAMLSimulationRunner,
-                         build_workers: int,
-                         save_history: bool,
-                         full_history_eps: int):
+def _build_sims_like_gui(
+    runner: YAMLSimulationRunner,
+    build_workers: int,
+    save_history: bool,
+    full_history_eps: int,
+):
     """
     Replicates the GUI's path:
       param_list = runner._build_param_list()
@@ -47,7 +49,7 @@ def _build_sims_like_gui(runner: YAMLSimulationRunner,
     # (factory, sim_type, cap, th, wth)
     param_list = runner._build_param_list()
 
-    # append flags expected by create_simulation_wrapper(...)
+    # Append flags expected by create_simulation_wrapper(...)
     job_args = [(*args, save_history, full_history_eps) for args in param_list]
 
     if build_workers > 1:
@@ -62,15 +64,18 @@ def _build_sims_like_gui(runner: YAMLSimulationRunner,
     return sims
 
 
-def _call_manager_run(mgr: SimulationRunManager,
-                      sims: list,
-                      use_multiproc: bool,
-                      run_workers: int,
-                      chunk_size: int | None,
-                      maxtasksperchild: int | None):
+def _call_manager_run(
+    mgr: SimulationRunManager,
+    sims: list,
+    use_multiproc: bool,
+    run_workers: int,
+    chunk_size: int | None,
+    maxtasksperchild: int | None,
+    verbose: bool,
+):
     """
     Call SimulationRunManager.run_simulations with best-available signature.
-    Older versions may not support chunk_size / maxtasksperchild: fall back cleanly.
+    Older versions may not support chunk_size / maxtasksperchild / verbose: fall back cleanly.
     """
     sig = inspect.signature(mgr.run_simulations)
     kwargs = dict(
@@ -82,20 +87,25 @@ def _call_manager_run(mgr: SimulationRunManager,
         kwargs["chunk_size"] = max(1, int(chunk_size))
     if "maxtasksperchild" in sig.parameters and maxtasksperchild is not None:
         kwargs["maxtasksperchild"] = int(maxtasksperchild)
+    if "verbose" in sig.parameters:
+        kwargs["verbose"] = bool(verbose)
 
     return mgr.run_simulations(**kwargs)
 
 
-def _run_one_config(config_path: str,
-                    out_dir: str | None,
-                    include_optimal: str,
-                    build_workers: int,
-                    run_workers: int,
-                    use_multiproc: bool,
-                    chunk_size: int | None,
-                    maxtasksperchild: int | None,
-                    save_history: bool,
-                    full_history_eps: int):
+def _run_one_config(
+    config_path: str,
+    out_dir: str | None,
+    include_optimal: str,
+    build_workers: int,
+    run_workers: int,
+    use_multiproc: bool,
+    chunk_size: int | None,
+    maxtasksperchild: int | None,
+    save_history: bool,
+    full_history_eps: int,
+    verbose_workers: bool,
+):
     cfg_base = os.path.splitext(os.path.basename(config_path))[0]
     print(f"[run] config: {cfg_base}")
 
@@ -148,6 +158,7 @@ def _run_one_config(config_path: str,
         run_workers=run_workers,
         chunk_size=chunk_size,
         maxtasksperchild=maxtasksperchild,
+        verbose=verbose_workers,
     )
     dt = time.time() - t0
     print(f"[done] {cfg_base}: {dt:.2f}s ({dt/3600:.2f}h)")
@@ -185,6 +196,10 @@ def main():
     ap.add_argument("--full-history-eps", type=int, default=1,
                     help="Episodes to record full history for; also used as fallback for 'episodes' if not set.")
 
+    # Worker logging
+    ap.add_argument("--verbose-workers", action="store_true",
+                    help="Workers print START/DONE for each simulation (requires manager support).")
+
     args = ap.parse_args()
 
     # Windows-friendly multiprocessing setup
@@ -218,6 +233,7 @@ def main():
             maxtasksperchild=args.maxtasksperchild,
             save_history=args.save_history,
             full_history_eps=args.full_history_eps,
+            verbose_workers=args.verbose_workers,
         )
 
     print("All done.")

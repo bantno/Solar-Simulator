@@ -169,12 +169,14 @@ class SimulationRunManager:
                 )
                 group = self._make_group_name(sim_meta)
                 self.storage.store_simulation(sim_meta, episodes, group_name=group)
+                episodes = None
                 # Optional extra durability: flush after each sim
                 try:
                     self.storage.h5file.flush()
                 except Exception:
                     pass
-                print(f"→ Stored group '{group}' with {len(episodes)} episodes")
+                # print(f"→ Stored group '{group}' with {len(episodes)} episodes")
+                print(f"→ Stored group '{group}' with {sim_meta.get('episodes_count', 'n/a')} episodes")
 
         # --- PARALLEL execution ---
         else:
@@ -191,12 +193,14 @@ class SimulationRunManager:
                 for sim_meta, episodes in pool.imap_unordered(_run_one_sim, tasks, chunksize=max(1, int(chunk_size))):
                     group = self._make_group_name(sim_meta)
                     self.storage.store_simulation(sim_meta, episodes, group_name=group)
+                    episodes = None
                     # Optional extra durability: flush after each sim
                     try:
                         self.storage.h5file.flush()
                     except Exception:
                         pass
-                    print(f"→ Stored group '{group}' with {len(episodes)} episodes")
+                    # print(f"→ Stored group '{group}' with {len(episodes)} episodes")
+                    print(f"→ Stored group '{group}' with {sim_meta.get('episodes_count', 'n/a')} episodes")
 
         # Close the HDF5 file when all writes are done
         self.storage.close()

@@ -277,8 +277,8 @@ if __name__ == "__main__":
     # latitude = [20.0,30.0,35.0,40.0,58.0]
     # longitude = [-159.0,-75.0,14.0,138.0,-161.0]
 
-    latitude = [35.0,40.0,58.0]
-    longitude = [14.0,138.0,-161.0]
+    latitude = [30.0]
+    longitude = [-75.0]
 
     for i in range(len(latitude)):
         processor = WeatherDataProcessor()

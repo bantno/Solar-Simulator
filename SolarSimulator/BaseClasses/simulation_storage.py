@@ -156,8 +156,7 @@ class SimulationStorageHDF5:
                     ep_grp.create_dataset(
                         field,
                         data=str_data,
-                        compression="gzip",
-                        compression_opts=9,
+                        compression="lzf",
                         shuffle=True,
                         # a simple chunk along first axis
                         chunks=(min(arr.shape[0], 1024),) + arr.shape[1:]
@@ -174,8 +173,7 @@ class SimulationStorageHDF5:
                 ep_grp.create_dataset(
                     field,
                     data=arr,
-                    compression="gzip",
-                    compression_opts=9,
+                    compression="lzf",
                     shuffle=True,
                     chunks=chunk_shape
                 )

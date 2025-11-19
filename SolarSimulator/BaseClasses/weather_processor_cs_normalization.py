@@ -169,8 +169,31 @@ class WeatherDataProcessor:
 
         # Only fit when all measurements exceed 15.0 (same condition)
         if clearsky_irradiance > 50:
+             # Check saturation BEFORE clipping
+            norm_raw = np.asarray(data, dtype=float) / clearsky_irradiance
+            # Consider it saturated if everything is at or above clearsky by a small tolerance
+            if np.all(norm_raw >= (0.999)):
+                # Near-degenerate Beta concentrated just below 1
+                mu_tgt = 1.0 - 1e-6
+                kappa0 = 1e6
+                alpha = mu_tgt * kappa0
+                beta_param = (1.0 - mu_tgt) * kappa0
+                expected_beta = mu_tgt * clearsky_irradiance
+                return (alpha, beta_param), expected_beta, clearsky_irradiance
             # Normalize and clip to (1e-7, 0.999999) as before
-            normalized = np.clip(data / clearsky_irradiance, 1e-7, 0.999999)
+            normalized = np.clip(norm_raw, 1e-7, 0.999999)
+
+            # 2a) Flat-bin guard: if all values equal (variance == 0), fall back
+            if np.allclose(normalized, normalized[0], rtol=0.0, atol=1e-12):
+                mu = float(normalized[0])
+                # push off boundary if needed
+                mu_tgt = min(max(mu, 1e-6), 1.0 - 1e-6)
+                kappa0 = 1e6
+                alpha = mu_tgt * kappa0
+                beta_param = (1.0 - mu_tgt) * kappa0
+                expected_beta = mu_tgt * clearsky_irradiance
+                return (alpha, beta_param), expected_beta, clearsky_irradiance
+
 
             # Method-of-moments fit (unchanged API)
             alpha, beta_param = self.fit_beta_mom(normalized)
@@ -251,18 +274,27 @@ class WeatherDataProcessor:
 # Example usage
 if __name__ == "__main__":
     processor = WeatherDataProcessor()
-    lat, lon = 30, -75
-    timestep_min = 15
-    processor.fetch_weather_data(
-        lat,
-        lon,
-        "1950-01-01",
-        "2022-12-31",
-        ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
-    )
-    hourly_df = processor.process_hourly_data()
-    hourly_df.to_pickle(rf"Data\HISTORICAL_DATA\data_{lat}_{lon}.pkl")
-    resampled_df = processor.resample_data(timestep_min)
+    # latitude = [20.0,30.0,35.0,40.0,58.0]
+    # longitude = [-159.0,-75.0,14.0,138.0,-161.0]
 
-    expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat:.1f}_lon{lon:.1f}_{timestep_min}min.pkl"
-    processor.fit_distributions(resampled_df, expected_data_filename)
+    latitude = [30.0]
+    longitude = [-75.0]
+
+    for i in range(len(latitude)):
+        processor = WeatherDataProcessor()
+        lat = latitude[i]
+        lon = longitude[i]
+        timestep_min = 15
+        processor.fetch_weather_data(
+            lat,
+            lon,
+            "1950-01-01",
+            "2022-12-31",
+            ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
+        )
+        hourly_df = processor.process_hourly_data()
+        hourly_df.to_pickle(rf"Data\HISTORICAL_DATA\data_{lat}_{lon}.pkl")
+        resampled_df = processor.resample_data(timestep_min)
+
+        expected_data_filename = rf"Data\EXPECTED_DATA\data_expected_lat{lat:.1f}_lon{lon:.1f}_{timestep_min}min.pkl"
+        processor.fit_distributions(resampled_df, expected_data_filename)

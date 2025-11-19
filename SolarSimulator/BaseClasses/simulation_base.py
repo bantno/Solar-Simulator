@@ -254,10 +254,15 @@ class AbstractContinuousEnergySimulation(ABC):
             # check for failure (mode==2)
             if state[1] == 2:
                 last_idx = t + 1
+                if next_energy_arr < 0:
+                    failure_type = 2 # Battery Depletion Failure
+                else:
+                    failure_type = 1 # Crash Failure
                 break
         else:
             # no failure in full horizon
             last_idx = max_steps
+            failure_type = 0 # No failure
         
         # slice out only the filled portion
         return (
@@ -267,11 +272,11 @@ class AbstractContinuousEnergySimulation(ABC):
             solar_samples[:last_idx],
             wind_samples[:last_idx],
             whale_samples[:last_idx],
-            energies[:last_idx+1]        # energies from t=0 to last_idx
+            energies[:last_idx+1],       # energies from t=0 to last_idx
+            failure_type,
         )
     
     def step(self, energy, states, actions, energy_gain, wind_sample,t):
-        # The samples for solar, wind, and whale need to be exposed in this function. Right now these are sampled in the transition function, but it needs to be in the simulation loop.
         next_states, next_energy = self.mdp.transition_logic.transition_continuous_energy_with_wind_and_energy(energy, states, actions, wind_sample, energy_gain)
         rewards = self.mdp.reward(states, actions, next_states, t)
         return next_states, rewards, next_energy
@@ -284,7 +289,7 @@ class AbstractContinuousEnergySimulation(ABC):
         """
         for episode_index in tqdm(range(num_episodes)):
             self.env_provider.reset(episode_index)
-            traj, acts, rews, solar, wind, whale, energies = self.simulate_episode()
+            traj, acts, rews, solar, wind, whale, energies, failure_type = self.simulate_episode()
 
             # Determine if this episode should save full history
             if (self.save_history
@@ -303,6 +308,7 @@ class AbstractContinuousEnergySimulation(ABC):
                     'flight_hrs' : sum(acts)/4, # TODO: Make this not hardcoded for 15min time step
                     'failure': traj[-1][1] == 2,
                     'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
+                    'failure_type': failure_type,
                 }
             else:
                 # summary only
@@ -312,6 +318,7 @@ class AbstractContinuousEnergySimulation(ABC):
                     'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
                     'total_reward': sum(rews),
                     'flight_hrs' : sum(acts)/4, # TODO: Make this not hardcoded for 15min time step
+                    'failure_type': failure_type,
                 }
 
             yield episode_data

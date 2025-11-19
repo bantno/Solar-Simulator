@@ -95,17 +95,20 @@ class ActionSuccessProbabilityModel(ABC):
             "Fly"
         ]
 
-        plt.figure(figsize=(12, 8))
+        plt.figure(figsize=(5, 3))
         i=0
         for action in actions:
             for state in states:
                 probabilities = self.compute_probability(wind_speeds, action, np.array([state] * len(wind_speeds)))
-                plt.plot(wind_speeds,1-probabilities, label=labels[i])
+                if i == 3:
+                    plt.plot(wind_speeds,1-probabilities, label=labels[i],ls="-.")
+                else:
+                    plt.plot(wind_speeds,1-probabilities, label=labels[i],)
                 i+=1
 
         plt.xlabel("Wind Speed [m/s]")
-        plt.ylabel("Success Probability")
-        plt.title("Success Probability vs Wind Speed for Different Actions and States")
+        plt.ylabel(r"P($z_{k}$=1)")
+        # plt.title("Failure Probability vs Wind Speed for Different Actions and States")
         plt.legend()
         plt.grid(True)
         plt.show()

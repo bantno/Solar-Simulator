@@ -57,8 +57,8 @@ class Seaplane:
         self.solar_panel_efficiency = 0.1
 
         # Propulsion efficiency factors (assumed typical values)
-        self.motor_efficiency = 0.85     # η_m
-        self.propeller_efficiency = 0.85 # η_p
+        self.motor_efficiency = 0.9     # η_m
+        self.propeller_efficiency = 0.8 # η_p
 
         self.INSTALLED_PROPULSION_POWER = 4000 # Watts
         self.cruise_altitude = 300 # meters

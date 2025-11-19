@@ -751,7 +751,7 @@ if __name__ == '__main__':
     # plotter.load_and_plot_reward_violin(simulation_ids=range(1))
     # plotter.plot_reward_stats_by_battery_capacity(simulation_ids=range(11),storage_dir=r"simulation_results\threshold_sweep")
     # plotter.load_and_plot_reward_histogram_subplots(simulation_ids=range(15))
-    plotter.load_and_plot_threshold_sweep(simulation_ids=range(139))
+    # plotter.load_and_plot_threshold_sweep(simulation_ids=range(139))
     # Other methods can be used similarly:
     # plotter.plot_specific_episode(simulation_id=0, episode_index=0)
     # plotter.plot_multiple_episodes_from_simulation(simulation_id=0, episode_indices=[0, 1, 2])

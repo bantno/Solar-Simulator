@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from BaseClasses.environment_provider_base import StochasticWindSolarEnvironmentProvider as EnvProv
+from BaseClasses.environment_provider_base_cs_normalization import StochasticWindSolarEnvironmentProvider as EnvProv
 from BaseClasses.mdp_base import stochasticMDP
 from BaseClasses.backward_induction_base import mdpBackwardSolver, mdpAnalyticalBackwardSolver
 from BaseClasses.seaplane_base import Seaplane

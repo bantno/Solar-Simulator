@@ -44,19 +44,54 @@ from matplotlib.backends.backend_qt5agg import (
 # 1) Multi‐Simulation Episode Inspector (adapted from plot_states_gui.py)
 # ------------------------------------------------------------------------------
 
-def _finish_plot(ax, title):
-    # move legend outside on the right
-    ax.legend(
-        loc='upper left',
-        bbox_to_anchor=(1.02, 1),
-        borderaxespad=0
-    )
-    ax.set_title(title)
-    ax.grid(True)
+def _finish_plot(
+    ax,
+    title: str = "",
+    xlabel: str = "",
+    ylabel: str = "",
+    legend_outside: bool = True,
+    show: bool = True
+):
+    """
+    Apply standard formatting to axes and optionally show plot.
 
-    # give room for the legend
-    plt.subplots_adjust(right=0.75)
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        The axes to format.
+    title : str, optional
+        Plot title.
+    xlabel : str, optional
+        X-axis label.
+    ylabel : str, optional
+        Y-axis label.
+    legend_outside : bool, optional
+        If True, place legend outside plot area on the right.
+    show : bool, optional
+        If True, call plt.show() to display the plot.
+    """
+    if title:
+        ax.set_title(title)
+    if xlabel:
+        ax.set_xlabel(xlabel)
+    if ylabel:
+        ax.set_ylabel(ylabel)
+
+    if legend_outside:
+        ax.legend(
+            loc='upper left',
+            bbox_to_anchor=(1.02, 1),
+            borderaxespad=0
+        )
+        plt.subplots_adjust(right=0.75)
+    else:
+        ax.legend()
+
+    ax.grid(True)
     plt.tight_layout()
+
+    if show:
+        plt.show()
 
 
 class InspectorTab(QWidget):
@@ -544,6 +579,198 @@ class HDF5RewardPlotter:
         self.opt_failure_step = None
         self.opt_failure_pct = None
 
+    # ========== Helper Methods for Plotting ==========
+
+    def _filter_data(
+        self,
+        algorithms: list[str] | None = None,
+        obs_thresholds: list[float] | None = None,
+        wind_thresholds: list[float] | None = None,
+        penalties: list[float] | None = None,
+        include_optimal: bool = False
+    ) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+        """
+        Standard filtering applied to summary data.
+
+        Parameters
+        ----------
+        algorithms : list[str], optional
+            List of algorithm/sim_type names to include.
+        obs_thresholds : list[float], optional
+            List of observation thresholds to include.
+        wind_thresholds : list[float], optional
+            List of wind thresholds to include.
+        penalties : list[float], optional
+            List of failure penalties to include.
+        include_optimal : bool, optional
+            If True, return filtered optimal data as well.
+
+        Returns
+        -------
+        tuple[pd.DataFrame, pd.DataFrame | None]
+            (filtered_main, filtered_optimal) dataframes
+        """
+        df = self._get_summary()
+        df_opt = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
+        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+
+        if algorithms:
+            df_main = df_main[df_main['sim_type'].isin(algorithms)]
+        if obs_thresholds:
+            df_main = df_main[df_main['observation_threshold'].isin(obs_thresholds)]
+        if wind_thresholds:
+            df_main = df_main[df_main['wind_threshold'].isin(wind_thresholds)]
+        if penalties:
+            df_main = df_main[df_main['failure_penalty'].isin(penalties)]
+            df_opt = df_opt[df_opt['failure_penalty'].isin(penalties)]
+
+        if df_main.empty:
+            raise ValueError("No data after filtering. Check selections.")
+
+        return df_main, df_opt if include_optimal else (df_main, None)
+
+    def _create_subplot_grid(self, n_items: int, figsize_per_subplot=(5, 4)):
+        """
+        Create a square-ish grid of subplots.
+
+        Parameters
+        ----------
+        n_items : int
+            Number of subplots needed.
+        figsize_per_subplot : tuple, optional
+            (width, height) per subplot.
+
+        Returns
+        -------
+        tuple
+            (fig, axes) where axes is always a 2D array via squeeze=False
+        """
+        cols = int(np.ceil(np.sqrt(n_items)))
+        rows = int(np.ceil(n_items / cols))
+
+        w, h = figsize_per_subplot
+        fig, axes = plt.subplots(
+            rows, cols,
+            figsize=(w * cols, h * rows),
+            squeeze=False
+        )
+
+        # Delete unused subplots
+        for idx in range(n_items, rows * cols):
+            fig.delaxes(axes.flatten()[idx])
+
+        return fig, axes
+
+    def _add_optimal_baseline(
+        self,
+        ax,
+        value: float,
+        metric_name: str = "Reward",
+        **plot_kwargs
+    ):
+        """
+        Add optimal baseline to plot as a horizontal line.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            The axes to add the baseline to.
+        value : float
+            The optimal value to plot.
+        metric_name : str, optional
+            Name of the metric for the label.
+        **plot_kwargs
+            Additional keyword arguments passed to axhline.
+        """
+        if value is not None:
+            defaults = {
+                'linestyle': '--',
+                'color': 'black',
+                'label': f"Optimal Mean {metric_name} ({value:.3f})"
+            }
+            defaults.update(plot_kwargs)
+            ax.axhline(value, **defaults)
+
+    def _pivot_by_thresholds(
+        self,
+        df: pd.DataFrame,
+        value_column: str
+    ) -> pd.DataFrame:
+        """
+        Standard pivot: rows=obs_threshold, cols=wind_threshold.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            DataFrame containing threshold data.
+        value_column : str
+            Column name to use as values in pivot table.
+
+        Returns
+        -------
+        pd.DataFrame
+            Pivoted data.
+        """
+        return df.pivot(
+            index='observation_threshold',
+            columns='wind_threshold',
+            values=value_column
+        )
+
+    def _plot_threshold_lines(
+        self,
+        ax,
+        pivot: pd.DataFrame,
+        y_label: str = "Wind Threshold",
+        **plot_kwargs
+    ):
+        """
+        Plot a line for each wind threshold column in pivot table.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            The axes to plot on.
+        pivot : pd.DataFrame
+            Pivoted data with wind thresholds as columns.
+        y_label : str, optional
+            Label prefix for legend entries.
+        **plot_kwargs
+            Additional keyword arguments passed to plot.
+        """
+        for wind in pivot.columns:
+            ax.plot(
+                pivot.index,
+                pivot[wind],
+                label=f"{y_label} {wind} m/s",
+                **plot_kwargs
+            )
+
+    def _create_plot_axes(self, canvas=None, figsize=(8, 6)):
+        """
+        Create axes, either on a Qt canvas or a new figure.
+
+        Parameters
+        ----------
+        canvas : PlotCanvas, optional
+            Qt canvas to plot on. If None, creates new figure.
+        figsize : tuple, optional
+            Figure size if creating new figure.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The axes to plot on.
+        """
+        if canvas:
+            canvas.clear()
+            return canvas.get_axes(111)
+        else:
+            fig, ax = plt.subplots(figsize=figsize)
+            return ax
+
+    # ========== End Helper Methods ==========
+
     def open_file(self):
         if self.file is None:
             self.file = h5py.File(self.file_path, 'r')
@@ -638,216 +865,156 @@ class HDF5RewardPlotter:
         self,
         algorithms: list[str] | None = None,
         obs_thresholds: list[float] | None = None,
-        wind_thresholds: list[float] | None = None
+        wind_thresholds: list[float] | None = None,
+        canvas=None
     ):
-        df = self._get_summary()
-        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+        """
+        Plot mean reward by threshold combinations.
 
-        if algorithms:
-            df_main = df_main[df_main['sim_type'].isin(algorithms)]
+        Parameters
+        ----------
+        algorithms : list[str], optional
+            List of algorithm names to include.
+        obs_thresholds : list[float], optional
+            List of observation thresholds to include.
+        wind_thresholds : list[float], optional
+            List of wind thresholds to include.
+        canvas : PlotCanvas, optional
+            Qt canvas to embed plot in. If None, creates popup window.
+        """
+        df_main, _ = self._filter_data(algorithms, obs_thresholds, wind_thresholds)
+        pivot = self._pivot_by_thresholds(df_main, 'mean_reward')
 
-        if obs_thresholds:
-            df_main = df_main[df_main['observation_threshold'].isin(obs_thresholds)]
-        if wind_thresholds:
-            df_main = df_main[df_main['wind_threshold'].isin(wind_thresholds)]
+        ax = self._create_plot_axes(canvas, figsize=(8, 6))
+        self._plot_threshold_lines(ax, pivot, marker='x')
+        self._add_optimal_baseline(ax, self.opt_reward, "Reward")
 
-        if df_main.empty:
-            raise ValueError("No data left after filtering. Check your selections.")
-
-        pivot = df_main.pivot(
-            index='observation_threshold',
-            columns='wind_threshold',
-            values='mean_reward'
+        _finish_plot(
+            ax,
+            title="Mean Total Reward by Threshold Combination",
+            xlabel="Observation Threshold",
+            ylabel="Mean Total Reward",
+            show=(canvas is None)
         )
 
-        fig, ax = plt.subplots(figsize=(8, 6))
-        for w in pivot.columns:
-            ax.plot(pivot.index, pivot[w], marker='x', label=f"Wind Threshold {w} m/s")
-
-        if self.opt_reward is not None:
-            ax.axhline(
-                self.opt_reward,
-                linestyle='--',
-                label=f"Optimal Mean Reward ({self.opt_reward:.3f})"
-            )
-
-        ax.set_xlabel("Observation Threshold")
-        ax.set_ylabel("Mean Total Reward")
-        _finish_plot(ax, "Mean Total Reward by Threshold Combination")
-        plt.show()
+        if canvas:
+            canvas.draw()
 
     def plot_mean_failure_step_by_thresholds(
         self,
         algorithms: list[str] | None = None,
         obs_thresholds: list[float] | None = None,
-        wind_thresholds: list[float] | None = None
+        wind_thresholds: list[float] | None = None,
+        canvas=None
     ):
         """
         Plot the mean failure step (time to failure) for each
         combination of observation and wind thresholds.
 
-        Parameters:
-            algorithms: list of sim_type names to include (None = all non-optimal)
-            obs_thresholds: list of observation thresholds to include (None = all)
-            wind_thresholds: list of wind thresholds to include (None = all)
+        Parameters
+        ----------
+        algorithms : list[str], optional
+            List of sim_type names to include (None = all non-optimal).
+        obs_thresholds : list[float], optional
+            List of observation thresholds to include (None = all).
+        wind_thresholds : list[float], optional
+            List of wind thresholds to include (None = all).
+        canvas : PlotCanvas, optional
+            Qt canvas to embed plot in. If None, creates popup window.
         """
-        # 1) Load and filter out any 'optimal' simulations
-        df = self._get_summary()
-        df = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+        df_main, _ = self._filter_data(algorithms, obs_thresholds, wind_thresholds)
+        pivot = self._pivot_by_thresholds(df_main, 'mean_failure_step')
 
-        # 2) Apply user filters
-        if algorithms:
-            df = df[df['sim_type'].isin(algorithms)]
-        if obs_thresholds:
-            df = df[df['observation_threshold'].isin(obs_thresholds)]
-        if wind_thresholds:
-            df = df[df['wind_threshold'].isin(wind_thresholds)]
+        ax = self._create_plot_axes(canvas, figsize=(8, 6))
+        self._add_optimal_baseline(ax, self.opt_failure_step, "Failure Step")
+        self._plot_threshold_lines(ax, pivot, marker='o')
 
-        if df.empty:
-            raise ValueError("No data left after filtering. Check your selections.")
-
-        # 3) Pivot into a matrix: rows=obs_thresh, cols=wind_thresh
-        pivot = df.pivot(
-            index='observation_threshold',
-            columns='wind_threshold',
-            values='mean_failure_step'
+        _finish_plot(
+            ax,
+            xlabel="Observation Threshold",
+            ylabel="Mean Failure Step",
+            show=(canvas is None)
         )
 
-        # 4) Create the plot
-        fig, ax = plt.subplots(figsize=(8, 6))
-        
-        # 5) Optimal baseline
-        if hasattr(self, 'opt_failure_step') and self.opt_failure_step is not None:
-            ax.axhline(
-                self.opt_failure_step,
-                linestyle='--',
-                color = "black",
-                label=f"Optimal Mean Failure Step ({self.opt_failure_step:.1f})"
-            )
-
-        # 6) Label axes
-        ax.set_xlabel("Observation Threshold")
-        ax.set_ylabel("Mean Failure Step")
-        
-        for w in pivot.columns:
-            ax.plot(
-                pivot.index,
-                pivot[w],
-                marker='o',
-                label=f"Wind Threshold {w} m/s"
-            )
-
-        # 7) Move legend outside to the right
-        ax.legend(
-            loc='upper left',         # anchor point for the legend
-            bbox_to_anchor=(1.02, 1), # position just outside the axes
-            borderaxespad=0
-        )
-        plt.subplots_adjust(right=0.75)  # make room on the right
-        ax.grid(True)
-        plt.tight_layout()
-        plt.show()
+        if canvas:
+            canvas.draw()
 
 
     def plot_failure_percentage_by_thresholds(
         self,
         algorithms: list[str] | None = None,
         obs_thresholds: list[float] | None = None,
-        wind_thresholds: list[float] | None = None
+        wind_thresholds: list[float] | None = None,
+        canvas=None
     ):
         """
         Plot the failure percentage for each combination of observation and wind thresholds.
 
-        Parameters:
-            algorithms: list of sim_type names to include (None = all non-optimal)
-            obs_thresholds: list of observation thresholds to include (None = all)
-            wind_thresholds: list of wind thresholds to include (None = all)
+        Parameters
+        ----------
+        algorithms : list[str], optional
+            List of sim_type names to include (None = all non-optimal).
+        obs_thresholds : list[float], optional
+            List of observation thresholds to include (None = all).
+        wind_thresholds : list[float], optional
+            List of wind thresholds to include (None = all).
+        canvas : PlotCanvas, optional
+            Qt canvas to embed plot in. If None, creates popup window.
         """
-        # 1) Load and filter out any 'optimal' simulations
-        df = self._get_summary()
-        df_opt = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
-        df = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
+        df_main, _ = self._filter_data(algorithms, obs_thresholds, wind_thresholds)
+        pivot = self._pivot_by_thresholds(df_main, 'failure_percentage')
 
-        # 2) Apply user filters
-        if algorithms:
-            df = df[df['sim_type'].isin(algorithms)]
-        if obs_thresholds:
-            df = df[df['observation_threshold'].isin(obs_thresholds)]
-        if wind_thresholds:
-            df = df[df['wind_threshold'].isin(wind_thresholds)]
+        ax = self._create_plot_axes(canvas, figsize=(8, 6))
+        self._plot_threshold_lines(ax, pivot, marker='s')
+        self._add_optimal_baseline(ax, self.opt_failure_pct, "Failure %", label=f"Optimal Failure % ({self.opt_failure_pct:.1f})" if self.opt_failure_pct else None)
 
-        if df.empty:
-            raise ValueError("No data left after filtering. Check your selections.")
-
-        # 3) Pivot into a matrix: rows=obs_thresh, cols=wind_thresh
-        pivot = df.pivot(
-            index='observation_threshold',
-            columns='wind_threshold',
-            values='failure_percentage'
+        _finish_plot(
+            ax,
+            xlabel="Observation Threshold",
+            ylabel="Failure Percentage",
+            show=(canvas is None)
         )
 
-        # 4) Create the plot
-        fig, ax = plt.subplots(figsize=(8, 6))
-        for w in pivot.columns:
-            ax.plot(
-                pivot.index,
-                pivot[w],
-                marker='s',
-                label=f"Wind Threshold {w} m/s"
-            )
+        if canvas:
+            canvas.draw()
 
-        # 5) Optional optimal baseline
-        failure_percentage = df_opt["failure_percentage"].values[0]
-        if df_opt is not None:
-            ax.axhline(
-                failure_percentage,
-                linestyle='--',
-                label=f"Optimal Failure % ({failure_percentage:.1f})"
-            )
+    def plot_reward_vs_capacity_by_thresholds(self, canvas=None):
+        """
+        Plot mean reward vs battery capacity for each observation threshold.
 
-        # 6) Label axes
-        ax.set_xlabel("Observation Threshold")
-        ax.set_ylabel("Failure Percentage")
+        Creates a grid of subplots, one for each observation threshold value.
+        Each subplot shows how mean reward varies with battery capacity for
+        different wind threshold values.
 
-        # 7) Move legend outside to the right
-        ax.legend(
-            loc='upper left',
-            bbox_to_anchor=(1.02, 1),
-            borderaxespad=0
-        )
-        plt.subplots_adjust(right=0.75)  # make room on the right
-        ax.grid(True)
-        plt.tight_layout()
-        plt.show()
-
-    def plot_reward_vs_capacity_by_thresholds(self):
-        df = self._get_summary()
-        df_main = df[~df['sim_type'].str.contains('optimal', case=False, na=False)]
-        df_opt = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
+        Parameters
+        ----------
+        canvas : PlotCanvas, optional
+            Qt canvas to embed plot in. If None, creates popup window.
+        """
+        df_main, df_opt = self._filter_data(include_optimal=True)
 
         obs_vals = sorted(df_main['observation_threshold'].dropna().unique())
         wind_vals = sorted(df_main['wind_threshold'].dropna().unique())
 
-        n = len(obs_vals)
-        cols = int(np.ceil(np.sqrt(n)))
-        rows = int(np.ceil(n / cols))
-        fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4*rows), squeeze=False)
+        fig, axes = self._create_subplot_grid(len(obs_vals))
 
         for idx, obs in enumerate(obs_vals):
-            ax = axes[idx//cols][idx%cols]
+            ax = axes[idx // axes.shape[1]][idx % axes.shape[1]]
             subset = df_main[df_main['observation_threshold'] == obs]
+
             for w in wind_vals:
                 series = subset[subset['wind_threshold'] == w]
                 if series.empty:
                     continue
                 series = series.sort_values('battery_capacity')
-                ax.plot(series['battery_capacity'], series['mean_reward'], marker='o', label=f"Wind {w}")
+                ax.plot(series['battery_capacity'], series['mean_reward'],
+                       marker='o', label=f"Wind {w}")
 
-            if not df_opt.empty:
+            if df_opt is not None and not df_opt.empty:
                 opt_series = df_opt.dropna(subset=['battery_capacity', 'mean_reward'])
                 opt_series = opt_series.sort_values('battery_capacity')
                 ax.plot(opt_series['battery_capacity'], opt_series['mean_reward'],
-                        linestyle='--', marker='s', label='Optimal')
+                       linestyle='--', marker='s', label='Optimal')
 
             ax.set_title(f"Obs Threshold = {obs}")
             ax.set_xlabel("Battery Capacity")
@@ -855,11 +1022,12 @@ class HDF5RewardPlotter:
             ax.grid(True)
             ax.legend()
 
-        for idx in range(n, rows*cols):
-            fig.delaxes(axes.flatten()[idx])
-
         plt.tight_layout()
-        plt.show()
+
+        if canvas is None:
+            plt.show()
+        else:
+            canvas.draw()
 
     def plot_reward_vs_horizon_by_thresholds(
         self,

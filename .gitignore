@@ -1,5 +1,7 @@
 Results/
 Data/
+Figures/archive/
+Figures/5191Results
 **/__pycache__/
 *.pyc
 *.pkl
@@ -7,4 +9,4 @@ Data/
 *.npz
 *.h5
 *.html
-Data/EXPECTED_DATA/data_expected_30min.pkl
+./claude

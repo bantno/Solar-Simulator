@@ -21,6 +21,28 @@ from BaseClasses.simulation_run_manager import SimulationRunManager
 from BaseClasses.whale_base import WhaleRewardSeriesFactory
 
 
+def _derive_chain_path(data_path: str) -> str:
+    """Default wind-chain artifact path: insert '_windchain' before the extension."""
+    base, ext = os.path.splitext(data_path)
+    return f"{base}_windchain{ext or '.pkl'}"
+
+
+def _load_wind_chain(config: Dict, location: Dict):
+    """
+    Return the wind-chain artifact dict if config enables it, else None.
+
+    Config:
+        wind_chain:
+            enabled: true|false   (default false)
+            path: <optional>      (default derived from the location's data_path)
+    """
+    wc = config.get("wind_chain") or {}
+    if not wc.get("enabled", False):
+        return None
+    path = wc.get("path") or _derive_chain_path(location["data_path"])
+    return pd.read_pickle(path)
+
+
 class EnvironmentLoader:
     """
     Helper to load and prepare environmental data for a given location.
@@ -33,6 +55,7 @@ class EnvironmentLoader:
         delta_t: int,
         solar_model: str,
         whale_type: str,
+        wind_chain: dict = None,
     ):
         self.data_path = data_path
         self.start_dt = start_dt
@@ -40,6 +63,8 @@ class EnvironmentLoader:
         self.delta_t = delta_t
         self.solar_model = solar_model
         self.whale_type = whale_type
+        # Optional wind Markov-chain artifact (dict from create_weather_distributions); None -> i.i.d.
+        self.wind_chain = wind_chain
 
     def _find_start_index(self, df: pd.DataFrame) -> int:
         mask = (
@@ -72,11 +97,24 @@ class EnvironmentLoader:
         )
         return wind_dist, solar_dist, whale_series
 
+    def _build_per_stage_transition(self, window: pd.DataFrame):
+        """Map each stage's (month, hour) to its fitted transition matrix; None if i.i.d."""
+        if self.wind_chain is None:
+            return None, None
+        bin_edges = self.wind_chain["bin_edges"]
+        Tmat = self.wind_chain["transition_by_month_hour"]  # (13, 24, n_bins, n_bins)
+        months = window["month"].values.astype(int)
+        hours = window["hour"].values.astype(int)
+        wind_transition = Tmat[months, hours]               # (horizon, n_bins, n_bins)
+        return bin_edges, wind_transition
+
     def _build_env_provider(
         self,
         wind_dist: np.ndarray,
         solar_dist: np.ndarray,
         whale_series: np.ndarray,
+        wind_bin_edges: np.ndarray = None,
+        wind_transition: np.ndarray = None,
     ) -> StochasticWindSolarEnvironmentProvider:
         return StochasticWindSolarEnvironmentProvider(
             solar_distributions=solar_dist,
@@ -84,6 +122,8 @@ class EnvironmentLoader:
             whale_reward_series=whale_series,
             delta_t_min=self.delta_t,
             solar_panel_model=self.solar_model,
+            wind_bin_edges=wind_bin_edges,
+            wind_transition=wind_transition,
         )
 
     def load(self) -> StochasticWindSolarEnvironmentProvider:
@@ -91,7 +131,11 @@ class EnvironmentLoader:
         start_idx = self._find_start_index(df)
         window = self._slice_window(df, start_idx)
         wind_dist, solar_dist, whale_series = self._extract_distributions(window)
-        return self._build_env_provider(wind_dist, solar_dist, whale_series)
+        bin_edges, wind_transition = self._build_per_stage_transition(window)
+        return self._build_env_provider(
+            wind_dist, solar_dist, whale_series,
+            wind_bin_edges=bin_edges, wind_transition=wind_transition,
+        )
 
 
 class SimulationFactory:
@@ -120,6 +164,9 @@ class SimulationFactory:
         # self.soc_increment = config.get("soc_increment", 1.0)
         self.energy_increment_wh = config.get("energy_increment_wh", None)
 
+        # Optional wind Markov-chain (persistence). Default off -> i.i.d. weather.
+        wind_chain = _load_wind_chain(config, location)
+
         loader = EnvironmentLoader(
             data_path=location["data_path"],
             start_dt=self.start_dt,
@@ -127,6 +174,7 @@ class SimulationFactory:
             delta_t=self.delta_t,
             solar_model=self.solar_model,
             whale_type=self.whale_type,
+            wind_chain=wind_chain,
         )
         self.env_provider = loader.load()
 

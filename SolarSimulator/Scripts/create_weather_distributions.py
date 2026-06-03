@@ -345,6 +345,108 @@ def generate_yearly_weather_data(historical_data: pd.DataFrame, N: int, latitude
         raise  # Re-raise the exception for visibility
 
 
+# --------- Wind Markov-chain fitting (persistence model) ---------
+
+def fit_wind_transition_chain(
+    wind_15min: pd.Series,
+    n_bins: int = 3,
+    bin_edges: np.ndarray | None = None,
+    conditioning: tuple = ("month", "hour"),
+):
+    """
+    Fit a time-conditioned discrete Markov chain over wind-speed bins.
+
+    The chain governs *which bin* the wind is in (its persistence); the continuous
+    within-bin distribution is supplied at run time by the stage's Weibull truncated to
+    the bin, so this only needs the bin edges and the transition matrices.
+
+    Parameters
+    ----------
+    wind_15min : pd.Series
+        Wind speed [m/s] on the model timestep (15 min) with a DatetimeIndex. Typically
+        the hourly historical series resampled+interpolated to 15 min.
+        NOTE: interpolation inflates short-lag persistence; fit on the model timestep for
+        consistency with the simulator, but treat the diagonal magnitude with caution.
+    n_bins : int
+        Number of wind bins (default 3).
+    bin_edges : np.ndarray, optional
+        Full edge array of length n_bins+1 (first 0, last np.inf). If None, derived from
+        global quantiles (equal-occupancy bins).
+    conditioning : tuple
+        Time keys the transition matrix is conditioned on. Only ("month", "hour") is
+        implemented (288 matrices), which preserves diurnal + seasonal structure.
+
+    Returns
+    -------
+    dict artifact with keys: n_bins, bin_edges, conditioning,
+        transition_by_month_hour (shape (13, 24, n_bins, n_bins); index [month, hour],
+        month 1..12 used).
+    """
+    if conditioning != ("month", "hour"):
+        raise NotImplementedError("Only conditioning=('month','hour') is implemented.")
+
+    w = wind_15min.astype(float)
+    idx = pd.DatetimeIndex(w.index)
+    vals = w.values
+
+    # Bin edges (equal-occupancy interior cutpoints) -> [0, q1, ..., q_{n-1}, inf]
+    if bin_edges is None:
+        qs = np.linspace(0.0, 1.0, n_bins + 1)[1:-1]
+        interior = np.quantile(vals[~np.isnan(vals)], qs)
+        bin_edges = np.concatenate(([0.0], interior, [np.inf]))
+    else:
+        bin_edges = np.asarray(bin_edges, dtype=float)
+        n_bins = len(bin_edges) - 1
+
+    interior = bin_edges[1:-1]
+    bins = np.digitize(vals, interior)  # 0..n_bins-1 ; NaN -> n_bins (dropped below)
+
+    # Consecutive (source -> dest) pairs on the continuous 15-min grid.
+    src = bins[:-1]
+    dst = bins[1:]
+    month = idx.month.values[:-1]
+    hour = idx.hour.values[:-1]
+    step_ok = (np.diff(idx.values).astype("timedelta64[m]").astype(int) == 15)
+    valid = step_ok & (src < n_bins) & (dst < n_bins) & ~np.isnan(vals[:-1]) & ~np.isnan(vals[1:])
+
+    counts = np.zeros((13, 24, n_bins, n_bins), dtype=np.float64)
+    np.add.at(counts, (month[valid], hour[valid], src[valid], dst[valid]), 1.0)
+
+    # Row-normalize; rows with no observations -> uniform (no information).
+    transition = np.empty_like(counts)
+    row_sums = counts.sum(axis=-1, keepdims=True)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        transition = np.where(row_sums > 0, counts / row_sums, 1.0 / n_bins)
+
+    return {
+        "n_bins": int(n_bins),
+        "bin_edges": bin_edges,
+        "conditioning": conditioning,
+        "transition_by_month_hour": transition,
+    }
+
+
+def build_wind_chain_artifact(
+    historical_pkl: str,
+    out_path: str,
+    interval_minutes: int = 15,
+    n_bins: int = 3,
+    wind_col: str = "wind_speed_10m",
+):
+    """
+    Resample an hourly HISTORICAL_DATA pickle to the model timestep and fit the wind chain.
+    Saves the artifact dict (pickle) to out_path and returns it.
+    """
+    hist = pd.read_pickle(historical_pkl)
+    hist = hist[~((hist.index.month == 2) & (hist.index.day == 29))]  # keep 365-day alignment
+    wind = hist[wind_col].resample(f"{interval_minutes}min").interpolate(method="linear")
+    artifact = fit_wind_transition_chain(wind, n_bins=n_bins)
+    pd.to_pickle(artifact, out_path)
+    print(f"Wind-chain artifact saved to {out_path} "
+          f"(n_bins={artifact['n_bins']}, edges={np.round(artifact['bin_edges'], 3)})")
+    return artifact
+
+
 if __name__ == "__main__":
     # Example usage
     processor = WeatherDataProcessor()

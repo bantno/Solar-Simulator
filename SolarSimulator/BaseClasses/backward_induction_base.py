@@ -212,6 +212,15 @@ class mdpAnalyticalBackwardSolver:
         # ─────────────────────────────────────────────────────────────────────────
         self.states = self.mdp._get_states()
         self._GAMMA = 1.0
+
+        # ─── Wind Markov-chain dimension (n_bins==1 => original i.i.d. behavior) ───
+        env = self.mdp.env_provider
+        self.n_bins: int = int(getattr(env, "n_wind_bins", 1))
+        self.wind_bin_edges: np.ndarray = np.asarray(
+            getattr(env, "wind_bin_edges", np.array([0.0, np.inf])), dtype=float
+        )
+        # ─────────────────────────────────────────────────────────────────────────
+
         self.future_value_table = self._initialize_future_value_table()
         self.optimal_action_table = np.zeros_like(self.future_value_table)
         soc_values = self.states[:-1, 0]  # exclude the 'broken' terminal state
@@ -221,6 +230,7 @@ class mdpAnalyticalBackwardSolver:
         # small caches
         self._wind_cache: dict[int, tuple[np.ndarray, np.ndarray]] = {}
         self._vnext_cache: dict[tuple[int, int], np.ndarray] = {}
+        self._wind_bin_cache: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
 
         edges = np.concatenate((np.arange(self.n_soc_levels) * self.Δ_energy, [np.inf]))
         self._e_lower = edges[:-1]
@@ -228,7 +238,10 @@ class mdpAnalyticalBackwardSolver:
 
     def _initialize_future_value_table(self) -> np.ndarray:
         num_states = self.states.shape[0]
-        return np.zeros((num_states, self.horizon))
+        if self.n_bins == 1:
+            return np.zeros((num_states, self.horizon))
+        # (n_bins, num_states, horizon): one value surface per wind bin
+        return np.zeros((self.n_bins, num_states, self.horizon))
 
     def set_start_date(self, start_date):
         self.start_date = start_date
@@ -392,18 +405,105 @@ class mdpAnalyticalBackwardSolver:
         survival_mass = (1.0 - p_fail)[:, None] * deltaP  # (n, n_soc)
         return survival_mass @ V_next                     # (n,)
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # Wind Markov-chain (n_bins > 1) machinery
+    # ──────────────────────────────────────────────────────────────────────────
+    def _get_wind_grid_bin(self, t: int, b: int, grid_size: int = 100):
+        """Stage-t Weibull grid + pdf truncated and renormalized to wind bin b."""
+        key = (t, b)
+        hit = self._wind_bin_cache.get(key)
+        if hit is not None:
+            return hit
+        env = self.mdp.transition_logic.env_provider
+        wd = weibull_min(c=env.get_wind_shape(t), loc=0.0, scale=env.get_wind_scale(t))
+        lo = self.wind_bin_edges[b]
+        hi = self.wind_bin_edges[b + 1]
+        hi_eff = wd.ppf(0.9999999) if np.isinf(hi) else hi
+        F_lo = wd.cdf(lo)
+        F_hi = 1.0 if np.isinf(hi) else wd.cdf(hi)
+        w = np.linspace(lo, hi_eff, grid_size)
+        mass = F_hi - F_lo
+        pdf = wd.pdf(w) / mass if mass > 0 else wd.pdf(w)
+        self._wind_bin_cache[key] = (w, pdf)
+        return w, pdf
+
+    def _mechanical_failure_probability_bin(self, states, actions, t, b):
+        """E[1 - success | wind in bin b] over the truncated within-bin Weibull."""
+        tl = self.mdp.transition_logic
+        n = states.shape[0]
+        w, pdf = self._get_wind_grid_bin(t, b)
+        gs = w.size
+        w_mat = np.repeat(w, n)
+        action_mat = np.tile(actions, gs)
+        state_mat = np.tile(states, (gs, 1))
+        succ = tl.transition_model.compute_probability(w_mat, action_mat, state_mat).reshape(gs, n)
+        return np.trapz((1.0 - succ) * pdf[:, None], w, axis=0)
+
+    def _compute_failure_probability_bin(self, states, actions, t, b):
+        """Failure prob with the mechanical (wind) part conditioned on wind bin b."""
+        tl = self.mdp.transition_logic
+        env = self.mdp.env_provider
+        C_joules = tl.soc_to_energy(states[:, 0])
+        required = tl.get_required_energy(states, actions)
+        deficits = required - C_joules
+        G_MAX = np.max((env.get_solar_cs_joules(t), 10))
+        u = np.clip(deficits / G_MAX, 0.0, 1.0)
+        p_B = betainc(env.get_solar_alpha(t), env.get_solar_beta(t), u)
+        p_M = self._mechanical_failure_probability_bin(states, actions, t, b)
+        return p_B + (1.0 - p_B) * p_M
+
+    def _vnext_eff(self, stage: int, a_scalar: int, P_row: np.ndarray) -> np.ndarray:
+        """Effective next-stage value over SoC for action a from current bin: Σ_b' P[b,b'] V[b',·]."""
+        block = slice(a_scalar * self.n_soc_levels, (a_scalar + 1) * self.n_soc_levels)
+        V_next = self.future_value_table[:, block, stage + 1]   # (n_bins, n_soc)
+        return P_row @ V_next                                   # (n_soc,)
+
+    def _value_batch_bin(self, states, a_scalar, t, b, P_row, last_stage=False):
+        """Vectorized state-action values for all states, action a, current wind bin b."""
+        n = states.shape[0]
+        actions = np.full(n, a_scalar, dtype=int)
+        p_fail = self._compute_failure_probability_bin(states, actions, t, b)
+        reward = self.expected_reward(actions, self.mdp.get_obs(t), self.mdp.failure_penalty, p_fail)
+        if last_stage:
+            return reward
+        Ck = self.mdp.transition_logic.soc_to_energy(states[:, 0])
+        Ek = self.mdp.transition_logic.get_required_energy(states, actions)
+        alpha_k, beta_k = self.get_beta_params(t)
+        G = self.mdp.env_provider.get_solar_cs_joules(t)
+        V_next_eff = self._vnext_eff(t, a_scalar, P_row)
+        future = self._compute_survival_contribution_batch(Ck, Ek, G, alpha_k, beta_k, p_fail, V_next_eff)
+        return reward + self._GAMMA * future
+
     def solve(self) -> None:
-        states = self.states
-        non_broken = states[:-1]
+        if self.n_bins == 1:
+            self._solve_iid()
+        else:
+            self._solve_chain()
+        # Save a 2D table for the i.i.d. case (back-compatible); 3D for the chain.
+        table = self.future_value_table[0] if self.n_bins == 1 and self.future_value_table.ndim == 3 \
+            else self.future_value_table
+        np.save(self._vf_filename(), table)
+        print("Value function table saved to:", self._vf_filename())
+
+    def _solve_iid(self) -> None:
+        non_broken = self.states[:-1]
         for t in tqdm(range(self.horizon - 1, -1, -1)):
             self._vnext_cache.clear()
             last = (t == self.horizon - 1)
             values0 = self._value_batch(non_broken, 0, t, last)
             values1 = self._value_batch(non_broken, 1, t, last)
             self.future_value_table[:-1, t] = np.maximum(values0, values1)
-            # self.optimal_action_table[:-1, t] = (values1 > values0).astype(float)
-        np.save(self._vf_filename(), self.future_value_table)
-        print("Value function table saved to:", self._vf_filename())
+
+    def _solve_chain(self) -> None:
+        non_broken = self.states[:-1]
+        env = self.mdp.env_provider
+        for t in tqdm(range(self.horizon - 1, -1, -1)):
+            last = (t == self.horizon - 1)
+            P = env.get_wind_transition(t)            # (n_bins, n_bins)
+            for b in range(self.n_bins):
+                v0 = self._value_batch_bin(non_broken, 0, t, b, P[b], last)
+                v1 = self._value_batch_bin(non_broken, 1, t, b, P[b], last)
+                self.future_value_table[b, :-1, t] = np.maximum(v0, v1)
 
     def lookup_future_values(self, states: np.ndarray, stages: np.ndarray) -> np.ndarray:
         is_broken_state = (self.states[:, 1] == 2) & (self.states[:, 0] == -1.0)
@@ -501,42 +601,53 @@ class mdpAnalyticalBackwardSolver:
             value += p * (avg_r + self._GAMMA * future_vals[idx])
         return value
 
-    def _lookup_future_values_fast(self, next_states: np.ndarray, stage: int) -> np.ndarray:
-        """
-        Vectorized, O(n) future-value lookup for a batch of grid-aligned next states.
-
-        Replaces the equality-scan in ``lookup_future_values`` with direct index
-        arithmetic: SoC -> bin index, mode -> row-block offset (same layout that
-        ``_get_vnext_slice`` relies on). Broken states (mode==2) map to value 0.
-        """
+    def _state_row_index(self, next_states: np.ndarray):
+        """Map grid-aligned states to value-table row indices. Returns (rows, normal_mask)."""
         soc = next_states[:, 0]
         mode = next_states[:, 1].astype(int)
         n = next_states.shape[0]
-        future = np.zeros(n)
+        rows = np.zeros(n, dtype=int)
         normal = mode != 2
-        if np.any(normal):
-            bin_idx = np.clip(
-                np.rint(soc[normal] / self.soc_increment).astype(int),
-                0, self.n_soc_levels - 1,
-            )
-            rows = bin_idx + mode[normal] * self.n_soc_levels
-            future[normal] = self.future_value_table[rows, stage]
+        bin_idx = np.clip(
+            np.rint(soc[normal] / self.soc_increment).astype(int),
+            0, self.n_soc_levels - 1,
+        )
+        rows[normal] = bin_idx + mode[normal] * self.n_soc_levels
+        return rows, normal
+
+    def _lookup_future_values_fast(self, next_states: np.ndarray, stage: int) -> np.ndarray:
+        """
+        Vectorized, O(n) future-value lookup for a batch of grid-aligned next states
+        (i.i.d. / single-bin case). Broken states (mode==2) map to value 0.
+        """
+        rows, normal = self._state_row_index(next_states)
+        future = np.zeros(next_states.shape[0])
+        future[normal] = self.future_value_table[rows[normal], stage]
         return future
 
     def value_function_batch(
-        self, stage: int, rewards: np.ndarray, next_states: np.ndarray
+        self, stage: int, rewards: np.ndarray, next_states: np.ndarray,
+        cur_bins: np.ndarray = None, P: np.ndarray = None,
     ) -> np.ndarray:
         """
-        Elementwise value = reward + GAMMA * V(next_state, stage+1) for a batch.
+        Elementwise value = reward + GAMMA * E[V(next_state, stage+1)] for a batch.
 
-        Equivalent to calling the single-sample ``value_function`` per row, but
-        vectorized via ``_lookup_future_values_fast``.
+        i.i.d. (n_bins==1): direct lookup. Chain (n_bins>1): the agent knows its current
+        wind bin (``cur_bins``) and the stage transition matrix ``P``, so the future value
+        sums next-stage value over next bins weighted by P[cur_bin, ·].
         """
         next_stage = stage + 1
-        if next_stage < self.horizon:
+        if next_stage >= self.horizon:
+            return rewards + 0.0
+
+        if self.n_bins == 1:
             future_vals = self._lookup_future_values_fast(next_states, next_stage)
         else:
-            future_vals = np.zeros_like(rewards)
+            rows, normal = self._state_row_index(next_states)
+            Vb = self.future_value_table[:, rows, next_stage]   # (n_bins, n)
+            w = P[cur_bins]                                      # (n, n_bins)
+            future_vals = np.einsum("nb,bn->n", w, Vb)
+            future_vals = np.where(normal, future_vals, 0.0)
         return rewards + self._GAMMA * future_vals
 
 

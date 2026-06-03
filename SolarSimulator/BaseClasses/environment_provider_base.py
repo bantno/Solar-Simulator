@@ -290,7 +290,8 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         Random number generator instance.
     """
     def __init__(self, solar_distributions: np.ndarray, wind_distributions: np.ndarray,
-                 whale_reward_series: np.ndarray, delta_t_min: float, solar_panel_model: str = "constant", rng=None):
+                 whale_reward_series: np.ndarray, delta_t_min: float, solar_panel_model: str = "constant", rng=None,
+                 wind_bin_edges: np.ndarray = None, wind_transition: np.ndarray = None):
         self.wind_shape = wind_distributions[:, 0]
         self.wind_scale = wind_distributions[:, 1]
         self.solar_alpha = solar_distributions[:, 0]
@@ -302,6 +303,22 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         self.panel = SolarPanelFactory.create_solar_panel(solar_panel_model)
         # Use a provided generator or default to np.random.default_rng()
         self.rng = rng if rng is not None else np.random.default_rng()
+
+        # --- Wind Markov-chain (persistence) state ---
+        # When wind_transition is None the provider falls back to the original i.i.d.
+        # Weibull sampling and behaves as a single-bin chain (n_wind_bins == 1), so the
+        # solver's bin machinery reduces exactly to the i.i.d. case.
+        self.use_wind_chain = wind_transition is not None
+        if self.use_wind_chain:
+            self.wind_bin_edges = np.asarray(wind_bin_edges, dtype=float)
+            self.wind_transition = np.asarray(wind_transition, dtype=float)  # (T, n_bins, n_bins)
+            self.n_wind_bins = self.wind_transition.shape[-1]
+        else:
+            self.wind_bin_edges = np.array([0.0, np.inf])
+            self.wind_transition = None
+            self.n_wind_bins = 1
+        self._wind_bins = None       # per-lane current bin (set lazily on first sample)
+        self.last_wind_bins = None   # bins used in the most recent sample_wind_speed call
 
     def get_wind_shape(self, stage):
         return self.wind_shape[stage]
@@ -329,9 +346,49 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
 
     def reset(self,seed: int = None) -> None:
         """
-        Reset the random number generator to a specific seed.
+        Reset the random number generator to a specific seed and clear chain state.
         """
         self.set_seed(seed)
+        self._wind_bins = None
+        self.last_wind_bins = None
+
+    def get_wind_transition(self, t: int) -> np.ndarray:
+        """Per-stage wind-bin transition matrix (n_bins x n_bins). Identity-like [[1]] when i.i.d."""
+        if self.use_wind_chain:
+            return self.wind_transition[t]
+        return np.array([[1.0]])
+
+    def _weibull_cdf(self, w, k, scale):
+        # F(w) = 1 - exp(-(w/scale)^k); F(inf)=1, F(0)=0
+        out = np.where(np.isinf(w), 1.0, 1.0 - np.exp(-np.power(np.clip(w, 0, None) / scale, k)))
+        return out
+
+    def _init_wind_bins(self, n: int) -> np.ndarray:
+        """Draw initial wind bins for n lanes from the stage-0 Weibull bin masses."""
+        k = self.wind_shape[0]
+        scale = self.wind_scale[0]
+        F = self._weibull_cdf(self.wind_bin_edges, k, scale)
+        p = np.diff(F)
+        p = p / p.sum()
+        return self.rng.choice(self.n_wind_bins, size=n, p=p)
+
+    def _sample_within_bin(self, t: int, bins: np.ndarray) -> np.ndarray:
+        """Sample wind from the stage-t Weibull truncated to each lane's current bin."""
+        k = self.wind_shape[t]
+        scale = self.wind_scale[t]
+        lo = self.wind_bin_edges[bins]
+        hi = self.wind_bin_edges[bins + 1]
+        F_lo = self._weibull_cdf(lo, k, scale)
+        F_hi = self._weibull_cdf(hi, k, scale)
+        u = F_lo + self.rng.random(size=bins.shape[0]) * (F_hi - F_lo)
+        u = np.clip(u, 0.0, 1.0 - 1e-12)
+        return scale * np.power(-np.log(1.0 - u), 1.0 / k)
+
+    def _advance_bins(self, bins: np.ndarray, P: np.ndarray) -> np.ndarray:
+        """Sample next bin per lane from transition rows P[bins]."""
+        cum = np.cumsum(P[bins], axis=1)
+        r = self.rng.random(size=bins.shape[0])
+        return (cum > r[:, None]).argmax(axis=1)
 
     def sample_sunlight(self, t: int, n: int) -> np.ndarray:
         w_p_m2 = self.beta_solar_energy_dist(t, n) # W/m^2
@@ -348,7 +405,16 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         return j_p_m2 * a_m2 * self.panel.efficiency
 
     def sample_wind_speed(self, t: int, n: int) -> np.ndarray:
-        return self.weibull_wind_speed_dist(t, n)
+        if not self.use_wind_chain:
+            return self.weibull_wind_speed_dist(t, n)
+        # Markov-chain path: sample within the current bin, expose it, then advance.
+        if self._wind_bins is None or self._wind_bins.shape[0] != n:
+            self._wind_bins = self._init_wind_bins(n)
+        bins = self._wind_bins
+        self.last_wind_bins = bins.copy()
+        w = self._sample_within_bin(t, bins)
+        self._wind_bins = self._advance_bins(bins, self.wind_transition[t])
+        return w
 
     def sample_whale_observation(self, t: int, n: int=1) -> np.ndarray:
         return np.full(n, self.whale_reward_series[t])

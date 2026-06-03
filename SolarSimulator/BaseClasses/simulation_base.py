@@ -281,10 +281,12 @@ class AbstractContinuousEnergySimulation(ABC):
         rewards = self.mdp.reward(states, actions, next_states, t)
         return next_states, rewards, next_energy
 
-    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
+    def choose_action_batch(self, state, solar, wind, whale, t, cur_bins=None) -> np.ndarray:
         """
         Vectorized policy: choose an action for every episode (row of ``state``) at once.
         Subclasses must override. ``state`` is (n,2); solar/wind/whale are (n,).
+        ``cur_bins`` is the current wind-bin per lane (only used by the optimal policy when
+        the wind Markov chain is active; ignored otherwise).
         Returns an (n,) int array of actions.
         """
         raise NotImplementedError("Subclasses must implement choose_action_batch.")
@@ -349,9 +351,14 @@ class AbstractContinuousEnergySimulation(ABC):
             wind  = self.env_provider.sample_wind_speed(t, n)[active_idx]
             whale = self.env_provider.sample_whale_observation(t, n)[active_idx]
 
+            # Current wind bin per active lane (only when the Markov chain is active).
+            cur_bins = None
+            if getattr(self.env_provider, "use_wind_chain", False):
+                cur_bins = self.env_provider.last_wind_bins[active_idx]
+
             s = state[active_idx]
             e = energy[active_idx]
-            a = self.choose_action_batch(s, solar, wind, whale, t).astype(int)
+            a = self.choose_action_batch(s, solar, wind, whale, t, cur_bins=cur_bins).astype(int)
 
             next_state, reward, next_energy = self.step_batch(e, s, a, solar, wind, t)
 
@@ -539,18 +546,23 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
         # Return the action with the highest expected value.
         return int(np.argmax(value_list))
 
-    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
+    def choose_action_batch(self, state, solar, wind, whale, t, cur_bins=None) -> np.ndarray:
         """
         Vectorized optimal policy: for every episode and both candidate actions,
         compute the two-outcome expected value and return the argmax action.
 
         This mirrors ``choose_action`` but evaluates all n episodes at once and uses
         the solver's O(n) ``value_function_batch`` instead of the per-call state scan.
+        When the wind Markov chain is active, the future value is taken over the next
+        wind bin via the stage transition matrix conditioned on ``cur_bins``.
         """
         n = state.shape[0]
         current_energy = self.mdp.transition_logic.soc_to_energy(state[:, 0])   # (n,)
         failure_state = np.tile(np.array([-1.0, 2]), (n, 1))                    # (n,2)
         values = np.empty((n, 2))
+
+        # Stage transition matrix for the chain (None -> i.i.d. lookup).
+        P = self.env_provider.get_wind_transition(t) if cur_bins is not None else None
 
         for action in (0, 1):
             actions_arr = np.full(n, action, dtype=int)
@@ -565,7 +577,7 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
             )
             reward_success = self.mdp.reward(state, actions_arr, next_state_success, t)
             value_success = self.mdp_solver.value_function_batch(
-                t, reward_success, next_state_success
+                t, reward_success, next_state_success, cur_bins=cur_bins, P=P
             )
             reward_failure = self.mdp.reward(state, actions_arr, failure_state, t)
             values[:, action] = p_success * value_success + (1.0 - p_success) * reward_failure
@@ -629,8 +641,8 @@ class UnifiedThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
 
         return action
 
-    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
-        """Vectorized form of ``choose_action`` over n episodes."""
+    def choose_action_batch(self, state, solar, wind, whale, t, cur_bins=None) -> np.ndarray:
+        """Vectorized form of ``choose_action`` over n episodes (wind bin unused)."""
         soc = state[:, 0]
         mode = state[:, 1]
         action = np.zeros(state.shape[0], dtype=int)
@@ -684,8 +696,8 @@ class ObservationThresholdContinuousSimulation(AbstractContinuousEnergySimulatio
             action = 1
         return action
 
-    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
-        """Vectorized form of ``choose_action`` over n episodes."""
+    def choose_action_batch(self, state, solar, wind, whale, t, cur_bins=None) -> np.ndarray:
+        """Vectorized form of ``choose_action`` over n episodes (wind bin unused)."""
         soc = state[:, 0]
         action = np.zeros(state.shape[0], dtype=int)
         fly = (

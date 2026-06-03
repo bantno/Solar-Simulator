@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from tqdm import tqdm
 from BaseClasses.mdp_base import AbstractMDP,stochasticMDP
@@ -195,10 +196,13 @@ class mdpAnalyticalBackwardSolver:
         mdp: stochasticMDP,
         horizon: int,
         sim_name_prefix: Optional[str] = None,
+        output_dir: Optional[str] = None,
     ):
         self.mdp = mdp
         self.horizon = horizon
         self.sim_name_prefix = sim_name_prefix
+        # Directory the value-function .npy is written to. None -> cwd (back-compatible).
+        self.output_dir = output_dir
 
         # ─── derive dynamic SoC grid from passed-in soc_increment ───────────────
         self.soc_increment: float = float(self.mdp.soc_increment)
@@ -251,13 +255,17 @@ class mdpAnalyticalBackwardSolver:
 
     def _vf_filename(self) -> str:
         prefix = self.sim_name_prefix or "future_value_table"
-        return (
+        fname = (
             f"{prefix}_"
             f"{self.mdp.battery_capacity_wh}Wh_"
             f"{self.horizon}h_"
             f"{self.mdp.failure_penalty}p_"
             f"{self.start_date[0:12]}.npy"
         )
+        if self.output_dir:
+            os.makedirs(self.output_dir, exist_ok=True)
+            return os.path.join(self.output_dir, fname)
+        return fname
 
     def _get_vnext_slice(self, stage: int, action_scalar: int) -> np.ndarray:
         key = (stage, int(action_scalar))

@@ -243,7 +243,11 @@ class SimulationFactory:
 
         if sim_type == "optimal":
             # solver = mdpBackwardSolver(mdp, self.horizon)
-            solver = mdpAnalyticalBackwardSolver(mdp,self.horizon, sim_name_prefix=self.config_name)
+            # Optional run-output dir (set by the harness) redirects the value-table .npy.
+            output_dir = self.config.get("_run_output_dir")
+            solver = mdpAnalyticalBackwardSolver(
+                mdp, self.horizon, sim_name_prefix=self.config_name, output_dir=output_dir
+            )
             solver.set_start_date(start_str)
             # solver.set_location(self.location)
             sim = OptimalContinuousAnalyticalPolicySimulation(

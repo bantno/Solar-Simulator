@@ -36,8 +36,16 @@ _SIM_ATTR_COLUMNS = [
 def _experiment_columns(config: Dict) -> Dict:
     """Experiment-level (config-wide) columns added to every row so each row is self-describing."""
     wind_chain = config.get("wind_chain") or {}
+    hist = config.get("historical_weather") or {}
+    if hist.get("enabled", False):
+        weather_mode = "historical"
+    elif wind_chain.get("enabled", False):
+        weather_mode = "chain"
+    else:
+        weather_mode = "iid"
     return {
         "config_basename": config.get("_config_basename"),
+        "weather_mode": weather_mode,
         "wind_chain_enabled": bool(wind_chain.get("enabled", False)),
         "transition_model": config.get("transition_model", "moderate"),
         "solar_panel_model": config.get("solar_panel_model", "constant"),

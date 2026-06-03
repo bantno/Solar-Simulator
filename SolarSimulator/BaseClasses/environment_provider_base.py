@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
+import pandas as pd
 from BaseClasses.solar_panel_base import SolarPanelFactory
 
 class AbstractEnvironmentProvider(ABC):
@@ -528,6 +529,181 @@ class RegimeSwitchingWindSolarEnvironmentProvider(StochasticWindSolarEnvironment
             solar_panel_model=solar_panel_model,
             rng=rng
         )
+
+
+class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
+    """
+    Environment provider that drives MC episodes from real historical weather via block bootstrap.
+
+    An episode's timeline keeps the mission's exact calendar dates.  The H-step horizon is
+    split into consecutive blocks of `block_length_steps`.  Each block's weather is drawn from
+    a randomly chosen year at the same calendar dates, independently per lane (MC episode).
+    Wind and solar use the *same* chosen year per (lane, block), preserving their real
+    cross-correlation.  Concatenating the blocks gives a real-within-block, season-correct,
+    diverse sequence (~n_years^n_blocks combinations).
+
+    For chain-solved policy evaluation: pass `wind_bin_edges` and `wind_transition` (copied
+    from the distributional solve-side provider).  `sample_wind_speed` then digitizes the
+    realized wind into bins (exposing `last_wind_bins`) so `simulate_episode_batch` and
+    `choose_action_batch` work unchanged for both i.i.d.-solved and chain-solved policies.
+
+    Parameters
+    ----------
+    cube : dict
+        Calendar cube from `build_historical_cube_artifact`; keys `wind_cube`
+        (slots_per_year x n_years), `solar_cube`, `slots_per_year`, `years`, `delta_t_min`.
+    start_dt : pd.Timestamp or str
+        Mission start datetime (only calendar position in the year matters; year ignored).
+    horizon : int
+        Episode length in steps.
+    delta_t_min : float
+        Timestep in minutes.  Must equal cube['delta_t_min'].
+    block_length_steps : int, optional
+        Bootstrap block size in steps (default: 7 days = 7*96 steps at 15 min).
+    solar_panel_model : str
+        Solar panel model identifier (passed to SolarPanelFactory).
+    whale_reward_series : np.ndarray
+        Pre-built whale series of length >= horizon.
+    rng : np.random.Generator, optional
+        RNG instance; defaults to np.random.default_rng().
+    wind_bin_edges : np.ndarray, optional
+        Full edge array (length n_bins+1) from the wind chain artifact.  When provided,
+        enables chain-solved evaluation via bin digitization.
+    wind_transition : np.ndarray, optional
+        Per-stage transition matrices shaped (horizon, n_bins, n_bins).
+    """
+
+    # Cumulative days before each month in a non-leap year (0-indexed, Jan=0).
+    _DAYS_BEFORE_MONTH = np.array([0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334])
+
+    def __init__(
+        self,
+        cube: dict,
+        start_dt,
+        horizon: int,
+        delta_t_min: float = 15.0,
+        block_length_steps: int = None,
+        solar_panel_model: str = "constant",
+        whale_reward_series: np.ndarray = None,
+        rng=None,
+        wind_bin_edges: np.ndarray = None,
+        wind_transition: np.ndarray = None,
+    ):
+        self.DELTA_T_MIN = float(delta_t_min)
+        self.DELTA_T_SEC = self.DELTA_T_MIN * 60.0
+        self.panel = SolarPanelFactory.create_solar_panel(solar_panel_model)
+        self.whale_reward_series = whale_reward_series
+        self.rng = rng if rng is not None else np.random.default_rng()
+
+        cube_dt = cube.get("delta_t_min", delta_t_min)
+        if int(cube_dt) != int(delta_t_min):
+            raise ValueError(
+                f"Cube delta_t_min ({cube_dt}) != requested delta_t_min ({delta_t_min})."
+            )
+
+        self._wind_cube = cube["wind_cube"]    # (slots_per_year, n_years)
+        self._solar_cube = cube["solar_cube"]  # (slots_per_year, n_years)
+        self._slots_per_year = int(cube["slots_per_year"])
+        self._n_years = int(cube["n_years"])
+        self.horizon = horizon
+
+        # Default block = 7 days.
+        if block_length_steps is None:
+            block_length_steps = int(7 * 24 * 60 / delta_t_min)
+        self.block_length_steps = int(block_length_steps)
+        self._n_blocks = (horizon + self.block_length_steps - 1) // self.block_length_steps
+
+        # Compute calendar slots for the mission window (wraps at year boundary).
+        start_ts = pd.Timestamp(start_dt) if not isinstance(start_dt, pd.Timestamp) else start_dt
+        start_slot = self._timestamp_to_slot(start_ts)
+        self._window_slots = (np.arange(horizon, dtype=np.int64) + start_slot) % self._slots_per_year
+
+        # Wind-chain support (core: chain-solved policy evaluated on historical weather).
+        self.use_wind_chain = (wind_bin_edges is not None) and (wind_transition is not None)
+        if self.use_wind_chain:
+            self.wind_bin_edges = np.asarray(wind_bin_edges, dtype=float)
+            self.wind_transition = np.asarray(wind_transition, dtype=float)
+            self.n_wind_bins = self.wind_transition.shape[-1]
+        else:
+            self.wind_bin_edges = np.array([0.0, np.inf])
+            self.wind_transition = None
+            self.n_wind_bins = 1
+        self.last_wind_bins = None
+
+        # Lazy per-n cache (built on first sample call or after reset).
+        self._cached_n = None
+        self._wind_cache = None    # (horizon, n) float64
+        self._solar_cache = None   # (horizon, n) float64
+
+    def _timestamp_to_slot(self, ts: pd.Timestamp) -> int:
+        """Map a calendar datetime to its slot index in [0, slots_per_year-1], ignoring Feb 29."""
+        if ts.month == 2 and ts.day == 29:
+            raise ValueError("start_dt is Feb 29, which is excluded from the calendar cube.")
+        spd = int(1440 // self.DELTA_T_MIN)  # slots per day
+        sph = int(60 // self.DELTA_T_MIN)    # slots per hour
+        doy_0 = int(self._DAYS_BEFORE_MONTH[ts.month - 1]) + ts.day - 1
+        return doy_0 * spd + ts.hour * sph + ts.minute // int(self.DELTA_T_MIN)
+
+    def _build_cache(self, n: int) -> None:
+        """Draw per-lane block-year assignments and gather wind and solar arrays once."""
+        # year_choice[lane, block] = year index in [0, n_years-1]
+        year_choice = self.rng.integers(0, self._n_years, size=(n, self._n_blocks))
+
+        wind = np.empty((self.horizon, n), dtype=np.float64)
+        solar_ghi = np.empty((self.horizon, n), dtype=np.float64)
+
+        for b in range(self._n_blocks):
+            s = b * self.block_length_steps
+            e = min((b + 1) * self.block_length_steps, self.horizon)
+            slots = self._window_slots[s:e]   # calendar slots for this block  (L,)
+            yr = year_choice[:, b]             # year index per lane  (n,)
+            # np.ix_ gives an outer-product index → shape (L, n)
+            wind[s:e, :] = self._wind_cube[np.ix_(slots, yr)]
+            solar_ghi[s:e, :] = self._solar_cube[np.ix_(slots, yr)]
+
+        self._wind_cache = wind
+        self._solar_cache = self._energy_gain_from_solar(solar_ghi)
+        self._cached_n = n
+
+    def _energy_gain_from_solar(self, ghi: np.ndarray) -> np.ndarray:
+        """GHI [W/m^2] -> energy [J] using the panel model (broadcasts over any shape)."""
+        return ghi * self.DELTA_T_SEC * self.panel.area * self.panel.efficiency
+
+    def reset(self, seed=None) -> None:
+        """Re-seed the RNG and clear the cached weather arrays so the next run draws fresh data."""
+        if seed is not None:
+            self.rng = np.random.default_rng(seed)
+        self._cached_n = None
+        self._wind_cache = None
+        self._solar_cache = None
+        self.last_wind_bins = None
+
+    def set_seed(self, seed: int) -> None:
+        self.rng = np.random.default_rng(seed)
+        self.reset()
+
+    def get_wind_transition(self, t: int) -> np.ndarray:
+        """Per-stage wind-bin transition matrix (n_bins x n_bins). Identity-like [[1]] when i.i.d."""
+        if self.use_wind_chain:
+            return self.wind_transition[t]
+        return np.array([[1.0]])
+
+    def sample_wind_speed(self, t: int, n: int) -> np.ndarray:
+        if self._cached_n != n:
+            self._build_cache(n)
+        wind_t = self._wind_cache[t]   # (n,)
+        if self.use_wind_chain:
+            # Digitize realized wind into bins so choose_action_batch indexes the 3D value table.
+            self.last_wind_bins = np.digitize(wind_t, self.wind_bin_edges[1:-1]).astype(int)
+        return wind_t
+
+    def sample_sunlight(self, t: int, n: int) -> np.ndarray:
+        if self._cached_n != n:
+            self._build_cache(n)
+        return self._solar_cache[t]    # (n,)
+
+    def sample_whale_observation(self, t: int, n: int = 1) -> np.ndarray:
+        return np.full(n, self.whale_reward_series[t])
 
 class SinusoidalWindSolarEnvironmentProvider(StochasticWindSolarEnvironmentProvider):
     """

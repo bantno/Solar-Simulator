@@ -447,6 +447,84 @@ def build_wind_chain_artifact(
     return artifact
 
 
+def build_historical_cube_artifact(
+    historical_pkl: str,
+    out_path: str,
+    interval_minutes: int = 15,
+    wind_col: str = "wind_speed_10m",
+    solar_col: str = "shortwave_radiation",
+):
+    """
+    Build a (slots_per_year, n_years) calendar cube from historical weather data.
+
+    Resamples the hourly HISTORICAL_DATA pickle to `interval_minutes`, drops Feb 29
+    for 365-day alignment, and packs wind speed and solar irradiance into two 2-D arrays
+    indexed by (calendar_slot, year_index).  The cube is used by
+    HistoricalBootstrapEnvironmentProvider for per-lane block-bootstrap episodes.
+
+    Parameters
+    ----------
+    historical_pkl : str
+        Path to an hourly HISTORICAL_DATA pickle (DatetimeIndex tz-aware, columns
+        `wind_speed_10m` and `shortwave_radiation`).
+    out_path : str
+        Destination path for the artifact pickle (dict).
+    interval_minutes : int
+        Model timestep in minutes; must match the expected-data file timestep.
+
+    Returns
+    -------
+    dict with keys: delta_t_min, slots_per_year, years, n_years, wind_cube, solar_cube.
+    """
+    hist = pd.read_pickle(historical_pkl)
+    hist = hist[~((hist.index.month == 2) & (hist.index.day == 29))]
+    resampled = hist[[wind_col, solar_col]].resample(f"{interval_minutes}min").interpolate(method="linear")
+    # Drop any Feb 29 introduced by interpolation near year boundaries.
+    resampled = resampled[~((resampled.index.month == 2) & (resampled.index.day == 29))]
+
+    slots_per_day = 1440 // interval_minutes
+    slots_per_year = 365 * slots_per_day
+
+    years = sorted(int(y) for y in resampled.index.year.unique())
+    n_years = len(years)
+    year_to_idx = {y: i for i, y in enumerate(years)}
+
+    wind_cube = np.full((slots_per_year, n_years), np.nan)
+    solar_cube = np.full((slots_per_year, n_years), np.nan)
+
+    # Cumulative days before each month (non-leap year, 0-indexed: Jan=0 ... Dec=334).
+    days_before = np.array([0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334])
+
+    idx = resampled.index
+    months = idx.month.values
+    days = idx.day.values
+    hours = idx.hour.values
+    minutes = idx.minute.values
+    yr_arr = idx.year.values
+
+    doy_0 = days_before[months - 1] + days - 1
+    slots = doy_0 * slots_per_day + hours * (60 // interval_minutes) + minutes // interval_minutes
+    yr_indices = np.array([year_to_idx[y] for y in yr_arr])
+
+    valid = (slots >= 0) & (slots < slots_per_year)
+    wind_cube[slots[valid], yr_indices[valid]] = resampled[wind_col].values[valid]
+    solar_cube[slots[valid], yr_indices[valid]] = resampled[solar_col].values[valid]
+
+    artifact = {
+        "delta_t_min": int(interval_minutes),
+        "slots_per_year": slots_per_year,
+        "years": years,
+        "n_years": n_years,
+        "wind_cube": wind_cube,    # shape (slots_per_year, n_years)
+        "solar_cube": solar_cube,  # shape (slots_per_year, n_years)
+    }
+    pd.to_pickle(artifact, out_path)
+    n_valid = int(np.isfinite(wind_cube).sum())
+    print(f"Historical cube saved to {out_path} "
+          f"(shape {wind_cube.shape}, {n_valid}/{wind_cube.size} valid slots, {n_years} years)")
+    return artifact
+
+
 if __name__ == "__main__":
     # Example usage
     processor = WeatherDataProcessor()

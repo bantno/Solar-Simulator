@@ -10,7 +10,10 @@ import numpy as np
 import pandas as pd
 
 from BaseClasses.seaplane_base import Seaplane
-from BaseClasses.environment_provider_base import StochasticWindSolarEnvironmentProvider
+from BaseClasses.environment_provider_base import (
+    StochasticWindSolarEnvironmentProvider,
+    HistoricalBootstrapEnvironmentProvider,
+)
 from BaseClasses.mdp_base import stochasticMDP
 from BaseClasses.backward_induction_base import mdpAnalyticalBackwardSolver
 from BaseClasses.simulation_base import (
@@ -27,6 +30,12 @@ def _derive_chain_path(data_path: str) -> str:
     return f"{base}_windchain{ext or '.pkl'}"
 
 
+def _derive_histcube_path(data_path: str) -> str:
+    """Default historical-cube artifact path: insert '_histcube' before the extension."""
+    base, ext = os.path.splitext(data_path)
+    return f"{base}_histcube{ext or '.pkl'}"
+
+
 def _load_wind_chain(config: Dict, location: Dict):
     """
     Return the wind-chain artifact dict if config enables it, else None.
@@ -40,6 +49,21 @@ def _load_wind_chain(config: Dict, location: Dict):
     if not wc.get("enabled", False):
         return None
     path = wc.get("path") or _derive_chain_path(location["data_path"])
+    return pd.read_pickle(path)
+
+
+def _load_historical_cube(config: Dict, location: Dict) -> dict:
+    """
+    Load the historical-weather calendar cube artifact for `location`.
+
+    Config:
+        historical_weather:
+            enabled: true|false   (default false)
+            path: <optional>      (default derived from the location's data_path)
+            block_length_days: 7  (default)
+    """
+    hw = config.get("historical_weather") or {}
+    path = hw.get("path") or _derive_histcube_path(location["data_path"])
     return pd.read_pickle(path)
 
 
@@ -178,6 +202,35 @@ class SimulationFactory:
         )
         self.env_provider = loader.load()
 
+        # Optional historical-weather bootstrap provider (used for episode rollouts; the
+        # distributional env_provider above is still used for solving the optimal policy).
+        self.sim_env_provider = None
+        hw_cfg = config.get("historical_weather") or {}
+        if hw_cfg.get("enabled", False):
+            cube = _load_historical_cube(config, location)
+            whale_series = WhaleRewardSeriesFactory.create_series(self.whale_type, self.horizon)
+            block_days = float(hw_cfg.get("block_length_days", 7))
+            block_steps = int(block_days * 24 * 60 / self.delta_t)
+            # For chain-solved evaluation: share the distributional provider's bin edges and
+            # per-stage transition matrices so the 3D value table can be indexed on real weather.
+            hist_bin_edges = (
+                self.env_provider.wind_bin_edges if self.env_provider.use_wind_chain else None
+            )
+            hist_wind_transition = (
+                self.env_provider.wind_transition if self.env_provider.use_wind_chain else None
+            )
+            self.sim_env_provider = HistoricalBootstrapEnvironmentProvider(
+                cube=cube,
+                start_dt=self.start_dt,
+                horizon=self.horizon,
+                delta_t_min=float(self.delta_t),
+                block_length_steps=block_steps,
+                solar_panel_model=self.solar_model,
+                whale_reward_series=whale_series,
+                wind_bin_edges=hist_bin_edges,
+                wind_transition=hist_wind_transition,
+            )
+
     def _compute_power_params(self, capacity_wh: float) -> Dict[str, float]:
         plane = Seaplane(
             lat=self.location.get("latitude", 0.0),
@@ -223,6 +276,9 @@ class SimulationFactory:
         state0 = np.array([100.0, 0])
         start_str = self.start_dt.strftime("%Y-%m-%d %H:%M:%S")
         mdp = self.build_mdp(cap)
+        # Use the historical-bootstrap provider for episode rollouts when enabled;
+        # the distributional provider is used only for solving (build_mdp above).
+        sim_env = self.sim_env_provider if self.sim_env_provider is not None else self.env_provider
 
         if sim_type == "threshold":
             sim = UnifiedThresholdContinuousSimulation(
@@ -230,7 +286,7 @@ class SimulationFactory:
                     observation_threshold=threshold,
                     wind_threshold=wind_threshold,
                     start_datetime=start_str,
-                    env_provider=self.env_provider,
+                    env_provider=sim_env,
                     save_history=save_states,
                     full_history_episodes=full_history_episodes,
                 )
@@ -242,18 +298,16 @@ class SimulationFactory:
             return sim
 
         if sim_type == "optimal":
-            # solver = mdpBackwardSolver(mdp, self.horizon)
             # Optional run-output dir (set by the harness) redirects the value-table .npy.
             output_dir = self.config.get("_run_output_dir")
             solver = mdpAnalyticalBackwardSolver(
                 mdp, self.horizon, sim_name_prefix=self.config_name, output_dir=output_dir
             )
             solver.set_start_date(start_str)
-            # solver.set_location(self.location)
             sim = OptimalContinuousAnalyticalPolicySimulation(
                 solver, self.horizon, state0,
                 start_datetime=start_str,
-                env_provider=self.env_provider,
+                env_provider=sim_env,
                 save_history=save_states,
                 full_history_episodes=full_history_episodes,
             )

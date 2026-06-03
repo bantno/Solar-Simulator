@@ -1,0 +1,43 @@
+experiment_name: journal_threshold_vs_optimal_historical
+description: >
+  Threshold-vs-optimal comparison (AIAA Journal of Aircraft paper matrix) evaluated on
+  real historical weather via block bootstrap.  Policy is solved on the fitted i.i.d.
+  distributions; episodes are driven from the lat30/lon-90 historical record (1950-2022)
+  resampled to 15 min, split into 7-day blocks drawn independently per episode.
+  Enables the honest "model vs. reality" test and preserves wind/solar cross-correlation.
+start_datetime: '2025-06-10T00:00:00'
+
+# --- sweep matrix (matches the paper config) ---
+battery_capacities: [300.0]
+threshold_values: [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
+wind_thresholds: [0.0, 3.0, 6.0, 9.0, 12.0]
+horizons: [3000]
+failure_penalties: [5.0]
+episodes: 3000
+
+# --- model settings ---
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+
+locations:
+- latitude: 30.0
+  longitude: -90.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min.pkl
+
+# i.i.d. wind for solving; historical weather drives the episode rollouts.
+wind_chain:
+  enabled: false
+
+# Historical weather: block bootstrap from Data/HISTORICAL_DATA/data_30_-90.pkl
+# The cube artifact (data_expected_lat30.0_lon-90.0_15min_histcube.pkl) must be
+# pre-built with Scripts/create_weather_distributions.py::build_historical_cube_artifact.
+historical_weather:
+  enabled: true
+  block_length_days: 7
+  # path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min_histcube.pkl  # auto-derived

@@ -351,7 +351,7 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         return self.weibull_wind_speed_dist(t, n)
 
     def sample_whale_observation(self, t: int, n: int=1) -> np.ndarray:
-        return np.array([self.whale_reward_series[t]] * n)
+        return np.full(n, self.whale_reward_series[t])
 
     def weibull_wind_speed_dist(self, t: int, n: int) -> np.ndarray:
         k = self.wind_shape[t]

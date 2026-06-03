@@ -329,18 +329,79 @@ class mdpAnalyticalBackwardSolver:
         p_M = self._mechanical_failure_probability(states, actions, t)
         return p_B + (1.0 - p_B) * p_M
 
+    def _value_batch(
+        self,
+        states: np.ndarray,   # shape (n, 2): [SoC, mode]
+        a_scalar: int,        # 0 or 1, applied to every state
+        t: int,
+        last_stage: bool = False,
+    ) -> np.ndarray:
+        """
+        Vectorized version of ``_value`` that scores every state in ``states`` for a
+        single action at once. Returns a (n,) array of state-action values.
+        """
+        n = states.shape[0]
+        actions = np.full(n, a_scalar, dtype=int)
+        p_f_total = self._compute_failure_probability(states, actions, t)
+        observation_k = self.mdp.get_obs(t)
+        expected_one_stage_reward = self.expected_reward(
+            actions, observation_k, self.mdp.failure_penalty, p_f_total
+        )
+        if last_stage:
+            return expected_one_stage_reward
+        expected_future_value = self._expected_future_value_batch(
+            states, a_scalar, t, p_f_total
+        )
+        return expected_one_stage_reward + self._GAMMA * expected_future_value
+
+    def _expected_future_value_batch(
+        self,
+        states: np.ndarray,   # shape (n, 2)
+        a_scalar: int,
+        stage: int,
+        p_fail: np.ndarray,   # shape (n,)
+    ) -> np.ndarray:
+        """Vectorized expected future value across all states for one action."""
+        stored_energy = self.mdp.transition_logic.soc_to_energy(states[:, 0])   # (n,)
+        required_energy = self.mdp.transition_logic.get_required_energy(
+            states, np.full(states.shape[0], a_scalar, dtype=int)
+        )                                                                        # (n,)
+        alpha_k, beta_k = self.get_beta_params(stage)
+        V_next = self._get_vnext_slice(stage, a_scalar)                          # (n_soc,)
+        max_collected_energy_J = self.mdp.env_provider.get_solar_cs_joules(stage)
+        return self._compute_survival_contribution_batch(
+            stored_energy, required_energy, max_collected_energy_J,
+            alpha_k, beta_k, p_fail, V_next,
+        )
+
+    def _compute_survival_contribution_batch(
+        self, Ck, Ek, G_max, alpha, beta, p_fail, V_next,
+    ) -> np.ndarray:
+        """
+        Batched survival contribution. ``Ck``, ``Ek``, ``p_fail`` are (n,); ``V_next``
+        is (n_soc,). Returns (n,) = survival_mass @ V_next per state.
+
+        Mirrors the scalar ``compute_survival_contribution`` but broadcasts the energy-bin
+        edges (cached in ``__init__`` as ``self._e_lower``/``self._e_upper``) across states.
+        """
+        G_max = max(G_max, 10.0)
+        shift = (Ek - Ck)[:, None]                       # (n, 1)
+        u_lower = np.clip((self._e_lower[None, :] + shift) / G_max, 0.0, 1.0)  # (n, n_soc)
+        u_upper = np.clip((self._e_upper[None, :] + shift) / G_max, 0.0, 1.0)  # (n, n_soc)
+        deltaP = betainc(alpha, beta, u_upper) - betainc(alpha, beta, u_lower)
+        survival_mass = (1.0 - p_fail)[:, None] * deltaP  # (n, n_soc)
+        return survival_mass @ V_next                     # (n,)
+
     def solve(self) -> None:
         states = self.states
-        action_list = [np.array(0)[np.newaxis], np.array(1)[np.newaxis]]
-        values = np.zeros(2)
+        non_broken = states[:-1]
         for t in tqdm(range(self.horizon - 1, -1, -1)):
             self._vnext_cache.clear()
-            for i, s in enumerate(states[:-1]):
-                for a in action_list:
-                    last = (t == self.horizon - 1)
-                    values[a] = self._value(s[np.newaxis], a, t, last)
-                self.future_value_table[i, t] = max(values)
-                # self.optimal_action_table[i, t] = np.argmax(values)
+            last = (t == self.horizon - 1)
+            values0 = self._value_batch(non_broken, 0, t, last)
+            values1 = self._value_batch(non_broken, 1, t, last)
+            self.future_value_table[:-1, t] = np.maximum(values0, values1)
+            # self.optimal_action_table[:-1, t] = (values1 > values0).astype(float)
         np.save(self._vf_filename(), self.future_value_table)
         print("Value function table saved to:", self._vf_filename())
 
@@ -439,6 +500,44 @@ class mdpAnalyticalBackwardSolver:
             avg_r = rewards[mask].mean()
             value += p * (avg_r + self._GAMMA * future_vals[idx])
         return value
+
+    def _lookup_future_values_fast(self, next_states: np.ndarray, stage: int) -> np.ndarray:
+        """
+        Vectorized, O(n) future-value lookup for a batch of grid-aligned next states.
+
+        Replaces the equality-scan in ``lookup_future_values`` with direct index
+        arithmetic: SoC -> bin index, mode -> row-block offset (same layout that
+        ``_get_vnext_slice`` relies on). Broken states (mode==2) map to value 0.
+        """
+        soc = next_states[:, 0]
+        mode = next_states[:, 1].astype(int)
+        n = next_states.shape[0]
+        future = np.zeros(n)
+        normal = mode != 2
+        if np.any(normal):
+            bin_idx = np.clip(
+                np.rint(soc[normal] / self.soc_increment).astype(int),
+                0, self.n_soc_levels - 1,
+            )
+            rows = bin_idx + mode[normal] * self.n_soc_levels
+            future[normal] = self.future_value_table[rows, stage]
+        return future
+
+    def value_function_batch(
+        self, stage: int, rewards: np.ndarray, next_states: np.ndarray
+    ) -> np.ndarray:
+        """
+        Elementwise value = reward + GAMMA * V(next_state, stage+1) for a batch.
+
+        Equivalent to calling the single-sample ``value_function`` per row, but
+        vectorized via ``_lookup_future_values_fast``.
+        """
+        next_stage = stage + 1
+        if next_stage < self.horizon:
+            future_vals = self._lookup_future_values_fast(next_states, next_stage)
+        else:
+            future_vals = np.zeros_like(rewards)
+        return rewards + self._GAMMA * future_vals
 
 
 

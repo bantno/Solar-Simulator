@@ -281,43 +281,166 @@ class AbstractContinuousEnergySimulation(ABC):
         rewards = self.mdp.reward(states, actions, next_states, t)
         return next_states, rewards, next_energy
 
+    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
+        """
+        Vectorized policy: choose an action for every episode (row of ``state``) at once.
+        Subclasses must override. ``state`` is (n,2); solar/wind/whale are (n,).
+        Returns an (n,) int array of actions.
+        """
+        raise NotImplementedError("Subclasses must implement choose_action_batch.")
+
+    def step_batch(self, energy, states, actions, solar, wind, t):
+        """Batched single-step transition + reward for n episodes at once."""
+        next_states, next_energy = self.mdp.transition_logic.transition_continuous_energy_with_wind_and_energy(
+            energy, states, actions, wind, solar
+        )
+        rewards = self.mdp.reward(states, actions, next_states, t)
+        return next_states, rewards, next_energy
+
+    def simulate_episode_batch(self, n: int):
+        """
+        Simulate n episodes simultaneously as vectorized (n,...) batches.
+
+        Episodes are independent Monte Carlo rollouts; running them together replaces
+        the per-episode Python loop with one vectorized pass per time step. Failed
+        episodes (mode==2) are frozen via a done mask so later steps don't mutate
+        them. Full per-step history is retained only for the first K episodes
+        (K = n if save_history else full_history_episodes), keeping memory bounded.
+
+        Returns a dict of per-episode results (see ''simulate_multiple_episodes'').
+        """
+        max_steps = self.horizon
+        S = self.initial_state.shape[0]
+
+        state = np.tile(np.asarray(self.initial_state, dtype=float), (n, 1))   # (n, S)
+        energy = np.full(n, self.mdp.transition_logic.soc_to_energy(self.initial_state[0]))
+
+        done = np.zeros(n, dtype=bool)
+        failure_type = np.zeros(n, dtype=int)
+        failure_step = np.full(n, max_steps, dtype=int)
+        total_reward = np.zeros(n)
+        action_sum = np.zeros(n)
+
+        # Full-history columns to retain
+        if self.save_history:
+            K = n
+        else:
+            K = min(self.full_history_episodes or 0, n)
+        if K > 0:
+            traj_hist   = np.zeros((max_steps + 1, K, S))
+            act_hist    = np.zeros((max_steps, K), dtype=int)
+            rew_hist    = np.zeros((max_steps, K))
+            solar_hist  = np.zeros((max_steps, K))
+            wind_hist   = np.zeros((max_steps, K))
+            whale_hist  = np.zeros((max_steps, K))
+            energy_hist = np.zeros((max_steps + 1, K))
+            traj_hist[0]   = state[:K]
+            energy_hist[0] = energy[:K]
+
+        for t in range(max_steps):
+            active_idx = np.nonzero(~done)[0]
+            if active_idx.size == 0:
+                break
+
+            # Sample the full population so episode i always sees draw i at step t,
+            # independent of which other lanes have already failed; then operate only
+            # on the still-active lanes (the transition model rejects broken states).
+            solar = self.env_provider.sample_sunlight(t, n)[active_idx]
+            wind  = self.env_provider.sample_wind_speed(t, n)[active_idx]
+            whale = self.env_provider.sample_whale_observation(t, n)[active_idx]
+
+            s = state[active_idx]
+            e = energy[active_idx]
+            a = self.choose_action_batch(s, solar, wind, whale, t).astype(int)
+
+            next_state, reward, next_energy = self.step_batch(e, s, a, solar, wind, t)
+
+            total_reward[active_idx] += reward
+            action_sum[active_idx]   += a
+
+            newly_local = next_state[:, 1] == 2
+            newly_global = active_idx[newly_local]
+            failure_step[newly_global] = t + 1
+            failure_type[newly_global] = np.where(next_energy[newly_local] < 0, 2, 1)
+
+            if K > 0:
+                in_hist = np.nonzero(active_idx < K)[0]
+                if in_hist.size:
+                    cols = active_idx[in_hist]
+                    act_hist[t, cols]        = a[in_hist]
+                    rew_hist[t, cols]        = reward[in_hist]
+                    solar_hist[t, cols]      = solar[in_hist]
+                    wind_hist[t, cols]       = wind[in_hist]
+                    whale_hist[t, cols]      = whale[in_hist]
+                    traj_hist[t + 1, cols]   = next_state[in_hist]
+                    energy_hist[t + 1, cols] = next_energy[in_hist]
+
+            state[active_idx]  = next_state
+            energy[active_idx] = next_energy
+            done[newly_global] = True
+
+        results = {
+            'n': n,
+            'done': done,
+            'failure_type': failure_type,
+            'failure_step': failure_step,
+            'total_reward': total_reward,
+            'action_sum': action_sum,
+            'K': K,
+        }
+        if K > 0:
+            results.update({
+                'traj_hist': traj_hist, 'act_hist': act_hist, 'rew_hist': rew_hist,
+                'solar_hist': solar_hist, 'wind_hist': wind_hist, 'whale_hist': whale_hist,
+                'energy_hist': energy_hist,
+            })
+        return results
 
     def simulate_multiple_episodes(self, num_episodes: int):
         """
         Yield episode data; full history for first full_history_episodes,
         then only summary for the remainder.
-        """
-        for episode_index in tqdm(range(num_episodes)):
-            self.env_provider.reset(episode_index)
-            traj, acts, rews, solar, wind, whale, energies, failure_type = self.simulate_episode()
 
-            # Determine if this episode should save full history
-            if (self.save_history
-                or (self.full_history_episodes is not None
-                    and episode_index < self.full_history_episodes)):
+        All episodes are simulated in a single vectorized batch (see
+        ``simulate_episode_batch``). The environment RNG is seeded once for the whole
+        batch, so individual episodes are not re-seeded per index as before; results
+        remain statistically equivalent i.i.d. Monte Carlo rollouts.
+        """
+        self.env_provider.reset(0)
+        res = self.simulate_episode_batch(num_episodes)
+        K = res['K']
+
+        for episode_index in range(num_episodes):
+            failed = bool(res['done'][episode_index])
+            last_idx = int(res['failure_step'][episode_index])
+            total_reward = float(res['total_reward'][episode_index])
+            flight_hrs = float(res['action_sum'][episode_index]) / 4  # TODO: hardcoded 15min step
+            failure_type = int(res['failure_type'][episode_index])
+
+            if K > 0 and episode_index < K:
+                j = episode_index
                 episode_data = {
-                    'trajectory': traj,
-                    'actions': acts,
-                    'rewards': rews,
-                    'solar_series': solar,
-                    'wind_series': wind,
-                    'whale_series': whale,
-                    'energy_series': energies,
+                    'trajectory':   res['traj_hist'][:last_idx + 1, j],
+                    'actions':      res['act_hist'][:last_idx, j],
+                    'rewards':      res['rew_hist'][:last_idx, j],
+                    'solar_series': res['solar_hist'][:last_idx, j],
+                    'wind_series':  res['wind_hist'][:last_idx, j],
+                    'whale_series': res['whale_hist'][:last_idx, j],
+                    'energy_series': res['energy_hist'][:last_idx + 1, j],
                     'metadata': {'episode_index': episode_index},
-                    'total_reward': sum(rews),
-                    'flight_hrs' : sum(acts)/4, # TODO: Make this not hardcoded for 15min time step
-                    'failure': traj[-1][1] == 2,
-                    'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
+                    'total_reward': total_reward,
+                    'flight_hrs': flight_hrs,
+                    'failure': failed,
+                    'failure_step': last_idx,
                     'failure_type': failure_type,
                 }
             else:
-                # summary only
                 episode_data = {
                     'metadata': {'episode_index': episode_index},
-                    'failure': traj[-1][1] == 2,
-                    'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
-                    'total_reward': sum(rews),
-                    'flight_hrs' : sum(acts)/4, # TODO: Make this not hardcoded for 15min time step
+                    'failure': failed,
+                    'failure_step': last_idx,
+                    'total_reward': total_reward,
+                    'flight_hrs': flight_hrs,
                     'failure_type': failure_type,
                 }
 
@@ -416,6 +539,39 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
         # Return the action with the highest expected value.
         return int(np.argmax(value_list))
 
+    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
+        """
+        Vectorized optimal policy: for every episode and both candidate actions,
+        compute the two-outcome expected value and return the argmax action.
+
+        This mirrors ``choose_action`` but evaluates all n episodes at once and uses
+        the solver's O(n) ``value_function_batch`` instead of the per-call state scan.
+        """
+        n = state.shape[0]
+        current_energy = self.mdp.transition_logic.soc_to_energy(state[:, 0])   # (n,)
+        failure_state = np.tile(np.array([-1.0, 2]), (n, 1))                    # (n,2)
+        values = np.empty((n, 2))
+
+        for action in (0, 1):
+            actions_arr = np.full(n, action, dtype=int)
+            p_success = self.mdp.transition_logic.transition_model.compute_probability(
+                wind, actions_arr, state
+            )                                                                  # (n,)
+            energy_consumption = self.mdp.transition_logic._calculate_energy_consumption(
+                state, actions_arr
+            )
+            next_state_success, _ = self.mdp.transition_logic._update_energy_and_state_continuous(
+                current_energy, solar, energy_consumption, actions_arr
+            )
+            reward_success = self.mdp.reward(state, actions_arr, next_state_success, t)
+            value_success = self.mdp_solver.value_function_batch(
+                t, reward_success, next_state_success
+            )
+            reward_failure = self.mdp.reward(state, actions_arr, failure_state, t)
+            values[:, action] = p_success * value_success + (1.0 - p_success) * reward_failure
+
+        return np.argmax(values, axis=1).astype(int)
+
 class UnifiedThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
     def __init__(self, mdp, horizon: int, initial_state: np.ndarray,
                  observation_threshold: float, wind_threshold: float,
@@ -472,6 +628,36 @@ class UnifiedThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
             raise ValueError("Invalid state: {}".format(state))
 
         return action
+
+    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
+        """Vectorized form of ``choose_action`` over n episodes."""
+        soc = state[:, 0]
+        mode = state[:, 1]
+        action = np.zeros(state.shape[0], dtype=int)
+
+        # mode 0 (floating): take off only if wind, observation, and battery allow
+        m0 = mode == 0
+        takeoff = (
+            m0
+            & (wind < self.wind_threshold)
+            & (whale > self.observation_threshold)
+            & (soc > self.low_battery_threshold)
+            & (soc > 95)
+        )
+        action[takeoff] = 1
+
+        # mode 1 (flying): keep flying unless battery low, observation low, or wind low
+        m1 = mode == 1
+        land = m1 & (
+            (soc < self.low_battery_threshold)
+            | (whale < self.observation_threshold)
+            | (wind <= self.wind_threshold - 3)
+        )
+        action[m1 & ~land] = 1
+        # mode 2 (broken) lanes stay 0; they are frozen by the done-mask anyway
+
+        return action
+
 class ObservationThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
     def __init__(self, mdp, horizon: int, initial_state: np.ndarray,
                  observation_threshold: float, wind_threshold: float,
@@ -496,4 +682,16 @@ class ObservationThresholdContinuousSimulation(AbstractContinuousEnergySimulatio
         is_battery_sufficient = state[0] > self.low_battery_threshold
         if is_wind_acceptable and is_observation_sufficient and is_battery_sufficient:
             action = 1
+        return action
+
+    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
+        """Vectorized form of ``choose_action`` over n episodes."""
+        soc = state[:, 0]
+        action = np.zeros(state.shape[0], dtype=int)
+        fly = (
+            (wind < self.wind_threshold)
+            & (whale > self.observation_threshold)
+            & (soc > self.low_battery_threshold)
+        )
+        action[fly] = 1
         return action

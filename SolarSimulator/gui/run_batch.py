@@ -177,8 +177,9 @@ def main():
     # Parallelism knobs
     ap.add_argument("--workers", type=int, default=max(1, mp.cpu_count() - 1),
                     help="Worker processes for running SIMULATIONS (default: CPU-1)")
-    ap.add_argument("--build-workers", type=int, default=1,
-                    help="Worker processes for SIM CREATION (default: equals --workers)")
+    ap.add_argument("--build-workers", type=int, default=None,
+                    help="Worker processes for SIM CREATION (default: equals --workers). "
+                         "Optimal-policy solves run during creation, so this parallelizes them.")
     ap.add_argument("--no-multiproc", action="store_true",
                     help="Disable multiprocessing during run (serial across sims)")
 

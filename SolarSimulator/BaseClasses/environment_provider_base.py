@@ -630,10 +630,11 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
             self.n_wind_bins = 1
         self.last_wind_bins = None
 
-        # Lazy per-n cache (built on first sample call or after reset).
-        self._cached_n = None
-        self._wind_cache = None    # (horizon, n) float64
-        self._solar_cache = None   # (horizon, n) float64
+        # Lazy per-n year-assignment matrix (built on first sample call or after reset).
+        # Shape (n, n_blocks): year_choice[lane, block] = year index in [0, n_years-1].
+        # Storing only this tiny matrix (not the full (H, n) weather arrays) keeps memory
+        # proportional to n*n_blocks rather than H*n, which matters for large episode counts.
+        self._year_choice = None   # (n, n_blocks) int
 
     def _timestamp_to_slot(self, ts: pd.Timestamp) -> int:
         """Map a calendar datetime to its slot index in [0, slots_per_year-1], ignoring Feb 29."""
@@ -644,38 +645,21 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
         doy_0 = int(self._DAYS_BEFORE_MONTH[ts.month - 1]) + ts.day - 1
         return doy_0 * spd + ts.hour * sph + ts.minute // int(self.DELTA_T_MIN)
 
-    def _build_cache(self, n: int) -> None:
-        """Draw per-lane block-year assignments and gather wind and solar arrays once."""
-        # year_choice[lane, block] = year index in [0, n_years-1]
-        year_choice = self.rng.integers(0, self._n_years, size=(n, self._n_blocks))
-
-        wind = np.empty((self.horizon, n), dtype=np.float64)
-        solar_ghi = np.empty((self.horizon, n), dtype=np.float64)
-
-        for b in range(self._n_blocks):
-            s = b * self.block_length_steps
-            e = min((b + 1) * self.block_length_steps, self.horizon)
-            slots = self._window_slots[s:e]   # calendar slots for this block  (L,)
-            yr = year_choice[:, b]             # year index per lane  (n,)
-            # np.ix_ gives an outer-product index → shape (L, n)
-            wind[s:e, :] = self._wind_cube[np.ix_(slots, yr)]
-            solar_ghi[s:e, :] = self._solar_cube[np.ix_(slots, yr)]
-
-        self._wind_cache = wind
-        self._solar_cache = self._energy_gain_from_solar(solar_ghi)
-        self._cached_n = n
+    def _ensure_year_choice(self, n: int) -> None:
+        """Draw per-lane block-year assignments if the batch size has changed."""
+        if self._year_choice is not None and self._year_choice.shape[0] == n:
+            return
+        self._year_choice = self.rng.integers(0, self._n_years, size=(n, self._n_blocks))
 
     def _energy_gain_from_solar(self, ghi: np.ndarray) -> np.ndarray:
         """GHI [W/m^2] -> energy [J] using the panel model (broadcasts over any shape)."""
         return ghi * self.DELTA_T_SEC * self.panel.area * self.panel.efficiency
 
     def reset(self, seed=None) -> None:
-        """Re-seed the RNG and clear the cached weather arrays so the next run draws fresh data."""
+        """Re-seed the RNG and clear year assignments so the next run draws fresh bootstrap data."""
         if seed is not None:
             self.rng = np.random.default_rng(seed)
-        self._cached_n = None
-        self._wind_cache = None
-        self._solar_cache = None
+        self._year_choice = None
         self.last_wind_bins = None
 
     def set_seed(self, seed: int) -> None:
@@ -689,18 +673,18 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
         return np.array([[1.0]])
 
     def sample_wind_speed(self, t: int, n: int) -> np.ndarray:
-        if self._cached_n != n:
-            self._build_cache(n)
-        wind_t = self._wind_cache[t]   # (n,)
+        self._ensure_year_choice(n)
+        yr = self._year_choice[:, t // self.block_length_steps]   # (n,)
+        wind_t = self._wind_cube[self._window_slots[t], yr]        # (n,)
         if self.use_wind_chain:
-            # Digitize realized wind into bins so choose_action_batch indexes the 3D value table.
             self.last_wind_bins = np.digitize(wind_t, self.wind_bin_edges[1:-1]).astype(int)
         return wind_t
 
     def sample_sunlight(self, t: int, n: int) -> np.ndarray:
-        if self._cached_n != n:
-            self._build_cache(n)
-        return self._solar_cache[t]    # (n,)
+        self._ensure_year_choice(n)
+        yr = self._year_choice[:, t // self.block_length_steps]    # (n,)
+        ghi_t = self._solar_cube[self._window_slots[t], yr]        # (n,)
+        return self._energy_gain_from_solar(ghi_t)
 
     def sample_whale_observation(self, t: int, n: int = 1) -> np.ndarray:
         return np.full(n, self.whale_reward_series[t])

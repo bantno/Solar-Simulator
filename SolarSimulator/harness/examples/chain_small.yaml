@@ -29,5 +29,8 @@ locations:
 
 # Wind persistence ON. `path` defaults to the data_path with `_windchain` inserted
 # (Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min_windchain.pkl); set explicitly to override.
+# bin_edges: interior cutpoints in m/s (aircraft-based thresholds). Omit to use equal-occupancy
+# quantile bins derived from historical data. Changing these triggers an automatic artifact rebuild.
 wind_chain:
   enabled: true
+  bin_edges: [5.0, 10.0]   # [0,5) safe, [5,10) marginal, [10,∞) unsafe

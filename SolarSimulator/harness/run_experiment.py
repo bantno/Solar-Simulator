@@ -73,6 +73,19 @@ def _find_historical_pkl(hist_dir: str, lat: float, lon: float) -> str:
     return None
 
 
+def _configured_bin_edges(wc_cfg: dict):
+    """
+    Return the full bin-edge array from wind_chain.bin_edges (interior cutpoints in the YAML),
+    or None if the key is absent (falls back to quantile-based derivation at build time).
+    """
+    import numpy as np  # noqa: E402 (local import avoids top-level dep for non-chain runs)
+    edges = wc_cfg.get("bin_edges")
+    if edges is None:
+        return None
+    interior = np.asarray(edges, dtype=float)
+    return np.concatenate(([0.0], interior, [np.inf]))
+
+
 def _fetch_historical_pkl(hist_dir: str, lat: float, lon: float) -> str:
     """Fetch historical weather from Open-Meteo (1950–2022) and save to hist_dir."""
     from Scripts.create_weather_distributions import WeatherDataProcessor  # noqa: E402
@@ -110,10 +123,25 @@ def _ensure_location_data(config: dict, location: dict) -> None:
     wc_cfg = config.get("wind_chain") or {}
     hw_cfg = config.get("historical_weather") or {}
 
+    import numpy as np    # noqa: E402
+    import pandas as pd   # noqa: E402
+
     chain_path = wc_cfg.get("path") or _derive_chain_path(data_path)
     cube_path = hw_cfg.get("path") or _derive_histcube_path(data_path)
 
-    missing_chain = wc_cfg.get("enabled", False) and not os.path.exists(chain_path)
+    # Chain: missing file OR configured edges have changed since last build.
+    missing_chain = False
+    if wc_cfg.get("enabled", False):
+        configured_edges = _configured_bin_edges(wc_cfg)
+        explicit_path = bool(wc_cfg.get("path"))
+        if not os.path.exists(chain_path):
+            missing_chain = True
+        elif not explicit_path and configured_edges is not None:
+            existing = pd.read_pickle(chain_path)
+            if not np.allclose(existing["bin_edges"], configured_edges):
+                print(f"[provision] wind_chain bin_edges changed — rebuilding {chain_path}")
+                missing_chain = True
+
     missing_cube = hw_cfg.get("enabled", False) and not os.path.exists(cube_path)
 
     if not missing_chain and not missing_cube:
@@ -131,10 +159,16 @@ def _ensure_location_data(config: dict, location: dict) -> None:
         hist_pkl = _fetch_historical_pkl(hist_dir, lat, lon)
 
     if missing_chain:
+        configured_edges = _configured_bin_edges(wc_cfg)
         n_bins = wc_cfg.get("n_bins", 3)
         os.makedirs(os.path.dirname(chain_path), exist_ok=True)
         print(f"[provision] Building wind-chain artifact -> {chain_path}")
-        build_wind_chain_artifact(hist_pkl, chain_path, interval_minutes=interval_min, n_bins=n_bins)
+        build_wind_chain_artifact(
+            hist_pkl, chain_path,
+            interval_minutes=interval_min,
+            n_bins=n_bins,
+            bin_edges=configured_edges,
+        )
 
     if missing_cube:
         os.makedirs(os.path.dirname(cube_path), exist_ok=True)

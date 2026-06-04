@@ -432,15 +432,20 @@ def build_wind_chain_artifact(
     interval_minutes: int = 15,
     n_bins: int = 3,
     wind_col: str = "wind_speed_10m",
+    bin_edges: np.ndarray | None = None,
 ):
     """
     Resample an hourly HISTORICAL_DATA pickle to the model timestep and fit the wind chain.
     Saves the artifact dict (pickle) to out_path and returns it.
+
+    If bin_edges is provided (full edge array: [0, cutpoint1, ..., inf]) it is used directly
+    and n_bins is ignored.  If omitted, n_bins equal-occupancy quantile bins are derived from
+    the data.
     """
     hist = pd.read_pickle(historical_pkl)
     hist = hist[~((hist.index.month == 2) & (hist.index.day == 29))]  # keep 365-day alignment
     wind = hist[wind_col].resample(f"{interval_minutes}min").interpolate(method="linear")
-    artifact = fit_wind_transition_chain(wind, n_bins=n_bins)
+    artifact = fit_wind_transition_chain(wind, n_bins=n_bins, bin_edges=bin_edges)
     pd.to_pickle(artifact, out_path)
     print(f"Wind-chain artifact saved to {out_path} "
           f"(n_bins={artifact['n_bins']}, edges={np.round(artifact['bin_edges'], 3)})")

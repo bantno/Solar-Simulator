@@ -40,9 +40,106 @@ if PKG_DIR not in sys.path:
 
 from BaseClasses.run_sim import YAMLSimulationRunner          # noqa: E402
 from BaseClasses.simulation_run_manager import SimulationRunManager  # noqa: E402
+from BaseClasses.run_sim import _derive_chain_path, _derive_histcube_path  # noqa: E402
 from harness import HARNESS_VERSION                            # noqa: E402
 from harness.summarize import write_summary_csv                # noqa: E402
 from harness.figures import plot_sweep_summary, plot_trajectory_replay, render_paper_figure  # noqa: E402
+
+
+# --------------------------------------------------------------------------------------
+# Data provisioning: fetch historical weather and build missing artifacts on demand.
+# --------------------------------------------------------------------------------------
+
+def _hist_dir_from_data_path(data_path: str) -> str:
+    """Return the HISTORICAL_DATA sibling directory for a given EXPECTED_DATA path."""
+    return os.path.join(os.path.dirname(os.path.dirname(data_path)), "HISTORICAL_DATA")
+
+
+def _find_historical_pkl(hist_dir: str, lat: float, lon: float) -> str:
+    """Return the path of an existing historical pkl for this location, or None."""
+    candidates = [
+        os.path.join(hist_dir, f"data_{lat}_{lon}.pkl"),
+        os.path.join(hist_dir, f"data_{int(lat)}_{int(lon)}.pkl"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    # Broader glob: any pkl whose filename contains both coordinate substrings.
+    lat_str, lon_str = f"{lat:g}", f"{lon:g}"
+    for p in glob.glob(os.path.join(hist_dir, "*.pkl")):
+        name = os.path.basename(p)
+        if lat_str in name and lon_str in name:
+            return p
+    return None
+
+
+def _fetch_historical_pkl(hist_dir: str, lat: float, lon: float) -> str:
+    """Fetch historical weather from Open-Meteo (1950–2022) and save to hist_dir."""
+    from Scripts.create_weather_distributions import WeatherDataProcessor  # noqa: E402
+    os.makedirs(hist_dir, exist_ok=True)
+    out_path = os.path.join(hist_dir, f"data_{lat}_{lon}.pkl")
+    print(f"[provision] Fetching historical weather for lat={lat}, lon={lon} "
+          f"(1950-01-01 to 2022-12-31) — this may take a few minutes ...")
+    proc = WeatherDataProcessor()
+    proc.fetch_weather_data(
+        lat, lon, "1950-01-01", "2022-12-31",
+        ["wind_speed_10m", "wind_direction_10m", "shortwave_radiation"],
+    )
+    proc.process_hourly_data()
+    proc.hourly_dataframe.to_pickle(out_path)
+    print(f"[provision] Historical data saved to {out_path}")
+    return out_path
+
+
+def _ensure_location_data(config: dict, location: dict) -> None:
+    """
+    Check that all artifact files required by config exist for this location.
+    Builds missing windchain / histcube from historical data, fetching from
+    Open-Meteo first if the historical pkl itself is absent.
+    """
+    from Scripts.create_weather_distributions import (  # noqa: E402
+        build_wind_chain_artifact,
+        build_historical_cube_artifact,
+    )
+
+    data_path = location["data_path"]
+    lat = location.get("latitude")
+    lon = location.get("longitude")
+    interval_min = int(config.get("delta_t", 15))
+
+    wc_cfg = config.get("wind_chain") or {}
+    hw_cfg = config.get("historical_weather") or {}
+
+    chain_path = wc_cfg.get("path") or _derive_chain_path(data_path)
+    cube_path = hw_cfg.get("path") or _derive_histcube_path(data_path)
+
+    missing_chain = wc_cfg.get("enabled", False) and not os.path.exists(chain_path)
+    missing_cube = hw_cfg.get("enabled", False) and not os.path.exists(cube_path)
+
+    if not missing_chain and not missing_cube:
+        return
+
+    if lat is None or lon is None:
+        raise RuntimeError(
+            f"Cannot provision data for {data_path!r}: "
+            "latitude and longitude must be set in the location config."
+        )
+
+    hist_dir = _hist_dir_from_data_path(data_path)
+    hist_pkl = _find_historical_pkl(hist_dir, lat, lon)
+    if hist_pkl is None:
+        hist_pkl = _fetch_historical_pkl(hist_dir, lat, lon)
+
+    if missing_chain:
+        n_bins = wc_cfg.get("n_bins", 3)
+        os.makedirs(os.path.dirname(chain_path), exist_ok=True)
+        print(f"[provision] Building wind-chain artifact -> {chain_path}")
+        build_wind_chain_artifact(hist_pkl, chain_path, interval_minutes=interval_min, n_bins=n_bins)
+
+    if missing_cube:
+        os.makedirs(os.path.dirname(cube_path), exist_ok=True)
+        print(f"[provision] Building histcube artifact -> {cube_path}")
+        build_historical_cube_artifact(hist_pkl, cube_path, interval_minutes=interval_min)
 
 
 # --------------------------------------------------------------------------------------
@@ -78,7 +175,7 @@ def _abspath(p: str) -> str:
 
 
 def _resolve_paths_in_place(config: dict) -> None:
-    """Make every data_path / wind_chain.path absolute so spawned workers don't depend on cwd."""
+    """Make every data_path / artifact path absolute so spawned workers don't depend on cwd."""
     for loc in config.get("locations", []) or []:
         if isinstance(loc, dict) and loc.get("data_path"):
             loc["data_path"] = _abspath(loc["data_path"])
@@ -87,6 +184,9 @@ def _resolve_paths_in_place(config: dict) -> None:
     wc = config.get("wind_chain")
     if isinstance(wc, dict) and wc.get("path"):
         wc["path"] = _abspath(wc["path"])
+    hw = config.get("historical_weather")
+    if isinstance(hw, dict) and hw.get("path"):
+        hw["path"] = _abspath(hw["path"])
 
 
 def _representative_optimal_sim(sims):
@@ -114,6 +214,10 @@ def run_experiment(config_path, storage_base, workers, use_multiproc):
     _resolve_paths_in_place(config)
     config["_run_output_dir"] = solver_tables       # solver writes value-table .npy here
     config["_config_basename"] = config_basename     # carried into summary.csv
+
+    # Build any missing windchain / histcube artifacts before spawning workers.
+    for loc in config.get("locations", []) or []:
+        _ensure_location_data(config, loc)
 
     # Copy the resolved spec (drop harness-internal underscore keys for a clean, re-runnable file).
     clean = {k: v for k, v in config.items() if not k.startswith("_")}

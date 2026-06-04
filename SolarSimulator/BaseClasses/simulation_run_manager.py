@@ -3,6 +3,7 @@ import time
 import multiprocessing
 from datetime import datetime
 from typing import Optional, Tuple, List, Dict, Any
+from tqdm import tqdm
 from BaseClasses.simulation_storage import SimulationStorageHDF5
 
 
@@ -47,15 +48,15 @@ def _label_for_sim(sim) -> str:
     return "|".join(parts)
 
 
-def _run_one_sim(args: Tuple[Any, int, bool, str]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+def _run_one_sim(args: Tuple[Any, int, bool, str, bool]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Worker function for a single simulation object.
     Args:
-        args = (sim, episodes_per_simulation, verbose, label)
+        args = (sim, episodes_per_simulation, verbose, label, show_episode_progress)
     Returns:
         (simulation_metadata, episodes)
     """
-    sim, episodes_per_simulation, verbose, label = args
+    sim, episodes_per_simulation, verbose, label, show_episode_progress = args
     pid = os.getpid()
     t0 = time.time()
     if verbose:
@@ -68,7 +69,17 @@ def _run_one_sim(args: Tuple[Any, int, bool, str]) -> Tuple[Dict[str, Any], List
     flight_hrs = 0.0
 
     # Episodes run SERIALLY inside this worker
-    for episode in sim.simulate_multiple_episodes(episodes_per_simulation):
+    episode_iter = sim.simulate_multiple_episodes(episodes_per_simulation)
+    if show_episode_progress:
+        episode_iter = tqdm(
+            episode_iter,
+            total=episodes_per_simulation,
+            desc=label[:50],
+            unit="ep",
+            leave=False,
+            dynamic_ncols=True,
+        )
+    for episode in episode_iter:
         flight_hrs   += episode["flight_hrs"]
         total_reward += episode["total_reward"]
         failure      += episode["failure"]
@@ -144,6 +155,7 @@ class SimulationRunManager:
         chunk_size: int = 1,
         maxtasksperchild: Optional[int] = None,
         verbose: bool = False,
+        show_progress: bool = True,
     ):
         """
         Execute simulations and incrementally store results by simulation group.
@@ -155,33 +167,40 @@ class SimulationRunManager:
             chunk_size: tasks per worker pull (1 = best load balancing).
             maxtasksperchild: recycle a worker after N sims (optional hygiene).
             verbose: per-worker START/DONE prints.
+            show_progress: show tqdm progress bars (outer sim bar always; inner
+                episode bar only in serial mode, since workers run in separate processes).
         """
-        # Determine worker count
         if use_multiprocessing and (num_workers is None):
             num_workers = max(1, multiprocessing.cpu_count() - 1)
 
+        n = len(simulation_list)
+        _log = tqdm.write if show_progress else print
+
         # --- SERIAL execution ---
         if not use_multiprocessing:
-            for sim in simulation_list:
+            sim_iter = (
+                tqdm(simulation_list, total=n, desc="Simulations", unit="sim",
+                     leave=True, dynamic_ncols=True)
+                if show_progress else simulation_list
+            )
+            for sim in sim_iter:
                 label = _label_for_sim(sim)
                 sim_meta, episodes = _run_one_sim(
-                    (sim, self.episodes_per_simulation, verbose, label)
+                    (sim, self.episodes_per_simulation, verbose, label, show_progress)
                 )
                 group = self._make_group_name(sim_meta)
                 self.storage.store_simulation(sim_meta, episodes, group_name=group)
                 episodes = None
-                # Optional extra durability: flush after each sim
                 try:
                     self.storage.h5file.flush()
                 except Exception:
                     pass
-                # print(f"→ Stored group '{group}' with {len(episodes)} episodes")
-                print(f"→ Stored group '{group}' with {sim_meta.get('episodes_count', 'n/a')} episodes")
+                _log(f"→ Stored group '{group}' with {sim_meta.get('episodes_count', 'n/a')} episodes")
 
         # --- PARALLEL execution ---
         else:
             tasks = [
-                (sim, self.episodes_per_simulation, verbose, _label_for_sim(sim))
+                (sim, self.episodes_per_simulation, verbose, _label_for_sim(sim), False)
                 for sim in simulation_list
             ]
             pool_kwargs = {"processes": num_workers}
@@ -189,22 +208,22 @@ class SimulationRunManager:
                 pool_kwargs["maxtasksperchild"] = int(maxtasksperchild)
 
             with multiprocessing.Pool(**pool_kwargs) as pool:
-                # dynamic scheduling; workers pull one sim at a time
-                for sim_meta, episodes in pool.imap_unordered(_run_one_sim, tasks, chunksize=max(1, int(chunk_size))):
+                result_iter = pool.imap_unordered(_run_one_sim, tasks, chunksize=max(1, int(chunk_size)))
+                if show_progress:
+                    result_iter = tqdm(result_iter, total=n, desc="Simulations",
+                                       unit="sim", dynamic_ncols=True)
+                for sim_meta, episodes in result_iter:
                     group = self._make_group_name(sim_meta)
                     self.storage.store_simulation(sim_meta, episodes, group_name=group)
                     episodes = None
-                    # Optional extra durability: flush after each sim
                     try:
                         self.storage.h5file.flush()
                     except Exception:
                         pass
-                    # print(f"→ Stored group '{group}' with {len(episodes)} episodes")
-                    print(f"→ Stored group '{group}' with {sim_meta.get('episodes_count', 'n/a')} episodes")
+                    _log(f"→ Stored group '{group}' with {sim_meta.get('episodes_count', 'n/a')} episodes")
 
-        # Close the HDF5 file when all writes are done
         self.storage.close()
-        print("All simulations completed and stored in one file.")
+        _log("All simulations completed and stored in one file.")
 
     def _make_group_name(self, meta: dict) -> str:
         """

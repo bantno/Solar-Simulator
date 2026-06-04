@@ -271,6 +271,28 @@ class WeatherDataProcessor:
             params, expected = (np.nan, np.nan, np.nan), np.nan
         return params, expected
 
+def build_expected_data_artifact(
+    historical_pkl: str,
+    out_path: str,
+    latitude: float,
+    longitude: float,
+    interval_minutes: int = 15,
+):
+    """
+    Build the expected-data (distribution fit) artifact from an hourly historical pkl.
+    Fits Beta to clearsky-normalized irradiance and Weibull to wind speed for every
+    (month, day, hour, minute) slot.  Saves and returns the resulting DataFrame.
+    """
+    proc = WeatherDataProcessor()
+    proc.lat = latitude
+    proc.lon = longitude
+    proc.hourly_dataframe = pd.read_pickle(historical_pkl)
+    resampled = proc.resample_data(interval_minutes=interval_minutes)
+    df = proc.fit_distributions(resampled, filename=out_path)
+    print(f"Expected data saved to {out_path}")
+    return df
+
+
 # Example usage
 if __name__ == "__main__":
     processor = WeatherDataProcessor()

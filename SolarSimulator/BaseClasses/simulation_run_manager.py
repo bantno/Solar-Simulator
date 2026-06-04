@@ -195,7 +195,7 @@ class SimulationRunManager:
                     self.storage.h5file.flush()
                 except Exception:
                     pass
-                _log(f"→ Stored group '{group}' with {sim_meta.get('episodes_count', 'n/a')} episodes")
+                _log(f"Stored group '{group}' with {sim_meta.get('episodes_count', 'n/a')} episodes")
 
         # --- PARALLEL execution ---
         else:
@@ -220,7 +220,7 @@ class SimulationRunManager:
                         self.storage.h5file.flush()
                     except Exception:
                         pass
-                    _log(f"→ Stored group '{group}' with {sim_meta.get('episodes_count', 'n/a')} episodes")
+                    _log(f"Stored group '{group}' with {sim_meta.get('episodes_count', 'n/a')} episodes")
 
         self.storage.close()
         _log("All simulations completed and stored in one file.")

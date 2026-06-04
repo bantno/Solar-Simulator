@@ -87,12 +87,12 @@ def _configured_bin_edges(wc_cfg: dict):
 
 
 def _fetch_historical_pkl(hist_dir: str, lat: float, lon: float) -> str:
-    """Fetch historical weather from Open-Meteo (1950–2022) and save to hist_dir."""
+    """Fetch historical weather from Open-Meteo (1950-2022) and save to hist_dir."""
     from Scripts.create_weather_distributions import WeatherDataProcessor  # noqa: E402
     os.makedirs(hist_dir, exist_ok=True)
     out_path = os.path.join(hist_dir, f"data_{lat}_{lon}.pkl")
     print(f"[provision] Fetching historical weather for lat={lat}, lon={lon} "
-          f"(1950-01-01 to 2022-12-31) — this may take a few minutes ...")
+          f"(1950-01-01 to 2022-12-31) - this may take a few minutes ...")
     proc = WeatherDataProcessor()
     proc.fetch_weather_data(
         lat, lon, "1950-01-01", "2022-12-31",
@@ -126,6 +126,7 @@ def _ensure_location_data(config: dict, location: dict) -> None:
     import numpy as np    # noqa: E402
     import pandas as pd   # noqa: E402
 
+    missing_base = not os.path.exists(data_path)
     chain_path = wc_cfg.get("path") or _derive_chain_path(data_path)
     cube_path = hw_cfg.get("path") or _derive_histcube_path(data_path)
 
@@ -139,12 +140,12 @@ def _ensure_location_data(config: dict, location: dict) -> None:
         elif not explicit_path and configured_edges is not None:
             existing = pd.read_pickle(chain_path)
             if not np.allclose(existing["bin_edges"], configured_edges):
-                print(f"[provision] wind_chain bin_edges changed — rebuilding {chain_path}")
+                print(f"[provision] wind_chain bin_edges changed - rebuilding {chain_path}")
                 missing_chain = True
 
     missing_cube = hw_cfg.get("enabled", False) and not os.path.exists(cube_path)
 
-    if not missing_chain and not missing_cube:
+    if not missing_base and not missing_chain and not missing_cube:
         return
 
     if lat is None or lon is None:
@@ -157,6 +158,12 @@ def _ensure_location_data(config: dict, location: dict) -> None:
     hist_pkl = _find_historical_pkl(hist_dir, lat, lon)
     if hist_pkl is None:
         hist_pkl = _fetch_historical_pkl(hist_dir, lat, lon)
+
+    if missing_base:
+        from BaseClasses.weather_processor_cs_normalization import build_expected_data_artifact  # noqa: E402
+        os.makedirs(os.path.dirname(data_path), exist_ok=True)
+        print(f"[provision] Building expected data -> {data_path}")
+        build_expected_data_artifact(hist_pkl, data_path, lat, lon, interval_min)
 
     if missing_chain:
         configured_edges = _configured_bin_edges(wc_cfg)

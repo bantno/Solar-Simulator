@@ -179,14 +179,25 @@ def plot_sweep_summary(df: pd.DataFrame, out_dir: str) -> list:
 # Trajectory replay on real historical weather (single policy)
 # --------------------------------------------------------------------------------------
 def _historical_pkl_for(location: Dict) -> Optional[str]:
-    """Map a config location to its HISTORICAL_DATA pickle (data_<lat>_<lon>.pkl, ints if integral)."""
-    def fmt(x):
-        xf = float(x)
-        return str(int(xf)) if xf.is_integer() else str(xf)
+    """Map a config location to its HISTORICAL_DATA pickle, trying common naming conventions."""
     lat, lon = location.get("latitude"), location.get("longitude")
     if lat is None or lon is None:
         return None
-    return os.path.join(REPO_ROOT, "Data", "HISTORICAL_DATA", f"data_{fmt(lat)}_{fmt(lon)}.pkl")
+    hist_dir = os.path.join(REPO_ROOT, "Data", "HISTORICAL_DATA")
+    candidates = [
+        f"data_{lat}_{lon}.pkl",
+        f"data_{int(lat)}_{int(lon)}.pkl",
+    ]
+    for name in candidates:
+        p = os.path.join(hist_dir, name)
+        if os.path.exists(p):
+            return p
+    # Glob fallback: any pkl whose name contains both coordinate substrings.
+    import glob as _glob
+    lat_str, lon_str = f"{float(lat):g}", f"{float(lon):g}"
+    matches = [p for p in _glob.glob(os.path.join(hist_dir, "*.pkl"))
+               if lat_str in os.path.basename(p) and lon_str in os.path.basename(p)]
+    return matches[0] if matches else os.path.join(hist_dir, f"data_{lat}_{lon}.pkl")
 
 
 def _load_historical_window(hist_pkl, start_date, n_steps, interval_min=15):

@@ -316,11 +316,9 @@ def run_experiment(config_path, storage_base, workers, use_multiproc):
             plot_sweep_summary(df, figures_dir)
     try:
         rep = _representative_optimal_sim(sims)
-        if rep is not None:
+        if rep is not None and h5_path:
             out = plot_trajectory_replay(
-                rep, config,
-                location=getattr(rep, "location", {}),
-                start_iso=getattr(rep, "start_datetime", None),
+                rep, h5_path,
                 out_dir=figures_dir,
                 interval_min=int(config.get("delta_t", 15)),
             )

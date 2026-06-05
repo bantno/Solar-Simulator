@@ -270,37 +270,93 @@ def _replay(sim, wind, solar_energy, whale, edges, bin_aware):
             "batt_fail_at": batt_fail_at, "mech_fail_prob": 1.0 - np.exp(log_surv)}
 
 
-def plot_trajectory_replay(sim, config: Dict, location: Dict, start_iso: str,
+def _read_episode_from_h5(h5_path: str, sim) -> Optional[dict]:
+    """
+    Read a representative full-history episode for `sim` from the HDF5.
+
+    Matches the simulation group by class name and battery capacity, then picks
+    the episode whose total reward is closest to the median of all saved
+    full-history episodes (those with a wind_series dataset).
+
+    Returns a dict with keys: wind, soc, mode, actions, episode_name, sim_group.
+    Returns None if no matching full-history episode exists.
+    """
+    import h5py
+    class_name = sim.__class__.__name__.lower()
+    cap = getattr(getattr(sim, "mdp", None), "battery_capacity_wh", None)
+
+    with h5py.File(h5_path, "r") as f:
+        for grp_name in f.keys():
+            grp = f[grp_name]
+            sim_type = str(grp.attrs.get("simulation_type", "")).lower()
+            if class_name not in sim_type:
+                continue
+            if cap is not None:
+                grp_cap = grp.attrs.get("battery_capacity")
+                if grp_cap is not None and abs(float(grp_cap) - float(cap)) > 1.0:
+                    continue
+            ep_grp = grp.get("episodes")
+            if ep_grp is None:
+                continue
+            full_eps = [(name, ep_grp[name]) for name in ep_grp.keys()
+                        if "wind_series" in ep_grp[name]]
+            if not full_eps:
+                continue
+            # Pick the episode closest to median total reward.
+            scored = []
+            for name, ep in full_eps:
+                r = ep.get("rewards")
+                total = float(r[()].sum()) if r is not None else 0.0
+                scored.append((total, name))
+            scored.sort(key=lambda x: x[0])
+            _, ep_name = scored[len(scored) // 2]
+            ep = ep_grp[ep_name]
+            return {
+                "sim_group":   grp_name,
+                "episode_name": ep_name,
+                "wind":    ep["wind_series"][()],
+                "soc":     ep["trajectory"][:, 0],
+                "mode":    ep["trajectory"][:, 1].astype(int),
+                "actions": ep["actions"][()],
+            }
+    return None
+
+
+def plot_trajectory_replay(sim, h5_path: str,
                            out_dir: str, interval_min: int = 15) -> Optional[str]:
     """
-    Replay `sim`'s policy through a real historical weather window for `location` and plot
-    wind / SoC / action over mission days. If the historical pickle is missing, warn and
-    return None (never fails the run). Returns the saved figure path or None.
+    Plot wind / SoC / action for a representative saved episode of `sim`.
+
+    Reads the median-reward full-history episode from the run's HDF5 file.
+    Requires full_history_episodes > 0 (or save_states: true) in the config so
+    that per-step time-series are stored. Returns the saved figure path or None.
     """
     os.makedirs(out_dir, exist_ok=True)
-    hist_pkl = _historical_pkl_for(location)
-    if not hist_pkl or not os.path.exists(hist_pkl):
-        warnings.warn(f"Historical data {hist_pkl} not found; skipping trajectory replay figure.")
-        return None
-
     try:
-        H = sim.horizon
-        wind_chain = config.get("wind_chain") or {}
-        bin_aware = bool(wind_chain.get("enabled", False))
-        env = sim.env_provider
-        edges = getattr(env, "wind_bin_edges", np.array([0.0, np.inf]))
+        ep = _read_episode_from_h5(h5_path, sim)
+        if ep is None:
+            warnings.warn(
+                "No full-history episodes found for the representative sim; "
+                "set full_history_episodes > 0 in config to enable trajectory figures."
+            )
+            return None
 
-        wind, ghi, win_start = _load_historical_window(hist_pkl, start_iso, H, interval_min)
+        wind    = ep["wind"]
+        soc     = ep["soc"]
+        actions = ep["actions"]
+        H = len(wind)
 
-        solar_energy = env._energy_gain_from_solar(ghi)
-        whale = np.array([env.sample_whale_observation(t, 1)[0] for t in range(H)])
-        r = _replay(sim, wind, solar_energy, whale, edges, bin_aware=bin_aware)
+        env       = sim.env_provider
+        edges     = getattr(env, "wind_bin_edges", np.array([0.0, np.inf]))
+        bin_aware = getattr(env, "use_wind_chain", False)
+        label     = "chain" if bin_aware else "i.i.d."
+        cap       = getattr(getattr(sim, "mdp", None), "battery_capacity_wh", "?")
 
         steps_per_day = 24 * 60 / interval_min
         days = np.arange(H) / steps_per_day
-        label = "chain" if bin_aware else "i.i.d."
 
         fig, ax = plt.subplots(3, 1, figsize=(13, 8), sharex=True, constrained_layout=True)
+
         ax[0].plot(days, wind, color="0.35", lw=0.7)
         if np.isfinite(edges).all() and len(edges) > 2:
             for e in edges[1:-1]:
@@ -309,25 +365,24 @@ def plot_trajectory_replay(sim, config: Dict, location: Dict, start_iso: str,
                                color="tab:red", alpha=0.25, label="high-wind bin")
             ax[0].legend(loc="upper right", fontsize=8)
         ax[0].set_ylabel("Wind [m/s]")
-        cap = getattr(sim.mdp, "battery_capacity_wh", "?")
-        ax[0].set_title(f"Real historical weather, {win_start.date()} +{H/steps_per_day:.0f}d  |  "
-                        f"{label} optimal policy, {cap} Wh")
+        ax[0].set_title(
+            f"{ep['episode_name']} (median-reward) | {label} policy, {cap} Wh"
+        )
 
-        socs = r["socs"]
-        ax[1].step(days[:len(socs) - 1], socs[:-1], where="post", color="tab:green")
-        if r["batt_fail_at"]:
-            ax[1].scatter(days[r["batt_fail_at"] - 1], 0, marker="x", s=70, color="tab:green", zorder=5)
+        batt_fail_at = int(np.argmax(ep["mode"] == 2)) if 2 in ep["mode"] else None
+        ax[1].step(days[:len(soc) - 1], soc[:-1], where="post", color="tab:green")
+        if batt_fail_at is not None:
+            ax[1].scatter(days[batt_fail_at], 0, marker="x", s=70, color="tab:green", zorder=5)
         ax[1].set_ylabel("State of charge [%]")
 
-        ax[2].step(days[:len(r["actions"])], r["actions"], where="post", color="tab:green")
+        ax[2].step(days[:len(actions)], actions, where="post", color="tab:green")
         ax[2].set_yticks([0, 1]); ax[2].set_yticklabels(["float/land", "fly"])
         ax[2].set_ylabel("Action"); ax[2].set_xlabel("Mission time [days]")
 
-        flight_hrs = r["actions"].sum() * interval_min / 60
-        batt = "none" if r["batt_fail_at"] is None else f"t{r['batt_fail_at']}"
+        flight_hrs = int(actions.sum()) * interval_min / 60
+        batt_str = "none" if batt_fail_at is None else f"t{batt_fail_at}"
         fig.text(0.01, 0.01,
-                 f"flight_hrs={flight_hrs:.1f}  mech_fail_prob={100*r['mech_fail_prob']:.1f}%  "
-                 f"batt_fail={batt}",
+                 f"flight_hrs={flight_hrs:.1f}  batt_fail={batt_str}",
                  fontsize=8)
 
         out = os.path.join(out_dir, f"trajectory_{label}_{cap}Wh.png")

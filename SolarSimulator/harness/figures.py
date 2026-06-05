@@ -201,17 +201,36 @@ def _historical_pkl_for(location: Dict) -> Optional[str]:
 
 
 def _load_historical_window(hist_pkl, start_date, n_steps, interval_min=15):
-    """Real wind [m/s] and GHI [W/m^2] for n_steps at the model timestep, from start_date."""
+    """Real wind [m/s] and GHI [W/m^2] for n_steps at the model timestep.
+
+    Matches on calendar position (month/day/hour/minute) only — the year in start_date is
+    ignored so that configs with future start_datetimes still produce figures from the most
+    recent available historical year.
+    """
     df = pd.read_pickle(hist_pkl)
     df = df[~((df.index.month == 2) & (df.index.day == 29))]
     res = (df[["wind_speed_10m", "shortwave_radiation"]]
            .resample(f"{interval_min}min").interpolate(method="linear"))
-    start = pd.Timestamp(start_date, tz=res.index.tz)
-    i = res.index.get_indexer([start], method="nearest")[0]
-    if i + n_steps > len(res):
-        raise ValueError("Requested window runs past the end of the historical record.")
-    win = res.iloc[i:i + n_steps]
-    return win["wind_speed_10m"].to_numpy(), win["shortwave_radiation"].to_numpy(), win.index[0]
+
+    ref = pd.Timestamp(start_date)
+    mask = (
+        (res.index.month  == ref.month) &
+        (res.index.day    == ref.day)   &
+        (res.index.hour   == ref.hour)  &
+        (res.index.minute == ref.minute)
+    )
+    candidates = res.index[mask]
+    if candidates.empty:
+        raise ValueError(
+            f"No historical data for {ref.month}/{ref.day} {ref.hour}:{ref.minute:02d}"
+        )
+    # Walk from the most recent matching date backwards until the window fits.
+    for ts in reversed(candidates):
+        i = res.index.get_loc(ts)
+        if i + n_steps <= len(res):
+            win = res.iloc[i:i + n_steps]
+            return win["wind_speed_10m"].to_numpy(), win["shortwave_radiation"].to_numpy(), win.index[0]
+    raise ValueError("No historical window long enough starting at the requested calendar date.")
 
 
 def _replay(sim, wind, solar_energy, whale, edges, bin_aware):
@@ -264,57 +283,57 @@ def plot_trajectory_replay(sim, config: Dict, location: Dict, start_iso: str,
         warnings.warn(f"Historical data {hist_pkl} not found; skipping trajectory replay figure.")
         return None
 
-    H = sim.horizon
-    wind_chain = config.get("wind_chain") or {}
-    bin_aware = bool(wind_chain.get("enabled", False))
-    env = sim.env_provider
-    edges = getattr(env, "wind_bin_edges", np.array([0.0, np.inf]))
-
     try:
+        H = sim.horizon
+        wind_chain = config.get("wind_chain") or {}
+        bin_aware = bool(wind_chain.get("enabled", False))
+        env = sim.env_provider
+        edges = getattr(env, "wind_bin_edges", np.array([0.0, np.inf]))
+
         wind, ghi, win_start = _load_historical_window(hist_pkl, start_iso, H, interval_min)
+
+        solar_energy = env._energy_gain_from_solar(ghi)
+        whale = np.array([env.sample_whale_observation(t, 1)[0] for t in range(H)])
+        r = _replay(sim, wind, solar_energy, whale, edges, bin_aware=bin_aware)
+
+        steps_per_day = 24 * 60 / interval_min
+        days = np.arange(H) / steps_per_day
+        label = "chain" if bin_aware else "i.i.d."
+
+        fig, ax = plt.subplots(3, 1, figsize=(13, 8), sharex=True, constrained_layout=True)
+        ax[0].plot(days, wind, color="0.35", lw=0.7)
+        if np.isfinite(edges).all() and len(edges) > 2:
+            for e in edges[1:-1]:
+                ax[0].axhline(e, ls="--", color="0.6", lw=0.8)
+            ax[0].fill_between(days, edges[-2], wind, where=wind >= edges[-2],
+                               color="tab:red", alpha=0.25, label="high-wind bin")
+            ax[0].legend(loc="upper right", fontsize=8)
+        ax[0].set_ylabel("Wind [m/s]")
+        cap = getattr(sim.mdp, "battery_capacity_wh", "?")
+        ax[0].set_title(f"Real historical weather, {win_start.date()} +{H/steps_per_day:.0f}d  |  "
+                        f"{label} optimal policy, {cap} Wh")
+
+        socs = r["socs"]
+        ax[1].step(days[:len(socs) - 1], socs[:-1], where="post", color="tab:green")
+        if r["batt_fail_at"]:
+            ax[1].scatter(days[r["batt_fail_at"] - 1], 0, marker="x", s=70, color="tab:green", zorder=5)
+        ax[1].set_ylabel("State of charge [%]")
+
+        ax[2].step(days[:len(r["actions"])], r["actions"], where="post", color="tab:green")
+        ax[2].set_yticks([0, 1]); ax[2].set_yticklabels(["float/land", "fly"])
+        ax[2].set_ylabel("Action"); ax[2].set_xlabel("Mission time [days]")
+
+        flight_hrs = r["actions"].sum() * interval_min / 60
+        batt = "none" if r["batt_fail_at"] is None else f"t{r['batt_fail_at']}"
+        fig.text(0.01, 0.01,
+                 f"flight_hrs={flight_hrs:.1f}  mech_fail_prob={100*r['mech_fail_prob']:.1f}%  "
+                 f"batt_fail={batt}",
+                 fontsize=8)
+
+        out = os.path.join(out_dir, f"trajectory_{label}_{cap}Wh.png")
+        fig.savefig(out, dpi=150)
+        plt.close(fig)
+        return out
     except Exception as e:                       # noqa: BLE001 - best-effort figure only
-        warnings.warn(f"Could not load historical window ({e}); skipping trajectory replay figure.")
+        warnings.warn(f"Trajectory replay figure failed ({e}); skipping.")
         return None
-
-    solar_energy = env._energy_gain_from_solar(ghi)
-    whale = np.array([env.sample_whale_observation(t, 1)[0] for t in range(H)])
-    r = _replay(sim, wind, solar_energy, whale, edges, bin_aware=bin_aware)
-
-    steps_per_day = 24 * 60 / interval_min
-    days = np.arange(H) / steps_per_day
-    label = "chain" if bin_aware else "i.i.d."
-
-    fig, ax = plt.subplots(3, 1, figsize=(13, 8), sharex=True, constrained_layout=True)
-    ax[0].plot(days, wind, color="0.35", lw=0.7)
-    if np.isfinite(edges).all() and len(edges) > 2:
-        for e in edges[1:-1]:
-            ax[0].axhline(e, ls="--", color="0.6", lw=0.8)
-        ax[0].fill_between(days, edges[-2], wind, where=wind >= edges[-2],
-                           color="tab:red", alpha=0.25, label="high-wind bin")
-        ax[0].legend(loc="upper right", fontsize=8)
-    ax[0].set_ylabel("Wind [m/s]")
-    cap = getattr(sim.mdp, "battery_capacity_wh", "?")
-    ax[0].set_title(f"Real historical weather, {win_start.date()} +{H/steps_per_day:.0f}d  |  "
-                    f"{label} optimal policy, {cap} Wh")
-
-    socs = r["socs"]
-    ax[1].step(days[:len(socs) - 1], socs[:-1], where="post", color="tab:green")
-    if r["batt_fail_at"]:
-        ax[1].scatter(days[r["batt_fail_at"] - 1], 0, marker="x", s=70, color="tab:green", zorder=5)
-    ax[1].set_ylabel("State of charge [%]")
-
-    ax[2].step(days[:len(r["actions"])], r["actions"], where="post", color="tab:green")
-    ax[2].set_yticks([0, 1]); ax[2].set_yticklabels(["float/land", "fly"])
-    ax[2].set_ylabel("Action"); ax[2].set_xlabel("Mission time [days]")
-
-    flight_hrs = r["actions"].sum() * interval_min / 60
-    batt = "none" if r["batt_fail_at"] is None else f"t{r['batt_fail_at']}"
-    fig.text(0.01, 0.01,
-             f"flight_hrs={flight_hrs:.1f}  mech_fail_prob={100*r['mech_fail_prob']:.1f}%  "
-             f"batt_fail={batt}",
-             fontsize=8)
-
-    out = os.path.join(out_dir, f"trajectory_{label}_{cap}Wh.png")
-    fig.savefig(out, dpi=150)
-    plt.close(fig)
-    return out

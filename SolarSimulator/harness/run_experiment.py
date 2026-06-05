@@ -314,15 +314,20 @@ def run_experiment(config_path, storage_base, workers, use_multiproc):
             render_paper_figure(paper_figure, h5_path, figures_dir)
         else:
             plot_sweep_summary(df, figures_dir)
-    rep = _representative_optimal_sim(sims)
-    if rep is not None:
-        plot_trajectory_replay(
-            rep, config,
-            location=getattr(rep, "location", {}),
-            start_iso=getattr(rep, "start_datetime", None),
-            out_dir=figures_dir,
-            interval_min=int(config.get("delta_t", 15)),
-        )
+    try:
+        rep = _representative_optimal_sim(sims)
+        if rep is not None:
+            out = plot_trajectory_replay(
+                rep, config,
+                location=getattr(rep, "location", {}),
+                start_iso=getattr(rep, "start_datetime", None),
+                out_dir=figures_dir,
+                interval_min=int(config.get("delta_t", 15)),
+            )
+            if out:
+                print(f"[fig]  trajectory replay -> {os.path.basename(out)}")
+    except Exception as e:
+        print(f"[warn] trajectory replay figure skipped: {e}")
 
     # Light reproducibility capture (no seeding machinery -- deferred by design).
     meta = {

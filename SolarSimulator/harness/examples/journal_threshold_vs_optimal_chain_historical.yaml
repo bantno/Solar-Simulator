@@ -33,7 +33,6 @@ locations:
 # quantile bins derived from historical data. Changing these triggers an automatic artifact rebuild.
 wind_chain:
   enabled: true
-  bin_edges: [5.0, 10.0]   # [0,5) safe, [5,10) marginal, [10,∞) unsafe
   # path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min_windchain.pkl  # auto-derived
 
 # Historical weather for episode rollouts.  Chain bin edges are automatically

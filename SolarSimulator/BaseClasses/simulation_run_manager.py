@@ -11,8 +11,7 @@ from BaseClasses.simulation_storage import SimulationStorageHDF5
 # Helpers (top-level & picklable)
 # ----------------------------
 def _label_for_sim(sim) -> str:
-    """
-    Build a compact, human-friendly label for logging.
+    """Build a compact, human-friendly label for logging.
     Example: 'OptimalContinuousAnalyticalPolicySimulation|c200Wh|H30h|t5|w3mps|f5p|lat30.0_lon-90.0'
     """
     parts = [sim.__class__.__name__]
@@ -49,10 +48,11 @@ def _label_for_sim(sim) -> str:
 
 
 def _run_one_sim(args: Tuple[Any, int, bool, str, bool]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """
-    Worker function for a single simulation object.
+    """Worker function for a single simulation object.
+
     Args:
         args = (sim, episodes_per_simulation, verbose, label, show_episode_progress)
+
     Returns:
         (simulation_metadata, episodes)
     """
@@ -119,8 +119,7 @@ def _run_one_sim(args: Tuple[Any, int, bool, str, bool]) -> Tuple[Dict[str, Any]
 # Manager
 # ----------------------------
 class SimulationRunManager:
-    """
-    Runs multiple simulations and stores each simulation's episodes as a group
+    """Runs multiple simulations and stores each simulation's episodes as a group
     in ONE HDF5 (per manager instance). Simulations can be parallelized across
     worker processes; episodes remain SERIAL within each simulation.
     """
@@ -130,8 +129,7 @@ class SimulationRunManager:
         storage_dir: str,
         sim_name_prefix: Optional[str] = None
     ):
-        """
-        Parameters:
+        """Args:
             episodes_per_simulation: Number of episodes to run per simulation.
             storage_dir: Directory to place the batch HDF5 file.
             sim_name_prefix: Prefix for the timestamped HDF5 filename.
@@ -157,8 +155,7 @@ class SimulationRunManager:
         verbose: bool = False,
         show_progress: bool = True,
     ):
-        """
-        Execute simulations and incrementally store results by simulation group.
+        """Execute simulations and incrementally store results by simulation group.
 
         Args:
             simulation_list: list of simulation objects.
@@ -226,8 +223,7 @@ class SimulationRunManager:
         _log("All simulations completed and stored in one file.")
 
     def _make_group_name(self, meta: dict) -> str:
-        """
-        Build a group name mirroring previous filenames, e.g.:
+        """Build a group name mirroring previous filenames, e.g.:
         'threshold_c100_f5_h30_lat30.0_lon-90.0_t0.5_w2.0_d162'
         """
         parts = [str(meta.get("simulation_type", "")).lower()]

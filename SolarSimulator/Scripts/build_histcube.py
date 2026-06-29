@@ -1,5 +1,4 @@
-"""
-Build historical-weather calendar cube artifacts for one or more locations.
+"""Build historical-weather calendar cube artifacts for one or more locations.
 
 Usage (pvlib conda env, from the SolarSimulator dir or repo root):
 

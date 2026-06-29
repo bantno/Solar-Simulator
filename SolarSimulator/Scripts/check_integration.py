@@ -118,16 +118,15 @@ class weather_data:
 
         # Define the time intervals and probabilities
     def get_whale_observation_probabilities(self, time_index: pd.DatetimeIndex, solar_radiation: np.ndarray) -> np.ndarray:
-        """
-        Get whale observation probabilities based on percentages outlined in PAPER.
+        """Get whale observation probabilities based on percentages outlined in PAPER.
         Also assume that nothing can be observed with no sunlight.
-        
-        Parameters:
-        - time_index (pd.DatetimeIndex): List of times to get whale observation probabilities.
-        - solar_radiation (np.ndarray): Corresponding solar radiation values.
+
+        Args:
+            time_index (pd.DatetimeIndex): List of times to get whale observation probabilities.
+            solar_radiation (np.ndarray): Corresponding solar radiation values.
 
         Returns:
-        - np.ndarray: Whale observation probabilities for each time index.
+            np.ndarray: Whale observation probabilities for each time index.
         """
 
         # Define the time intervals and probabilities

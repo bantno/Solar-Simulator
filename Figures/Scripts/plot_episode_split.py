@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Plot a single episode as two separate figures from a results HDF5.
+"""Plot a single episode as two separate figures from a results HDF5.
 
 Figure 1 – Environment (3 panels, shared x-axis):
   1) Collected solar radiation  →  y-label: e_k+ (Wh)

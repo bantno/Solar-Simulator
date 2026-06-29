@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Journal-paper figure generator.
+"""Journal-paper figure generator.
 
 Single entry point that re-renders every figure used in the journal paper
 into ``Figures/Journal_Paper_Figures/`` with one uniform style

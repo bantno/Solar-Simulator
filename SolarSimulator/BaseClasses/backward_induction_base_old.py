@@ -9,8 +9,7 @@ from numpy.polynomial.legendre import leggauss
 
 
 class mdpBackwardSolver:
-    """
-    Backward induction solver for a given MDP using Monte Carlo sampling.
+    """Backward induction solver for a given MDP using Monte Carlo sampling.
 
     This class approximates the value function by sampling transitions
     for each state and both actions at each stage, then performs
@@ -27,8 +26,7 @@ class mdpBackwardSolver:
     """
 
     def __init__(self, mdp: AbstractMDP, horizon: int):
-        """
-        Initialize the backward solver.
+        """Initialize the backward solver.
 
         Args:
             mdp (AbstractMDP): MDP instance providing `.step()` for transitions and rewards.
@@ -41,8 +39,7 @@ class mdpBackwardSolver:
         self.future_value_table = self._initialize_future_value_table()
 
     def _initialize_future_value_table(self) -> np.ndarray:
-        """
-        Create an empty future value table.
+        """Create an empty future value table.
 
         Returns:
             np.ndarray: Zero-initialized array of shape (num_states, horizon).
@@ -52,8 +49,7 @@ class mdpBackwardSolver:
         return np.zeros((num_states, T))
 
     def solve(self) -> None:
-        """
-        Perform backward induction via Monte Carlo sampling.
+        """Perform backward induction via Monte Carlo sampling.
 
         For each stage from horizon-1 down to 0, and for each non-terminal state:
         1. Sample a batch of next states and rewards for both actions.
@@ -95,8 +91,7 @@ class mdpBackwardSolver:
         # PlottingUtils.plot_surface_plotly(self.future_value_table, self.mdp.battery_capacity_wh, filename)
 
     def value_function(self, stage: int, rewards: np.ndarray, next_states: np.ndarray) -> float:
-        """
-        Estimate the expected value for a batch of transitions at a given stage.
+        """Estimate the expected value for a batch of transitions at a given stage.
 
         Args:
             stage (int): Current time step.
@@ -133,8 +128,7 @@ class mdpBackwardSolver:
         return value
 
     def lookup_future_values(self, states: np.ndarray, stages: np.ndarray) -> np.ndarray:
-        """
-        Retrieve precomputed future values for given states and stages.
+        """Retrieve precomputed future values for given states and stages.
         Any state with mode==2 is treated as the broken state [-1.0, 2].
 
         Args:
@@ -183,8 +177,7 @@ class mdpBackwardSolver:
 
 
 class mdpAnalyticalBackwardSolver:
-    """
-    Analytically solves a finite-horizon stochastic MDP via backward induction.
+    """Analytically solves a finite-horizon stochastic MDP via backward induction.
 
     Integrates over solar and wind distributions to compute expected action values
     and fills a future-value table, which can then be visualized.
@@ -243,8 +236,7 @@ class mdpAnalyticalBackwardSolver:
         t: int,
         last_stage: bool = False
     ):
-        """
-        Compute the value of a state-action pair at a given time step.
+        """Compute the value of a state-action pair at a given time step.
         """
         p_f_total = self._compute_failure_probability(state,a,t)
         observation_k = self.mdp.get_obs(t)
@@ -261,8 +253,7 @@ class mdpAnalyticalBackwardSolver:
         actions: np.ndarray,
         t: int
     ) -> np.ndarray:
-        """
-        Step 2: Compute p_M via Weibull-sigmoid integration over wind.
+        """Step 2: Compute p_M via Weibull-sigmoid integration over wind.
         """
         actions = np.array(actions)
         tl = self.mdp.transition_logic
@@ -289,8 +280,7 @@ class mdpAnalyticalBackwardSolver:
         actions: np.ndarray,   # shape (n,), each 0 or 1
         t: int
     ) -> np.ndarray:
-        """
-        Vectorized analytic p_fail = p_B + (1 - p_B)*p_M,
+        """Vectorized analytic p_fail = p_B + (1 - p_B)*p_M,
         where p_B = Beta-CDF((required - C)/G_MAX),
         and p_M is the unconditional mechanical-failure prob.
         """
@@ -318,8 +308,7 @@ class mdpAnalyticalBackwardSolver:
         return p_fail
 
     def solve(self) -> None:
-        """
-        Perform backward induction, filling future_value_table.
+        """Perform backward induction, filling future_value_table.
         """
         states = self.states
         action_list = [np.array(0)[np.newaxis],np.array(1)[np.newaxis]]
@@ -346,8 +335,7 @@ class mdpAnalyticalBackwardSolver:
         print("Value function table saved to:", filename)
 
     def lookup_future_values(self, states: np.ndarray, stages: np.ndarray) -> np.ndarray:
-        """
-        Retrieve precomputed future values for given states and stages.
+        """Retrieve precomputed future values for given states and stages.
         Any state with mode==2 is treated as the broken state [-1.0, 2].
 
         Args:
@@ -459,8 +447,7 @@ class mdpAnalyticalBackwardSolver:
     def compute_survival_contribution(
         Ck, Ek, G_max, α, β, p_fail, V_next, Δ
     ):
-        """
-        Interpret solar Gₖ arriving *before* you pay Eₖ.
+        """Interpret solar Gₖ arriving *before* you pay Eₖ.
         """
 
         # 1) Before receiving solar, you have Cₖ.
@@ -500,8 +487,7 @@ class mdpAnalyticalBackwardSolver:
         return survival_contribution
 
     def value_function(self, stage: int, rewards: np.ndarray, next_states: np.ndarray) -> float:
-        """
-        Estimate the expected value for a batch of transitions at a given stage.
+        """Estimate the expected value for a batch of transitions at a given stage.
 
         Args:
             stage (int): Current time step.

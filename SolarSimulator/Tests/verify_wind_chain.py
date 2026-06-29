@@ -1,5 +1,4 @@
-"""
-Verification for the wind-persistence (Markov-modulated wind) model.
+"""Verification for the wind-persistence (Markov-modulated wind) model.
 
 Checks:
   1. Chain OFF (n_bins==1) is the unchanged i.i.d. path (solver table is 2D, runs).

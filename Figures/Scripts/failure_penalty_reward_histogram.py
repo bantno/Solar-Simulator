@@ -1,5 +1,4 @@
-"""
-Histogram of episode total rewards across failure penalties.
+"""Histogram of episode total rewards across failure penalties.
 
 Shows Optimal and Threshold (obs=0.2, wind=6.0) as overlaid histograms,
 one subplot per selected failure penalty value (phi).

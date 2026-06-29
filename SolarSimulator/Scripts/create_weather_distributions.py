@@ -18,8 +18,7 @@ except Exception:
 
 
 class WeatherDataProcessor:
-    """
-    Fetches historical weather from Open-Meteo, resamples it, and fits
+    """Fetches historical weather from Open-Meteo, resamples it, and fits
     parametric distributions for wind (Weibull) and irradiance (Beta),
     implementing the Fatemi–Kuh–Fripp (2018) normalization:
         x(n) = r(n) / (A * cos(z))  in (0, 1), with clipping of rare x>=1 to 0.99999.
@@ -48,9 +47,7 @@ class WeatherDataProcessor:
         hourly_vars: list[str],
         timezone: str = "auto",
     ):
-        """
-        Download historical weather data from Open-Meteo archive.
-        """
+        """Download historical weather data from Open-Meteo archive."""
         params = {
             "latitude": latitude,
             "longitude": longitude,
@@ -106,9 +103,7 @@ class WeatherDataProcessor:
             raise ImportError("pvlib is required for solar zenith calculation. `pip install pvlib`. ")
 
     def _compute_cos_zenith(self, index: pd.DatetimeIndex, latitude: float, longitude: float) -> pd.Series:
-        """
-        Compute cos(zenith) for each timestamp. zenith >= 90° => set to NaN (night).
-        """
+        """Compute cos(zenith) for each timestamp. zenith >= 90° => set to NaN (night)."""
         self._require_pvlib()
         solpos = pvlib.solarposition.get_solarposition(index, latitude, longitude)
         zenith = solpos["zenith"]
@@ -117,8 +112,7 @@ class WeatherDataProcessor:
         return pd.Series(cos_z.values, index=index, name="cos_zenith")
 
     def resample_data(self, interval_minutes: int = 15, filename: str | None = None) -> pd.DataFrame:
-        """
-        Resample to a finer grid, interpolate linearly, then compute cos(zenith),
+        """Resample to a finer grid, interpolate linearly, then compute cos(zenith),
         and create normalized irradiance x = r / (A * cos z) for valid daytime points
         with r > MIN_GHI_WM2 and cos z > 0. Rare x>=1 are clipped to 0.99999.
         """
@@ -162,8 +156,7 @@ class WeatherDataProcessor:
 
     # ---------- Distribution fitting ----------
     def fit_distributions(self, data: pd.DataFrame, filename: str = "data_expected.pkl") -> pd.DataFrame:
-        """
-        Group by (month, day, hour, minute) and fit:
+        """Group by (month, day, hour, minute) and fit:
           • Beta to normalized irradiance (ghi_norm)
           • Weibull to 10m wind speed
         Also store an expected irradiance for the slot by mapping Beta mean back using
@@ -214,8 +207,8 @@ class WeatherDataProcessor:
 
     @staticmethod
     def _fit_beta_normalized(x: pd.Series) -> tuple[tuple[float, float], float]:
-        """
-        Fit Beta(alpha, beta) to normalized irradiance x in (0,1).
+        """Fit Beta(alpha, beta) to normalized irradiance x in (0,1).
+
         Returns ((alpha, beta), mean_x).
         """
         x = x.dropna()
@@ -238,8 +231,7 @@ class WeatherDataProcessor:
 
     # ---------- Sampling helper (optional) ----------
     def sample_irradiance(self, alpha: float, beta_param: float, target_ts: pd.Timestamp) -> float:
-        """
-        Sample irradiance at a target timestamp by:
+        """Sample irradiance at a target timestamp by:
           1) draw x ~ Beta(alpha, beta)
           2) scale by A * cos(zenith(target_ts))
           3) enforce MIN_GHI_WM2 near night
@@ -353,34 +345,27 @@ def fit_wind_transition_chain(
     bin_edges: np.ndarray | None = None,
     conditioning: tuple = ("month", "hour"),
 ):
-    """
-    Fit a time-conditioned discrete Markov chain over wind-speed bins.
+    """Fit a time-conditioned discrete Markov chain over wind-speed bins.
 
     The chain governs *which bin* the wind is in (its persistence); the continuous
     within-bin distribution is supplied at run time by the stage's Weibull truncated to
     the bin, so this only needs the bin edges and the transition matrices.
 
-    Parameters
-    ----------
-    wind_15min : pd.Series
-        Wind speed [m/s] on the model timestep (15 min) with a DatetimeIndex. Typically
-        the hourly historical series resampled+interpolated to 15 min.
-        NOTE: interpolation inflates short-lag persistence; fit on the model timestep for
-        consistency with the simulator, but treat the diagonal magnitude with caution.
-    n_bins : int
-        Number of wind bins (default 3).
-    bin_edges : np.ndarray, optional
-        Full edge array of length n_bins+1 (first 0, last np.inf). If None, derived from
-        global quantiles (equal-occupancy bins).
-    conditioning : tuple
-        Time keys the transition matrix is conditioned on. Only ("month", "hour") is
-        implemented (288 matrices), which preserves diurnal + seasonal structure.
+    Args:
+        wind_15min (pd.Series): Wind speed [m/s] on the model timestep (15 min) with a DatetimeIndex. Typically
+            the hourly historical series resampled+interpolated to 15 min.
+            NOTE: interpolation inflates short-lag persistence; fit on the model timestep for
+            consistency with the simulator, but treat the diagonal magnitude with caution.
+        n_bins (int): Number of wind bins (default 3).
+        bin_edges (np.ndarray, optional): Full edge array of length n_bins+1 (first 0, last np.inf). If None, derived from
+            global quantiles (equal-occupancy bins).
+        conditioning (tuple): Time keys the transition matrix is conditioned on. Only ("month", "hour") is
+            implemented (288 matrices), which preserves diurnal + seasonal structure.
 
-    Returns
-    -------
-    dict artifact with keys: n_bins, bin_edges, conditioning,
-        transition_by_month_hour (shape (13, 24, n_bins, n_bins); index [month, hour],
-        month 1..12 used).
+    Returns:
+        dict artifact with keys: n_bins, bin_edges, conditioning,
+            transition_by_month_hour (shape (13, 24, n_bins, n_bins); index [month, hour],
+            month 1..12 used).
     """
     if conditioning != ("month", "hour"):
         raise NotImplementedError("Only conditioning=('month','hour') is implemented.")
@@ -434,8 +419,7 @@ def build_wind_chain_artifact(
     wind_col: str = "wind_speed_10m",
     bin_edges: np.ndarray | None = None,
 ):
-    """
-    Resample an hourly HISTORICAL_DATA pickle to the model timestep and fit the wind chain.
+    """Resample an hourly HISTORICAL_DATA pickle to the model timestep and fit the wind chain.
     Saves the artifact dict (pickle) to out_path and returns it.
 
     If bin_edges is provided (full edge array: [0, cutpoint1, ..., inf]) it is used directly
@@ -459,27 +443,21 @@ def build_historical_cube_artifact(
     wind_col: str = "wind_speed_10m",
     solar_col: str = "shortwave_radiation",
 ):
-    """
-    Build a (slots_per_year, n_years) calendar cube from historical weather data.
+    """Build a (slots_per_year, n_years) calendar cube from historical weather data.
 
     Resamples the hourly HISTORICAL_DATA pickle to `interval_minutes`, drops Feb 29
     for 365-day alignment, and packs wind speed and solar irradiance into two 2-D arrays
     indexed by (calendar_slot, year_index).  The cube is used by
     HistoricalBootstrapEnvironmentProvider for per-lane block-bootstrap episodes.
 
-    Parameters
-    ----------
-    historical_pkl : str
-        Path to an hourly HISTORICAL_DATA pickle (DatetimeIndex tz-aware, columns
-        `wind_speed_10m` and `shortwave_radiation`).
-    out_path : str
-        Destination path for the artifact pickle (dict).
-    interval_minutes : int
-        Model timestep in minutes; must match the expected-data file timestep.
+    Args:
+        historical_pkl (str): Path to an hourly HISTORICAL_DATA pickle (DatetimeIndex tz-aware, columns
+            `wind_speed_10m` and `shortwave_radiation`).
+        out_path (str): Destination path for the artifact pickle (dict).
+        interval_minutes (int): Model timestep in minutes; must match the expected-data file timestep.
 
-    Returns
-    -------
-    dict with keys: delta_t_min, slots_per_year, years, n_years, wind_cube, solar_cube.
+    Returns:
+        dict with keys: delta_t_min, slots_per_year, years, n_years, wind_cube, solar_cube.
     """
     hist = pd.read_pickle(historical_pkl)
     hist = hist[~((hist.index.month == 2) & (hist.index.day == 29))]

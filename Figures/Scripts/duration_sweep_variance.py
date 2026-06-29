@@ -1,5 +1,4 @@
-"""
-Violin plots for duration sweep results — 3 series only:
+"""Violin plots for duration sweep results — 3 series only:
   Optimal, Threshold (obs=0.25, wind=4.0), Threshold (obs=0.25, wind=8.0)
 
 X-axis is horizon converted to days (horizon * 15 / 1440).

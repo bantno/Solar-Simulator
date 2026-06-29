@@ -1,5 +1,4 @@
-"""
-Script 4: Failure Penalty sweep (standalone, one figure per obs threshold × metric)
+"""Script 4: Failure Penalty sweep (standalone, one figure per obs threshold × metric)
 
 For each observation-threshold value and for each metric (defaults to all),
 this script creates a figure of the metric vs failure_penalty. Within each

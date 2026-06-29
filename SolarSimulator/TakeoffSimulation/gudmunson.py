@@ -183,8 +183,8 @@ class UAVSimulator(SeaplaneSimulator):
         self.k   = 0.045       # Induced drag factor (~1/(πeAR) for e~0.8, AR~6)
 
     def lift_drag(self, q, alpha):
-        """
-        Compute lift and drag for NACA 4414:
+        """Compute lift and drag for NACA 4414:
+
           CL = CL0 + CLa * alpha_rad
           CD = CD0 + k * CL^2
           L = q * S * CL
@@ -201,8 +201,8 @@ class UAVSimulator(SeaplaneSimulator):
         D = q * self.p.S * CD
         return L, D
     def thrust(self, V, r):
-        """
-        Override to use Motor.thrust(throttle) instead of polynomial.
+        """Override to use Motor.thrust(throttle) instead of polynomial.
+
         V is ignored here (static test), r is ramp‑up 0–1.
         """
         # map ramp factor to throttle % (0–100)
@@ -213,8 +213,8 @@ class UAVSimulator(SeaplaneSimulator):
         return thrust_N * N_TO_LBF
     
     def power(self,r):
-        """
-        Override to use Motor.power(throttle) instead of polynomial.
+        """Override to use Motor.power(throttle) instead of polynomial.
+
         V is ignored here (static test), r is ramp‑up 0–1.
         """
         # map ramp factor to throttle % (0–100)

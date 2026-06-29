@@ -342,8 +342,8 @@ distY = weibull_min(c=2.0, scale=5.0)
 #    Adapt to your real problem logic.
 # -------------------------------------------------
 def Z(y, m, a):
-    """
-    Return success probability for given (y, m, a).
+    """Return success probability for given (y, m, a).
+
     We'll define four toy cases for demonstration:
     (m=0,a=0): Z=0
     (m=0,a=1): Z = min(y/5, 1)

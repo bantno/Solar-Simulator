@@ -1,5 +1,4 @@
-"""
-wind_persistence_plots.py -- visualize the wind persistence / Markov-order pre-check.
+"""wind_persistence_plots.py -- visualize the wind persistence / Markov-order pre-check.
 
 Two modes, both built on Scripts.wind_persistence_precheck.analyze (single source of truth):
 

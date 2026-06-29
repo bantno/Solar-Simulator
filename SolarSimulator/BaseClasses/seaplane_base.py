@@ -70,8 +70,7 @@ class Seaplane:
         self.update_plane()
 
     def get_total_mass(self, directory):
-        """
-        Searches for a file containing 'mass' in its name within the specified directory.
+        """Searches for a file containing 'mass' in its name within the specified directory.
         If found, reads the file to extract the total mass of the aircraft.
         """
         # Search for a file with 'mass' in its name in the given directory.
@@ -170,8 +169,7 @@ class Seaplane:
 
     @property
     def cruise_power(self) -> float:
-        """
-        Compute the estimated propulsion power (W) required for level cruise flight.
+        """Compute the estimated propulsion power (W) required for level cruise flight.
         """
         U_cruise = self.cruise_speed   # m/s
         rho = self.rho(300)       # kg/m³ (typical sea-level density)
@@ -179,8 +177,7 @@ class Seaplane:
 
     @property
     def takeoff_power(self) -> float:
-        """
-        Estimate the propulsion power (W) needed during takeoff.
+        """Estimate the propulsion power (W) needed during takeoff.
         """
         if not hasattr(self, "_cached_takeoff_power"):
             self._cached_takeoff_power = self.get_average_takeoff_power()
@@ -384,8 +381,7 @@ class Seaplane:
         return p / (287.05 * T)
 
     def get_mdp_power_params(self) -> dict:
-        """
-        Adapter method to package the power parameters for the MDP.
+        """Adapter method to package the power parameters for the MDP.
         """
         return {
             "idle_power": self.idle_power,

@@ -4,51 +4,37 @@ import pandas as pd
 from BaseClasses.solar_panel_base import SolarPanelFactory
 
 class AbstractEnvironmentProvider(ABC):
-    """
-    Abstract base class for environment providers in the solar simulator.
+    """Abstract base class for environment providers in the solar simulator.
 
     Defines the interface for sampling environmental conditions (sunlight, wind, whale observations)
     at discrete time steps. Subclasses must implement methods for sampling each environmental variable.
     """
     @abstractmethod
     def sample_sunlight(self, t: int, n: int = 1) -> np.ndarray:
-        """
-        Return an array of solar energy values at time step t.
-        """
+        """Return an array of solar energy values at time step t."""
 
     @abstractmethod
     def sample_wind_speed(self, t: int, n: int = 1) -> np.ndarray:
-        """
-        Return an array of wind speed values at time step t.
-        """
+        """Return an array of wind speed values at time step t."""
 
     @abstractmethod
     def sample_whale_observation(self, t: int, n: int = 1) -> np.ndarray:
-        """
-        Return an array of whale observation values at time step t.
-        """
+        """Return an array of whale observation values at time step t."""
 
 class DeterministicEnvironmentProvider(AbstractEnvironmentProvider):
-    """
-    Deterministic environment provider with fixed time series data.
+    """Deterministic environment provider with fixed time series data.
 
     This class provides deterministic environmental samples by directly indexing
     into pre-defined time series arrays for solar, wind, and whale observations.
 
-    Parameters
-    ----------
-    solar_rate_series : np.ndarray
-        Time series of solar irradiance rates (W/m^2).
-    wind_series : np.ndarray
-        Time series of wind speeds (m/s).
-    whale_reward_series : np.ndarray
-        Time series of whale observation rewards.
-    delta_t : float
-        Timestep size in appropriate time units.
+    Args:
+        solar_rate_series (np.ndarray): Time series of solar irradiance rates (W/m^2).
+        wind_series (np.ndarray): Time series of wind speeds (m/s).
+        whale_reward_series (np.ndarray): Time series of whale observation rewards.
+        delta_t (float): Timestep size in appropriate time units.
 
-    Notes
-    -----
-    This class is currently out of date and raises NotImplementedError.
+    Note:
+        This class is currently out of date and raises NotImplementedError.
     """
     def __init__(self, solar_rate_series: np.ndarray, wind_series: np.ndarray, whale_reward_series: np.ndarray, delta_t: float):
         self.solar_rate_series = solar_rate_series
@@ -72,43 +58,30 @@ class DeterministicEnvironmentProvider(AbstractEnvironmentProvider):
         return np.full((n,), self.whale_reward_series[t])
 
 class HistoricalEnvironmentProvider(AbstractEnvironmentProvider):
-    """
-    Environment provider using historical time series data.
+    """Environment provider using historical time series data.
 
     Returns deterministic values from historical data, replicating the same
     value n times when multiple samples are requested. Properly converts
     solar irradiance to energy using the specified solar panel model.
 
-    Parameters
-    ----------
-    solar_irradiance_series : np.ndarray
-        Historical solar irradiance time series [W/m^2].
-    wind_speed_series : np.ndarray
-        Historical wind speed time series [m/s].
-    whale_observation_series : np.ndarray
-        Historical whale observation time series.
-    delta_t_min : float
-        Timestep size in minutes.
-    solar_panel_model : str, optional
-        Identifier for the solar panel model (default: "constant").
-    rng : np.random.Generator, optional
-        Random number generator (included for API consistency, not used).
+    Args:
+        solar_irradiance_series (np.ndarray): Historical solar irradiance time series [W/m^2].
+        wind_speed_series (np.ndarray): Historical wind speed time series [m/s].
+        whale_observation_series (np.ndarray): Historical whale observation time series.
+        delta_t_min (float): Timestep size in minutes.
+        solar_panel_model (str, optional): Identifier for the solar panel model (default: "constant").
+        rng (np.random.Generator, optional): Random number generator (included for API consistency, not used).
 
-    Attributes
-    ----------
-    DELTA_T_MIN : float
-        Timestep size in minutes.
-    DELTA_T_SEC : float
-        Timestep size in seconds.
-    panel : SolarPanel
-        Solar panel instance created from the factory.
+    Attributes:
+        DELTA_T_MIN (float): Timestep size in minutes.
+        DELTA_T_SEC (float): Timestep size in seconds.
+        panel (SolarPanel): Solar panel instance created from the factory.
 
-    Notes
-    -----
-    TODO: Add functionality to randomly select historical data from a given time period
-    (day, week, month, etc.) while maintaining interoperability with other environment
-    provider classes. This would allow sampling from different historical periods while
-    keeping the same AbstractEnvironmentProvider interface.
+    Note:
+        TODO: Add functionality to randomly select historical data from a given time period
+        (day, week, month, etc.) while maintaining interoperability with other environment
+        provider classes. This would allow sampling from different historical periods while
+        keeping the same AbstractEnvironmentProvider interface.
     """
     def __init__(
         self,
@@ -128,42 +101,36 @@ class HistoricalEnvironmentProvider(AbstractEnvironmentProvider):
         self.rng = rng if rng is not None else np.random.default_rng()
 
     def set_seed(self, seed: int) -> None:
-        """
-        Set the random seed for API consistency.
+        """Set the random seed for API consistency.
 
-        Note: This provider is deterministic, but this method is included
-        for compatibility with stochastic providers.
+        Note:
+            This provider is deterministic, but this method is included
+            for compatibility with stochastic providers.
         """
         self.rng = np.random.default_rng(seed)
 
     def reset(self, seed: int = None) -> None:
-        """
-        Reset the random number generator to a specific seed.
+        """Reset the random number generator to a specific seed.
 
-        Note: This provider is deterministic, but this method is included
-        for compatibility with stochastic providers.
+        Note:
+            This provider is deterministic, but this method is included
+            for compatibility with stochastic providers.
         """
         if seed is not None:
             self.set_seed(seed)
 
     def sample_sunlight(self, t: int, n: int = 1) -> np.ndarray:
-        """
-        Return an array of solar energy values at time step t.
+        """Return an array of solar energy values at time step t.
 
         Converts historical irradiance [W/m^2] to energy [J] using the
         panel area, efficiency, and timestep duration.
 
-        Parameters
-        ----------
-        t : int
-            Time step index.
-        n : int, optional
-            Number of samples to return (all identical).
+        Args:
+            t (int): Time step index.
+            n (int, optional): Number of samples to return (all identical).
 
-        Returns
-        -------
-        np.ndarray
-            Array of shape (n,) with solar energy values in Joules.
+        Returns:
+            np.ndarray: Array of shape (n,) with solar energy values in Joules.
         """
         if t >= len(self.solar_irradiance_series):
             raise IndexError(
@@ -179,20 +146,14 @@ class HistoricalEnvironmentProvider(AbstractEnvironmentProvider):
         return np.full((n,), energy)
 
     def sample_wind_speed(self, t: int, n: int = 1) -> np.ndarray:
-        """
-        Return an array of wind speed values at time step t.
+        """Return an array of wind speed values at time step t.
 
-        Parameters
-        ----------
-        t : int
-            Time step index.
-        n : int, optional
-            Number of samples to return (all identical).
+        Args:
+            t (int): Time step index.
+            n (int, optional): Number of samples to return (all identical).
 
-        Returns
-        -------
-        np.ndarray
-            Array of shape (n,) with wind speed values in m/s.
+        Returns:
+            np.ndarray: Array of shape (n,) with wind speed values in m/s.
         """
         if t >= len(self.wind_speed_series):
             raise IndexError(
@@ -203,20 +164,14 @@ class HistoricalEnvironmentProvider(AbstractEnvironmentProvider):
         return np.full((n,), self.wind_speed_series[t])
 
     def sample_whale_observation(self, t: int, n: int = 1) -> np.ndarray:
-        """
-        Return an array of whale observation values at time step t.
+        """Return an array of whale observation values at time step t.
 
-        Parameters
-        ----------
-        t : int
-            Time step index.
-        n : int, optional
-            Number of samples to return (all identical).
+        Args:
+            t (int): Time step index.
+            n (int, optional): Number of samples to return (all identical).
 
-        Returns
-        -------
-        np.ndarray
-            Array of shape (n,) with whale observation values.
+        Returns:
+            np.ndarray: Array of shape (n,) with whale observation values.
         """
         if t >= len(self.whale_observation_series):
             raise IndexError(
@@ -227,8 +182,8 @@ class HistoricalEnvironmentProvider(AbstractEnvironmentProvider):
         return np.full((n,), self.whale_observation_series[t])
 
 class StochasticWindEnvironmentProvider(AbstractEnvironmentProvider):
-    """
-    Environment provider that uses a stochastic Weibull distribution for wind speed.
+    """Environment provider that uses a stochastic Weibull distribution for wind speed.
+
     The solar and whale observation data are provided deterministically.
     """
     def __init__(self, solar_rate_series: np.ndarray, wind_distributions: np.ndarray,
@@ -256,39 +211,26 @@ class StochasticWindEnvironmentProvider(AbstractEnvironmentProvider):
         return lam * np.random.weibull(k, size=n)
 
 class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
-    """
-    Environment provider with stochastic wind and solar energy sampling.
+    """Environment provider with stochastic wind and solar energy sampling.
 
     Uses Weibull distributions for wind speed and Beta distributions for solar irradiance,
     allowing for realistic stochastic environmental variations while maintaining diurnal patterns.
 
-    Parameters
-    ----------
-    solar_distributions : np.ndarray
-        Array of shape (n_stages, 3) containing Beta distribution parameters (alpha, beta, clearsky).
-        Each row specifies [alpha, beta, clearsky_irradiance] for that stage.
-    wind_distributions : np.ndarray
-        Array of shape (n_stages, 2) containing Weibull distribution parameters (shape k, scale λ).
-        Each row specifies [k, λ] for that stage.
-    whale_reward_series : np.ndarray
-        Time series of whale observation rewards (one value per stage).
-    delta_t_min : float
-        Timestep size in minutes.
-    solar_panel_model : str, optional
-        Identifier for the solar panel model (default: "constant").
-    rng : np.random.Generator, optional
-        Random number generator for reproducibility; if None, defaults to np.random.default_rng().
+    Args:
+        solar_distributions (np.ndarray): Array of shape (n_stages, 3) containing Beta distribution parameters (alpha, beta, clearsky).
+            Each row specifies [alpha, beta, clearsky_irradiance] for that stage.
+        wind_distributions (np.ndarray): Array of shape (n_stages, 2) containing Weibull distribution parameters (shape k, scale λ).
+            Each row specifies [k, λ] for that stage.
+        whale_reward_series (np.ndarray): Time series of whale observation rewards (one value per stage).
+        delta_t_min (float): Timestep size in minutes.
+        solar_panel_model (str, optional): Identifier for the solar panel model (default: "constant").
+        rng (np.random.Generator, optional): Random number generator for reproducibility; if None, defaults to np.random.default_rng().
 
-    Attributes
-    ----------
-    DELTA_T_MIN : float
-        Timestep size in minutes.
-    DELTA_T_SEC : float
-        Timestep size in seconds.
-    panel : SolarPanel
-        Solar panel instance created from the factory.
-    rng : np.random.Generator
-        Random number generator instance.
+    Attributes:
+        DELTA_T_MIN (float): Timestep size in minutes.
+        DELTA_T_SEC (float): Timestep size in seconds.
+        panel (SolarPanel): Solar panel instance created from the factory.
+        rng (np.random.Generator): Random number generator instance.
     """
     def __init__(self, solar_distributions: np.ndarray, wind_distributions: np.ndarray,
                  whale_reward_series: np.ndarray, delta_t_min: float, solar_panel_model: str = "constant", rng=None,
@@ -340,15 +282,11 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         return self._energy_gain_from_solar(self.solar_cs[stage])
 
     def set_seed(self, seed: int) -> None:
-        """
-        Set the random seed for reproducibility.
-        """
+        """Set the random seed for reproducibility."""
         self.rng = np.random.default_rng(seed)
 
     def reset(self,seed: int = None) -> None:
-        """
-        Reset the random number generator to a specific seed and clear chain state.
-        """
+        """Reset the random number generator to a specific seed and clear chain state."""
         self.set_seed(seed)
         self._wind_bins = None
         self.last_wind_bins = None
@@ -438,34 +376,21 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         return self.solar_beta[stage]
 
 class RegimeSwitchingWindSolarEnvironmentProvider(StochasticWindSolarEnvironmentProvider):
-    """
-    Environment provider that uses two wind regimes (high and low) in sequence,
-    while maintaining a constant diurnal solar cycle with small stochastic variations.
+    """Environment provider that uses two wind regimes (high and low) in sequence, while maintaining a constant diurnal solar cycle with small stochastic variations.
 
-    Parameters
-    ----------
-    whale_reward_series : np.ndarray
-        Time series of whale observation rewards (one value per stage).
-    delta_t_min : float
-        Timestep size in minutes.
-    switch_stage : int
-        Stage length (in stages) for each regime block.
-    high_wind : tuple(float, float)
-        Weibull parameters (shape k, scale λ) for the high-wind regime.
-    low_wind : tuple(float, float)
-        Weibull parameters (shape k, scale λ) for the low-wind regime.
-    solar_concentration : float
-        Concentration parameter φ for the Beta solar distribution (larger = less variance).
-    start_with_high : bool, optional
-        If True (default), the first block uses the high-wind regime;
-        otherwise, the first block uses low-wind.
-    repeat_pattern : bool, optional
-        If True, alternate regimes every `switch_stage` indefinitely;
-        if False (default), use two blocks only (high then low or vice versa).
-    solar_panel_model : str, optional
-        Identifier for the solar panel model, passed to the base provider.
-    rng : np.random.Generator, optional
-        Random number generator; if None, defaults to np.random.default_rng().
+    Args:
+        whale_reward_series (np.ndarray): Time series of whale observation rewards (one value per stage).
+        delta_t_min (float): Timestep size in minutes.
+        switch_stage (int): Stage length (in stages) for each regime block.
+        high_wind (tuple(float, float)): Weibull parameters (shape k, scale λ) for the high-wind regime.
+        low_wind (tuple(float, float)): Weibull parameters (shape k, scale λ) for the low-wind regime.
+        solar_concentration (float): Concentration parameter φ for the Beta solar distribution (larger = less variance).
+        start_with_high (bool, optional): If True (default), the first block uses the high-wind regime;
+            otherwise, the first block uses low-wind.
+        repeat_pattern (bool, optional): If True, alternate regimes every `switch_stage` indefinitely;
+            if False (default), use two blocks only (high then low or vice versa).
+        solar_panel_model (str, optional): Identifier for the solar panel model, passed to the base provider.
+        rng (np.random.Generator, optional): Random number generator; if None, defaults to np.random.default_rng().
     """
     def __init__(
         self,
@@ -532,8 +457,7 @@ class RegimeSwitchingWindSolarEnvironmentProvider(StochasticWindSolarEnvironment
 
 
 class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
-    """
-    Environment provider that drives MC episodes from real historical weather via block bootstrap.
+    """Environment provider that drives MC episodes from real historical weather via block bootstrap.
 
     An episode's timeline keeps the mission's exact calendar dates.  The H-step horizon is
     split into consecutive blocks of `block_length_steps`.  Each block's weather is drawn from
@@ -547,30 +471,19 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
     realized wind into bins (exposing `last_wind_bins`) so `simulate_episode_batch` and
     `choose_action_batch` work unchanged for both i.i.d.-solved and chain-solved policies.
 
-    Parameters
-    ----------
-    cube : dict
-        Calendar cube from `build_historical_cube_artifact`; keys `wind_cube`
-        (slots_per_year x n_years), `solar_cube`, `slots_per_year`, `years`, `delta_t_min`.
-    start_dt : pd.Timestamp or str
-        Mission start datetime (only calendar position in the year matters; year ignored).
-    horizon : int
-        Episode length in steps.
-    delta_t_min : float
-        Timestep in minutes.  Must equal cube['delta_t_min'].
-    block_length_steps : int, optional
-        Bootstrap block size in steps (default: 7 days = 7*96 steps at 15 min).
-    solar_panel_model : str
-        Solar panel model identifier (passed to SolarPanelFactory).
-    whale_reward_series : np.ndarray
-        Pre-built whale series of length >= horizon.
-    rng : np.random.Generator, optional
-        RNG instance; defaults to np.random.default_rng().
-    wind_bin_edges : np.ndarray, optional
-        Full edge array (length n_bins+1) from the wind chain artifact.  When provided,
-        enables chain-solved evaluation via bin digitization.
-    wind_transition : np.ndarray, optional
-        Per-stage transition matrices shaped (horizon, n_bins, n_bins).
+    Args:
+        cube (dict): Calendar cube from `build_historical_cube_artifact`; keys `wind_cube`
+            (slots_per_year x n_years), `solar_cube`, `slots_per_year`, `years`, `delta_t_min`.
+        start_dt (pd.Timestamp or str): Mission start datetime (only calendar position in the year matters; year ignored).
+        horizon (int): Episode length in steps.
+        delta_t_min (float): Timestep in minutes.  Must equal cube['delta_t_min'].
+        block_length_steps (int, optional): Bootstrap block size in steps (default: 7 days = 7*96 steps at 15 min).
+        solar_panel_model (str): Solar panel model identifier (passed to SolarPanelFactory).
+        whale_reward_series (np.ndarray): Pre-built whale series of length >= horizon.
+        rng (np.random.Generator, optional): RNG instance; defaults to np.random.default_rng().
+        wind_bin_edges (np.ndarray, optional): Full edge array (length n_bins+1) from the wind chain artifact.  When provided,
+            enables chain-solved evaluation via bin digitization.
+        wind_transition (np.ndarray, optional): Per-stage transition matrices shaped (horizon, n_bins, n_bins).
     """
 
     # Cumulative days before each month in a non-leap year (0-indexed, Jan=0).
@@ -690,30 +603,18 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
         return np.full(n, self.whale_reward_series[t])
 
 class SinusoidalWindSolarEnvironmentProvider(StochasticWindSolarEnvironmentProvider):
-    """
-    Environment provider that uses a constant Weibull shape parameter for wind and
-    a sinusoidally varying scale parameter, alongside a constant diurnal solar cycle.
+    """Environment provider that uses a constant Weibull shape parameter for wind and a sinusoidally varying scale parameter, alongside a constant diurnal solar cycle.
 
-    Parameters
-    ----------
-    whale_reward_series : np.ndarray
-        Time series of whale observation rewards (one value per stage).
-    delta_t_min : float
-        Timestep size in minutes.
-    wind_shape : float
-        Weibull shape parameter k for all wind samples.
-    base_scale : float
-        Mean scale parameter λ around which the sinusoid oscillates.
-    scale_amplitude : float
-        Amplitude of the sine wave for wind scale variations.
-    scale_period : int
-        Period of the sine wave in number of stages.
-    solar_concentration : float
-        Concentration parameter φ for the Beta solar distribution (larger = less variance).
-    solar_panel_model : str, optional
-        Identifier for the solar panel model, passed to the base provider.
-    rng : np.random.Generator, optional
-        Random number generator; if None, defaults to np.random.default_rng().
+    Args:
+        whale_reward_series (np.ndarray): Time series of whale observation rewards (one value per stage).
+        delta_t_min (float): Timestep size in minutes.
+        wind_shape (float): Weibull shape parameter k for all wind samples.
+        base_scale (float): Mean scale parameter λ around which the sinusoid oscillates.
+        scale_amplitude (float): Amplitude of the sine wave for wind scale variations.
+        scale_period (int): Period of the sine wave in number of stages.
+        solar_concentration (float): Concentration parameter φ for the Beta solar distribution (larger = less variance).
+        solar_panel_model (str, optional): Identifier for the solar panel model, passed to the base provider.
+        rng (np.random.Generator, optional): Random number generator; if None, defaults to np.random.default_rng().
     """
     def __init__(
         self,

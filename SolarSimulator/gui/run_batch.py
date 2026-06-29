@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-run_batch.py — CLI runner that mirrors the GUI flow and scales well.
+"""run_batch.py — CLI runner that mirrors the GUI flow and scales well.
 
 Behavior:
 - Builds simulations exactly like the GUI:
@@ -38,8 +37,7 @@ def _build_sims_like_gui(
     save_history: bool,
     full_history_eps: int,
 ):
-    """
-    Replicates the GUI's path:
+    """Replicates the GUI's path:
       param_list = runner._build_param_list()
       job_args   = [(*args, save_history, full_history_eps)]
       sims       = map(create_simulation_wrapper, job_args)
@@ -73,8 +71,7 @@ def _call_manager_run(
     maxtasksperchild: int | None,
     verbose: bool,
 ):
-    """
-    Call SimulationRunManager.run_simulations with best-available signature.
+    """Call SimulationRunManager.run_simulations with best-available signature.
     Older versions may not support chunk_size / maxtasksperchild / verbose: fall back cleanly.
     """
     sig = inspect.signature(mgr.run_simulations)

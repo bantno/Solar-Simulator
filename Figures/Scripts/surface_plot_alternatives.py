@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Option 4 only: plot V_moored and V_flying over time for selected SoC slices.
+"""Option 4 only: plot V_moored and V_flying over time for selected SoC slices.
 
 QoL:
 - Auto-extract mission start datetime from the filename (e.g., "..._2025-01-01 0.npy").

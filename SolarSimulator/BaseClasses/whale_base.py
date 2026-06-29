@@ -56,13 +56,12 @@ class WhaleRewardSeriesFactory:
     
     @classmethod
     def create_series(self, series_type, horizon):
-        """
-        Creates the desired whale reward series.
-        
-        Parameters:
+        """Creates the desired whale reward series.
+
+        Args:
             series_type (str): The type of series ('sinusoidal', 'constant', 'real', etc.)
             horizon (int): Number of time steps to create the series for.
-        
+
         Returns:
             numpy.ndarray: The whale reward series.
         """

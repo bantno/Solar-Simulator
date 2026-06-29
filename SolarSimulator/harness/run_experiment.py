@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-run_experiment.py -- declarative, self-describing simulation validation harness.
+"""run_experiment.py -- declarative, self-describing simulation validation harness.
 
 One YAML fully describes an experiment (the sweep matrix + all behavior flags). This CLI
 expands and executes it, reusing the existing SimulationFactory / SimulationRunManager / HDF5
@@ -74,8 +73,7 @@ def _find_historical_pkl(hist_dir: str, lat: float, lon: float) -> str:
 
 
 def _configured_bin_edges(wc_cfg: dict):
-    """
-    Return the full bin-edge array from wind_chain.bin_edges (interior cutpoints in the YAML),
+    """Return the full bin-edge array from wind_chain.bin_edges (interior cutpoints in the YAML),
     or None if the key is absent (falls back to quantile-based derivation at build time).
     """
     import numpy as np  # noqa: E402 (local import avoids top-level dep for non-chain runs)
@@ -105,8 +103,8 @@ def _fetch_historical_pkl(hist_dir: str, lat: float, lon: float) -> str:
 
 
 def _ensure_location_data(config: dict, location: dict) -> None:
-    """
-    Check that all artifact files required by config exist for this location.
+    """Check that all artifact files required by config exist for this location.
+
     Builds missing windchain / histcube from historical data, fetching from
     Open-Meteo first if the historical pkl itself is absent.
     """

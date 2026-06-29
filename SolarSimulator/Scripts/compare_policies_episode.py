@@ -1,5 +1,4 @@
-"""
-Same-weather, different-policy comparison over a REAL historical window.
+"""Same-weather, different-policy comparison over a REAL historical window.
 
 Both the i.i.d.-optimal policy and the wind-persistence (Markov-chain) optimal policy are
 replayed through one actual 2-week historical weather window (wind + solar) pulled from
@@ -88,8 +87,7 @@ def load_historical_window(hist_pkl, start_date, n_steps, interval_min=15):
 
 
 def replay(sim, wind, solar_energy, whale, edges, bin_aware):
-    """
-    Deterministic policy rollout on fixed real weather. Mechanical transitions are assumed
+    """Deterministic policy rollout on fixed real weather. Mechanical transitions are assumed
     to succeed (so we see the full intended trajectory); battery depletion (soc<0) is
     deterministic and terminates. Returns the trajectory plus the exact cumulative
     mechanical-failure probability 1 - prod_t p_success_t along the flown path.

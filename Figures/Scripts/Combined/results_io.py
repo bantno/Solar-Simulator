@@ -1,6 +1,5 @@
 # results_io.py
-"""
-Utilities for loading simulation HDF5 results into a tidy Pandas DataFrame
+"""Utilities for loading simulation HDF5 results into a tidy Pandas DataFrame
 and a few small plotting helpers shared by standalone results scripts.
 
 This module is **independent** of any GUI code. It mirrors the summarization

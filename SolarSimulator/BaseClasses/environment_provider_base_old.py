@@ -5,21 +5,15 @@ from BaseClasses.solar_panel_base import SolarPanelFactory
 class AbstractEnvironmentProvider(ABC):
     @abstractmethod
     def sample_sunlight(self, t: int, n: int = 1) -> np.ndarray:
-        """
-        Return an array of solar energy values at time step t.
-        """
+        """Return an array of solar energy values at time step t."""
 
     @abstractmethod
     def sample_wind_speed(self, t: int, n: int = 1) -> np.ndarray:
-        """
-        Return an array of wind speed values at time step t.
-        """
+        """Return an array of wind speed values at time step t."""
 
     @abstractmethod
     def sample_whale_observation(self, t: int, n: int = 1) -> np.ndarray:
-        """
-        Return an array of whale observation values at time step t.
-        """
+        """Return an array of whale observation values at time step t."""
 
 class DeterministicEnvironmentProvider(AbstractEnvironmentProvider):
     def __init__(self, solar_rate_series: np.ndarray, wind_series: np.ndarray, whale_reward_series: np.ndarray, delta_t: float):
@@ -44,8 +38,7 @@ class DeterministicEnvironmentProvider(AbstractEnvironmentProvider):
         return np.full((n,), self.whale_reward_series[t])
 
 class StochasticWindEnvironmentProvider(AbstractEnvironmentProvider):
-    """
-    Environment provider that uses a stochastic Weibull distribution for wind speed.
+    """Environment provider that uses a stochastic Weibull distribution for wind speed.
     The solar and whale observation data are provided deterministically.
     """
     def __init__(self, solar_rate_series: np.ndarray, wind_distributions: np.ndarray,
@@ -98,15 +91,11 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         return self.solar_beta[stage]
 
     def set_seed(self, seed: int) -> None:
-        """
-        Set the random seed for reproducibility.
-        """
+        """Set the random seed for reproducibility."""
         self.rng = np.random.default_rng(seed)
 
     def reset(self,seed: int = None) -> None:
-        """
-        Reset the random number generator to a specific seed.
-        """
+        """Reset the random number generator to a specific seed."""
         self.set_seed(seed)
 
     def sample_sunlight(self, t: int, n: int) -> np.ndarray:
@@ -146,34 +135,22 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         return self.solar_beta[stage]
 
 class RegimeSwitchingWindSolarEnvironmentProvider(StochasticWindSolarEnvironmentProvider):
-    """
-    Environment provider that uses two wind regimes (high and low) in sequence,
+    """Environment provider that uses two wind regimes (high and low) in sequence,
     while maintaining a constant diurnal solar cycle with small stochastic variations.
 
-    Parameters
-    ----------
-    whale_reward_series : np.ndarray
-        Time series of whale observation rewards (one value per stage).
-    delta_t_min : float
-        Timestep size in minutes.
-    switch_stage : int
-        Stage length (in stages) for each regime block.
-    high_wind : tuple(float, float)
-        Weibull parameters (shape k, scale λ) for the high-wind regime.
-    low_wind : tuple(float, float)
-        Weibull parameters (shape k, scale λ) for the low-wind regime.
-    solar_concentration : float
-        Concentration parameter φ for the Beta solar distribution (larger = less variance).
-    start_with_high : bool, optional
-        If True (default), the first block uses the high-wind regime;
-        otherwise, the first block uses low-wind.
-    repeat_pattern : bool, optional
-        If True, alternate regimes every `switch_stage` indefinitely;
-        if False (default), use two blocks only (high then low or vice versa).
-    solar_panel_model : str, optional
-        Identifier for the solar panel model, passed to the base provider.
-    rng : np.random.Generator, optional
-        Random number generator; if None, defaults to np.random.default_rng().
+    Args:
+        whale_reward_series (np.ndarray): Time series of whale observation rewards (one value per stage).
+        delta_t_min (float): Timestep size in minutes.
+        switch_stage (int): Stage length (in stages) for each regime block.
+        high_wind (tuple(float, float)): Weibull parameters (shape k, scale λ) for the high-wind regime.
+        low_wind (tuple(float, float)): Weibull parameters (shape k, scale λ) for the low-wind regime.
+        solar_concentration (float): Concentration parameter φ for the Beta solar distribution (larger = less variance).
+        start_with_high (bool, optional): If True (default), the first block uses the high-wind regime;
+            otherwise, the first block uses low-wind.
+        repeat_pattern (bool, optional): If True, alternate regimes every `switch_stage` indefinitely;
+            if False (default), use two blocks only (high then low or vice versa).
+        solar_panel_model (str, optional): Identifier for the solar panel model, passed to the base provider.
+        rng (np.random.Generator, optional): Random number generator; if None, defaults to np.random.default_rng().
     """
     def __init__(
         self,
@@ -239,30 +216,19 @@ class RegimeSwitchingWindSolarEnvironmentProvider(StochasticWindSolarEnvironment
         )
 
 class SinusoidalWindSolarEnvironmentProvider(StochasticWindSolarEnvironmentProvider):
-    """
-    Environment provider that uses a constant Weibull shape parameter for wind and
+    """Environment provider that uses a constant Weibull shape parameter for wind and
     a sinusoidally varying scale parameter, alongside a constant diurnal solar cycle.
 
-    Parameters
-    ----------
-    whale_reward_series : np.ndarray
-        Time series of whale observation rewards (one value per stage).
-    delta_t_min : float
-        Timestep size in minutes.
-    wind_shape : float
-        Weibull shape parameter k for all wind samples.
-    base_scale : float
-        Mean scale parameter λ around which the sinusoid oscillates.
-    scale_amplitude : float
-        Amplitude of the sine wave for wind scale variations.
-    scale_period : int
-        Period of the sine wave in number of stages.
-    solar_concentration : float
-        Concentration parameter φ for the Beta solar distribution (larger = less variance).
-    solar_panel_model : str, optional
-        Identifier for the solar panel model, passed to the base provider.
-    rng : np.random.Generator, optional
-        Random number generator; if None, defaults to np.random.default_rng().
+    Args:
+        whale_reward_series (np.ndarray): Time series of whale observation rewards (one value per stage).
+        delta_t_min (float): Timestep size in minutes.
+        wind_shape (float): Weibull shape parameter k for all wind samples.
+        base_scale (float): Mean scale parameter λ around which the sinusoid oscillates.
+        scale_amplitude (float): Amplitude of the sine wave for wind scale variations.
+        scale_period (int): Period of the sine wave in number of stages.
+        solar_concentration (float): Concentration parameter φ for the Beta solar distribution (larger = less variance).
+        solar_panel_model (str, optional): Identifier for the solar panel model, passed to the base provider.
+        rng (np.random.Generator, optional): Random number generator; if None, defaults to np.random.default_rng().
     """
     def __init__(
         self,

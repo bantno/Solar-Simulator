@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Threshold Sweep Plotter
+"""Threshold Sweep Plotter
 
 Plots:
 1. Takeoff threshold (lowest SoC where flying > moored at each timestep).

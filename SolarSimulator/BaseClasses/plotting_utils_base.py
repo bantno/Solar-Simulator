@@ -5,10 +5,9 @@ import plotly.graph_objects as go
 class PlottingUtils:
     @staticmethod
     def plot_surface(data, capacity=0):
-        """
-        Plots separate surface plots for the 'moored,' 'flying,' and 'broken' states.
+        """Plots separate surface plots for the 'moored,' 'flying,' and 'broken' states.
 
-        Parameters:
+        Args:
             data (numpy.ndarray): A 2D array where:
                 - Rows 0-100 represent battery percentages for the 'moored' state.
                 - Rows 101-201 represent battery percentages for the 'flying' state.
@@ -71,11 +70,10 @@ class PlottingUtils:
 
     @staticmethod
     def plot_surface_plotly(data, capacity=50, filename="ev_table_combined.html"):
-        """
-        Plots an interactive 3D surface plot for the 'moored,' 'flying,' and 'broken'
+        """Plots an interactive 3D surface plot for the 'moored,' 'flying,' and 'broken'
         states using Plotly.
 
-        Parameters:
+        Args:
             data (numpy.ndarray): A 2D array where:
                 - Rows 0-100 represent battery percentages for the 'moored' state.
                 - Rows 101-201 represent battery percentages for the 'flying' state.

@@ -4,17 +4,16 @@ from scipy.stats import weibull_min
 
 
 def compute_ps(alpha_0, alpha_1, lambda_param, k):
-    """
-    Compute P(S = 1) for a system where P(S = 1 | W = w) depends on a Weibull distribution of W.
+    """Compute P(S = 1) for a system where P(S = 1 | W = w) depends on a Weibull distribution of W.
 
-    Parameters:
-    - alpha_0: Intercept for the sigmoid function.
-    - alpha_1: Coefficient for the sigmoid function (depends on W).
-    - lambda_param: Scale parameter of the Weibull distribution.
-    - k: Shape parameter of the Weibull distribution.
+    Args:
+        alpha_0: Intercept for the sigmoid function.
+        alpha_1: Coefficient for the sigmoid function (depends on W).
+        lambda_param: Scale parameter of the Weibull distribution.
+        k: Shape parameter of the Weibull distribution.
 
     Returns:
-    - P(S = 1): The marginal probability.
+        P(S = 1): The marginal probability.
     """
 
     # Define the conditional probability P(S = 1 | W = w)
@@ -35,20 +34,19 @@ def compute_ps(alpha_0, alpha_1, lambda_param, k):
 
 
 def compute_ps_simpsons(alpha_0, alpha_1, lambda_param, k, w_max=10, n_points=1000):
-    """
-    Compute P(S = 1) using Simpson's rule for a system where P(S = 1 | W = w)
+    """Compute P(S = 1) using Simpson's rule for a system where P(S = 1 | W = w)
     depends on a Weibull distribution of W.
 
-    Parameters:
-    - alpha_0: Intercept for the sigmoid function.
-    - alpha_1: Coefficient for the sigmoid function (depends on W).
-    - lambda_param: Scale parameter of the Weibull distribution.
-    - k: Shape parameter of the Weibull distribution.
-    - w_max: Upper limit for approximating the range of W.
-    - n_points: Number of points to sample in the range [0, w_max].
+    Args:
+        alpha_0: Intercept for the sigmoid function.
+        alpha_1: Coefficient for the sigmoid function (depends on W).
+        lambda_param: Scale parameter of the Weibull distribution.
+        k: Shape parameter of the Weibull distribution.
+        w_max: Upper limit for approximating the range of W.
+        n_points: Number of points to sample in the range [0, w_max].
 
     Returns:
-    - P(S = 1): The marginal probability.
+        P(S = 1): The marginal probability.
     """
     # Create a range of W values from 0 to w_max
     w_values = np.linspace(0.001, w_max, n_points)

@@ -1,5 +1,4 @@
-"""
-Simulation validation harness.
+"""Simulation validation harness.
 
 A thin, declarative driver around the existing SimulationFactory / SimulationRunManager
 stack. One self-describing YAML fully describes an experiment; the CLI executes it and

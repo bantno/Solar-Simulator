@@ -1,5 +1,4 @@
-"""
-Auto-generated figures for one experiment run set.
+"""Auto-generated figures for one experiment run set.
 
 Three kinds of figure:
   * render_paper_figure  -- reproduce an exact journal-paper figure (matching
@@ -63,8 +62,7 @@ _PAPER_FIGURE_H5_KEY = {
 
 
 def render_paper_figure(func_name: str, h5_path: str, out_dir: str) -> Optional[str]:
-    """
-    Reproduce the journal-paper figure `func_name` from this run's HDF5, writing it to `out_dir`.
+    """Reproduce the journal-paper figure `func_name` from this run's HDF5, writing it to `out_dir`.
 
     Reuses Figures/Scripts/generate_journal_paper_figures.py directly (its `load_summary` reads
     the same HDF5 attrs the harness writes), so the output matches the paper by construction.
@@ -106,8 +104,7 @@ def render_paper_figure(func_name: str, h5_path: str, out_dir: str) -> Optional[
 # Generic sweep-summary plots (fallback for configs without a named paper_figure)
 # --------------------------------------------------------------------------------------
 def plot_sweep_summary(df: pd.DataFrame, out_dir: str) -> list:
-    """
-    For each metric, plot it against the primary swept parameter as a FAMILY OF CURVES -- one
+    """For each metric, plot it against the primary swept parameter as a FAMILY OF CURVES -- one
     line per value of the secondary swept parameter (no averaging) -- with the optimal policy
     overlaid (a line vs x when x is a global dim, or a horizontal reference when x is a
     threshold knob the optimal ignores). Returns the saved figure paths.
@@ -234,8 +231,7 @@ def _load_historical_window(hist_pkl, start_date, n_steps, interval_min=15):
 
 
 def _replay(sim, wind, solar_energy, whale, edges, bin_aware):
-    """
-    Deterministic policy rollout on fixed real weather. Mechanical transitions are assumed to
+    """Deterministic policy rollout on fixed real weather. Mechanical transitions are assumed to
     succeed (full intended trajectory); battery depletion (soc<0) terminates. Returns the
     trajectory plus the exact cumulative mechanical-failure prob 1 - prod_t p_success_t.
     """
@@ -271,8 +267,7 @@ def _replay(sim, wind, solar_energy, whale, edges, bin_aware):
 
 
 def _read_episode_from_h5(h5_path: str, sim) -> Optional[dict]:
-    """
-    Read a representative full-history episode for `sim` from the HDF5.
+    """Read a representative full-history episode for `sim` from the HDF5.
 
     Matches the simulation group by class name and battery capacity, then picks
     the episode whose total reward is closest to the median of all saved
@@ -324,8 +319,7 @@ def _read_episode_from_h5(h5_path: str, sim) -> Optional[dict]:
 
 def plot_trajectory_replay(sim, h5_path: str,
                            out_dir: str, interval_min: int = 15) -> Optional[str]:
-    """
-    Plot wind / SoC / action for a representative saved episode of `sim`.
+    """Plot wind / SoC / action for a representative saved episode of `sim`.
 
     Reads the median-reward full-history episode from the run's HDF5 file.
     Requires full_history_episodes > 0 (or save_states: true) in the config so

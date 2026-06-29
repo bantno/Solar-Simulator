@@ -16,9 +16,7 @@ class AbstractMDP(ABC):
                  transition_model_name: str,
                  soc_increment: float,
                  env_provider: AbstractEnvironmentProvider):
-        """
-        Initialize the MDP with time series inputs.
-        """
+        """Initialize the MDP with time series inputs."""
         self.battery_capacity_wh = battery_capacity_wh
         self.battery_capacity_joules = battery_capacity_wh * 3600
         self.idle_power = idle_power

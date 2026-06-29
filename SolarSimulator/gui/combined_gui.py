@@ -52,23 +52,15 @@ def _finish_plot(
     legend_outside: bool = True,
     show: bool = True
 ):
-    """
-    Apply standard formatting to axes and optionally show plot.
+    """Apply standard formatting to axes and optionally show plot.
 
-    Parameters
-    ----------
-    ax : matplotlib.axes.Axes
-        The axes to format.
-    title : str, optional
-        Plot title.
-    xlabel : str, optional
-        X-axis label.
-    ylabel : str, optional
-        Y-axis label.
-    legend_outside : bool, optional
-        If True, place legend outside plot area on the right.
-    show : bool, optional
-        If True, call plt.show() to display the plot.
+    Args:
+        ax (matplotlib.axes.Axes): The axes to format.
+        title (str, optional): Plot title.
+        xlabel (str, optional): X-axis label.
+        ylabel (str, optional): Y-axis label.
+        legend_outside (bool, optional): If True, place legend outside plot area on the right.
+        show (bool, optional): If True, call plt.show() to display the plot.
     """
     if title:
         ax.set_title(title)
@@ -95,8 +87,8 @@ def _finish_plot(
 
 
 class InspectorTab(QWidget):
-    """
-    Tab for inspecting simulation episodes stored in an HDF5 file.
+    """Tab for inspecting simulation episodes stored in an HDF5 file.
+
     Based on MultiSimInspector, but reimplemented as a QWidget.
     """
     def __init__(self):
@@ -341,8 +333,7 @@ class InspectorTab(QWidget):
         plt.show()
 
     def unselect_all_simulations(self):
-        """
-        Uncheck every item in the simulation list
+        """Uncheck every item in the simulation list
         and trigger a plot update.
         """
         for i in range(self.sim_list_widget.count()):
@@ -562,8 +553,7 @@ class InspectorTab(QWidget):
 # ------------------------------------------------------------------------------
 
 class HDF5RewardPlotter:
-    """
-    Non‐GUI class to load a simulation‐result HDF5 file, aggregate summary, and offer various plots:
+    """Non‐GUI class to load a simulation‐result HDF5 file, aggregate summary, and offer various plots:
       • Mean Total Reward by (obs, wind)
       • Mean Failure Step by (obs, wind)
       • Failure Percentage by (obs, wind)
@@ -589,26 +579,17 @@ class HDF5RewardPlotter:
         penalties: list[float] | None = None,
         include_optimal: bool = False
     ) -> tuple[pd.DataFrame, pd.DataFrame | None]:
-        """
-        Standard filtering applied to summary data.
+        """Standard filtering applied to summary data.
 
-        Parameters
-        ----------
-        algorithms : list[str], optional
-            List of algorithm/sim_type names to include.
-        obs_thresholds : list[float], optional
-            List of observation thresholds to include.
-        wind_thresholds : list[float], optional
-            List of wind thresholds to include.
-        penalties : list[float], optional
-            List of failure penalties to include.
-        include_optimal : bool, optional
-            If True, return filtered optimal data as well.
+        Args:
+            algorithms (list[str], optional): List of algorithm/sim_type names to include.
+            obs_thresholds (list[float], optional): List of observation thresholds to include.
+            wind_thresholds (list[float], optional): List of wind thresholds to include.
+            penalties (list[float], optional): List of failure penalties to include.
+            include_optimal (bool, optional): If True, return filtered optimal data as well.
 
-        Returns
-        -------
-        tuple[pd.DataFrame, pd.DataFrame | None]
-            (filtered_main, filtered_optimal) dataframes
+        Returns:
+            tuple[pd.DataFrame, pd.DataFrame | None]: (filtered_main, filtered_optimal) dataframes
         """
         df = self._get_summary()
         df_opt = df[df['sim_type'].str.contains('optimal', case=False, na=False)]
@@ -630,20 +611,14 @@ class HDF5RewardPlotter:
         return df_main, df_opt if include_optimal else (df_main, None)
 
     def _create_subplot_grid(self, n_items: int, figsize_per_subplot=(5, 4)):
-        """
-        Create a square-ish grid of subplots.
+        """Create a square-ish grid of subplots.
 
-        Parameters
-        ----------
-        n_items : int
-            Number of subplots needed.
-        figsize_per_subplot : tuple, optional
-            (width, height) per subplot.
+        Args:
+            n_items (int): Number of subplots needed.
+            figsize_per_subplot (tuple, optional): (width, height) per subplot.
 
-        Returns
-        -------
-        tuple
-            (fig, axes) where axes is always a 2D array via squeeze=False
+        Returns:
+            tuple: (fig, axes) where axes is always a 2D array via squeeze=False
         """
         cols = int(np.ceil(np.sqrt(n_items)))
         rows = int(np.ceil(n_items / cols))
@@ -668,19 +643,13 @@ class HDF5RewardPlotter:
         metric_name: str = "Reward",
         **plot_kwargs
     ):
-        """
-        Add optimal baseline to plot as a horizontal line.
+        """Add optimal baseline to plot as a horizontal line.
 
-        Parameters
-        ----------
-        ax : matplotlib.axes.Axes
-            The axes to add the baseline to.
-        value : float
-            The optimal value to plot.
-        metric_name : str, optional
-            Name of the metric for the label.
-        **plot_kwargs
-            Additional keyword arguments passed to axhline.
+        Args:
+            ax (matplotlib.axes.Axes): The axes to add the baseline to.
+            value (float): The optimal value to plot.
+            metric_name (str, optional): Name of the metric for the label.
+            **plot_kwargs: Additional keyword arguments passed to axhline.
         """
         if value is not None:
             defaults = {
@@ -696,20 +665,14 @@ class HDF5RewardPlotter:
         df: pd.DataFrame,
         value_column: str
     ) -> pd.DataFrame:
-        """
-        Standard pivot: rows=obs_threshold, cols=wind_threshold.
+        """Standard pivot: rows=obs_threshold, cols=wind_threshold.
 
-        Parameters
-        ----------
-        df : pd.DataFrame
-            DataFrame containing threshold data.
-        value_column : str
-            Column name to use as values in pivot table.
+        Args:
+            df (pd.DataFrame): DataFrame containing threshold data.
+            value_column (str): Column name to use as values in pivot table.
 
-        Returns
-        -------
-        pd.DataFrame
-            Pivoted data.
+        Returns:
+            pd.DataFrame: Pivoted data.
         """
         return df.pivot(
             index='observation_threshold',
@@ -724,19 +687,13 @@ class HDF5RewardPlotter:
         y_label: str = "Wind Threshold",
         **plot_kwargs
     ):
-        """
-        Plot a line for each wind threshold column in pivot table.
+        """Plot a line for each wind threshold column in pivot table.
 
-        Parameters
-        ----------
-        ax : matplotlib.axes.Axes
-            The axes to plot on.
-        pivot : pd.DataFrame
-            Pivoted data with wind thresholds as columns.
-        y_label : str, optional
-            Label prefix for legend entries.
-        **plot_kwargs
-            Additional keyword arguments passed to plot.
+        Args:
+            ax (matplotlib.axes.Axes): The axes to plot on.
+            pivot (pd.DataFrame): Pivoted data with wind thresholds as columns.
+            y_label (str, optional): Label prefix for legend entries.
+            **plot_kwargs: Additional keyword arguments passed to plot.
         """
         for wind in pivot.columns:
             ax.plot(
@@ -747,20 +704,14 @@ class HDF5RewardPlotter:
             )
 
     def _create_plot_axes(self, canvas=None, figsize=(8, 6)):
-        """
-        Create axes, either on a Qt canvas or a new figure.
+        """Create axes, either on a Qt canvas or a new figure.
 
-        Parameters
-        ----------
-        canvas : PlotCanvas, optional
-            Qt canvas to plot on. If None, creates new figure.
-        figsize : tuple, optional
-            Figure size if creating new figure.
+        Args:
+            canvas (PlotCanvas, optional): Qt canvas to plot on. If None, creates new figure.
+            figsize (tuple, optional): Figure size if creating new figure.
 
-        Returns
-        -------
-        matplotlib.axes.Axes
-            The axes to plot on.
+        Returns:
+            matplotlib.axes.Axes: The axes to plot on.
         """
         if canvas:
             canvas.clear()
@@ -868,19 +819,13 @@ class HDF5RewardPlotter:
         wind_thresholds: list[float] | None = None,
         canvas=None
     ):
-        """
-        Plot mean reward by threshold combinations.
+        """Plot mean reward by threshold combinations.
 
-        Parameters
-        ----------
-        algorithms : list[str], optional
-            List of algorithm names to include.
-        obs_thresholds : list[float], optional
-            List of observation thresholds to include.
-        wind_thresholds : list[float], optional
-            List of wind thresholds to include.
-        canvas : PlotCanvas, optional
-            Qt canvas to embed plot in. If None, creates popup window.
+        Args:
+            algorithms (list[str], optional): List of algorithm names to include.
+            obs_thresholds (list[float], optional): List of observation thresholds to include.
+            wind_thresholds (list[float], optional): List of wind thresholds to include.
+            canvas (PlotCanvas, optional): Qt canvas to embed plot in. If None, creates popup window.
         """
         df_main, _ = self._filter_data(algorithms, obs_thresholds, wind_thresholds)
         pivot = self._pivot_by_thresholds(df_main, 'mean_reward')
@@ -907,20 +852,14 @@ class HDF5RewardPlotter:
         wind_thresholds: list[float] | None = None,
         canvas=None
     ):
-        """
-        Plot the mean failure step (time to failure) for each
+        """Plot the mean failure step (time to failure) for each
         combination of observation and wind thresholds.
 
-        Parameters
-        ----------
-        algorithms : list[str], optional
-            List of sim_type names to include (None = all non-optimal).
-        obs_thresholds : list[float], optional
-            List of observation thresholds to include (None = all).
-        wind_thresholds : list[float], optional
-            List of wind thresholds to include (None = all).
-        canvas : PlotCanvas, optional
-            Qt canvas to embed plot in. If None, creates popup window.
+        Args:
+            algorithms (list[str], optional): List of sim_type names to include (None = all non-optimal).
+            obs_thresholds (list[float], optional): List of observation thresholds to include (None = all).
+            wind_thresholds (list[float], optional): List of wind thresholds to include (None = all).
+            canvas (PlotCanvas, optional): Qt canvas to embed plot in. If None, creates popup window.
         """
         df_main, _ = self._filter_data(algorithms, obs_thresholds, wind_thresholds)
         pivot = self._pivot_by_thresholds(df_main, 'mean_failure_step')
@@ -947,19 +886,13 @@ class HDF5RewardPlotter:
         wind_thresholds: list[float] | None = None,
         canvas=None
     ):
-        """
-        Plot the failure percentage for each combination of observation and wind thresholds.
+        """Plot the failure percentage for each combination of observation and wind thresholds.
 
-        Parameters
-        ----------
-        algorithms : list[str], optional
-            List of sim_type names to include (None = all non-optimal).
-        obs_thresholds : list[float], optional
-            List of observation thresholds to include (None = all).
-        wind_thresholds : list[float], optional
-            List of wind thresholds to include (None = all).
-        canvas : PlotCanvas, optional
-            Qt canvas to embed plot in. If None, creates popup window.
+        Args:
+            algorithms (list[str], optional): List of sim_type names to include (None = all non-optimal).
+            obs_thresholds (list[float], optional): List of observation thresholds to include (None = all).
+            wind_thresholds (list[float], optional): List of wind thresholds to include (None = all).
+            canvas (PlotCanvas, optional): Qt canvas to embed plot in. If None, creates popup window.
         """
         df_main, _ = self._filter_data(algorithms, obs_thresholds, wind_thresholds)
         pivot = self._pivot_by_thresholds(df_main, 'failure_percentage')
@@ -979,17 +912,14 @@ class HDF5RewardPlotter:
             canvas.draw()
 
     def plot_reward_vs_capacity_by_thresholds(self, canvas=None):
-        """
-        Plot mean reward vs battery capacity for each observation threshold.
+        """Plot mean reward vs battery capacity for each observation threshold.
 
         Creates a grid of subplots, one for each observation threshold value.
         Each subplot shows how mean reward varies with battery capacity for
         different wind threshold values.
 
-        Parameters
-        ----------
-        canvas : PlotCanvas, optional
-            Qt canvas to embed plot in. If None, creates popup window.
+        Args:
+            canvas (PlotCanvas, optional): Qt canvas to embed plot in. If None, creates popup window.
         """
         df_main, df_opt = self._filter_data(include_optimal=True)
 
@@ -1036,8 +966,7 @@ class HDF5RewardPlotter:
         wind_thresholds: list[float] | None = None,
         penalties: list[float] | None = None
     ):
-        """
-        Plot Average Reward per Timestep vs Days for each (obs, wind) threshold combination,
+        """Plot Average Reward per Timestep vs Days for each (obs, wind) threshold combination,
         optionally filtering by algorithm, thresholds, and failure penalties.
         """
         # 1) Load summary and split out optimal vs main
@@ -1134,11 +1063,10 @@ class HDF5RewardPlotter:
         penalties: list[float] | None = None,
         battery_capacity: float = 350,
     ):
-        """
-        Line‐plot of <metric> vs latitude for a single battery capacity,
+        """Line‐plot of <metric> vs latitude for a single battery capacity,
         with one line per (obs, wind) threshold combo plus the optimal policy.
 
-        Parameters:
+        Args:
             battery_capacity: the capacity (Wh) to plot
             metric: one of the summary columns, e.g. "mean_reward",
                     "failure_percentage" or "mean_failure_step"
@@ -1243,8 +1171,7 @@ class HDF5RewardPlotter:
             wind_thresholds: list[float] | None = None,
             penalties: list[float] | None = None,
         ):
-        """
-        For each study location:
+        """For each study location:
         1) Show a map of all locations numbered (with matching colors).
         2) Open a separate figure plotting <metric> vs. battery capacity
             for each location (one per figure), without legends.
@@ -1373,8 +1300,7 @@ class HDF5RewardPlotter:
         penalties: list[float] | None = None,
         battery_capacity: float = 300,
     ):
-        """
-        Line‐plot of <metric> vs mission start date for a single battery capacity,
+        """Line‐plot of <metric> vs mission start date for a single battery capacity,
         with one line per (obs, wind) threshold combo plus the optimal policy.
 
         Supported metrics:
@@ -1493,8 +1419,7 @@ class HDF5RewardPlotter:
         penalties: list[float] | None = None,
         battery_capacity: float = 300,
     ):
-        """
-        Line‐plot of <metric> vs mission duration (days) for a single battery capacity,
+        """Line‐plot of <metric> vs mission duration (days) for a single battery capacity,
         with one line per (obs, wind) threshold combo plus the optimal policy.
 
         Supported metrics:
@@ -1953,8 +1878,8 @@ class HDF5RewardPlotter:
 
 
 class RewardPlotterTab(QWidget):
-    """
-    Tab for selecting an HDF5 file and invoking any of the HDF5RewardPlotter plots.
+    """Tab for selecting an HDF5 file and invoking any of the HDF5RewardPlotter plots.
+
     Provides a dropdown + buttons for each plot type.
     """
     def __init__(self):
@@ -2332,8 +2257,7 @@ class RewardPlotterTab(QWidget):
 # ------------------------------------------------------------------------------
 
 class CombinedGUI(QMainWindow):
-    """
-    Main window combining:
+    """Main window combining:
       • Simulation Runner / Config Creator
       • Multi‐Simulation Episode Inspector
       • HDF5 Reward Plotter

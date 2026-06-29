@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Wind mean and ±3σ panels (Jan/Apr/Jul/Oct) using expected_wind_speed + Weibull spread.
+"""Wind mean and ±3σ panels (Jan/Apr/Jul/Oct) using expected_wind_speed + Weibull spread.
 
 - Mean comes from column: expected_wind_speed  (m/s)
 - Spread comes from either:

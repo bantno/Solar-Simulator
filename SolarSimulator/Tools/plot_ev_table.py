@@ -14,18 +14,17 @@ def plot_data(
     legend=None,
     style=None,
 ):
-    """
-    A generic plotting function to create different types of plots.
+    """A generic plotting function to create different types of plots.
 
-    Parameters:
-    - x (list or array): x-axis data.
-    - y (list or array): y-axis data.
-    - plot_type (str): Type of plot ('line', 'scatter', 'bar', 'hist', etc.).
-    - xlabel (str, optional): Label for the x-axis.
-    - ylabel (str, optional): Label for the y-axis.
-    - title (str, optional): Title of the plot.
-    - legend (list, optional): Labels for the plot legend.
-    - style (str, optional): Matplotlib style for the plot.
+    Args:
+        x (list or array): x-axis data.
+        y (list or array): y-axis data.
+        plot_type (str): Type of plot ('line', 'scatter', 'bar', 'hist', etc.).
+        xlabel (str, optional): Label for the x-axis.
+        ylabel (str, optional): Label for the y-axis.
+        title (str, optional): Title of the plot.
+        legend (list, optional): Labels for the plot legend.
+        style (str, optional): Matplotlib style for the plot.
     """
     # plt.figure(figsize=(8, 4))
     if style:

@@ -54,8 +54,7 @@ class mdpBackwardSolver:
         return np.zeros((num_states, T))
 
     def solve(self) -> None:
-        """
-        Perform backward induction via Monte Carlo sampling.
+        """Perform backward induction via Monte Carlo sampling.
 
         For each stage from horizon-1 down to 0, and for each non-terminal state:
         1. Sample a batch of next states and rewards for both actions.
@@ -184,8 +183,7 @@ class mdpBackwardSolver:
         return self.future_value_table[state_idxs, stages]
 
 class mdpAnalyticalBackwardSolver:
-    """
-    Analytically solves a finite-horizon stochastic MDP via backward induction.
+    """Analytically solves a finite-horizon stochastic MDP via backward induction.
 
     Integrates over solar and wind distributions to compute expected action values
     and fills a future-value table, which can then be visualized.
@@ -357,9 +355,9 @@ class mdpAnalyticalBackwardSolver:
         t: int,
         last_stage: bool = False,
     ) -> np.ndarray:
-        """
-        Vectorized version of ``_value`` that scores every state in ``states`` for a
-        single action at once. Returns a (n,) array of state-action values.
+        """Vectorized version of ``_value`` that scores every state in ``states`` for a single action at once.
+
+        Returns a (n,) array of state-action values.
         """
         n = states.shape[0]
         actions = np.full(n, a_scalar, dtype=int)
@@ -398,9 +396,10 @@ class mdpAnalyticalBackwardSolver:
     def _compute_survival_contribution_batch(
         self, Ck, Ek, G_max, alpha, beta, p_fail, V_next,
     ) -> np.ndarray:
-        """
-        Batched survival contribution. ``Ck``, ``Ek``, ``p_fail`` are (n,); ``V_next``
-        is (n_soc,). Returns (n,) = survival_mass @ V_next per state.
+        """Batched survival contribution.
+
+        ``Ck``, ``Ek``, ``p_fail`` are (n,); ``V_next`` is (n_soc,). Returns
+        (n,) = survival_mass @ V_next per state.
 
         Mirrors the scalar ``compute_survival_contribution`` but broadcasts the energy-bin
         edges (cached in ``__init__`` as ``self._e_lower``/``self._e_upper``) across states.
@@ -624,9 +623,9 @@ class mdpAnalyticalBackwardSolver:
         return rows, normal
 
     def _lookup_future_values_fast(self, next_states: np.ndarray, stage: int) -> np.ndarray:
-        """
-        Vectorized, O(n) future-value lookup for a batch of grid-aligned next states
-        (i.i.d. / single-bin case). Broken states (mode==2) map to value 0.
+        """Vectorized, O(n) future-value lookup for a batch of grid-aligned next states (i.i.d. / single-bin case).
+
+        Broken states (mode==2) map to value 0.
         """
         rows, normal = self._state_row_index(next_states)
         future = np.zeros(next_states.shape[0])
@@ -637,8 +636,7 @@ class mdpAnalyticalBackwardSolver:
         self, stage: int, rewards: np.ndarray, next_states: np.ndarray,
         cur_bins: np.ndarray = None, P: np.ndarray = None,
     ) -> np.ndarray:
-        """
-        Elementwise value = reward + GAMMA * E[V(next_state, stage+1)] for a batch.
+        """Elementwise value = reward + GAMMA * E[V(next_state, stage+1)] for a batch.
 
         i.i.d. (n_bins==1): direct lookup. Chain (n_bins>1): the agent knows its current
         wind bin (``cur_bins``) and the stage transition matrix ``P``, so the future value

@@ -1,5 +1,4 @@
-"""
-Variance visualizations for battery sweep results, segmented by algorithm.
+"""Variance visualizations for battery sweep results, segmented by algorithm.
 
 Produces three figures:
   1. Violin plots of scalar outcomes vs battery capacity (side-by-side per algorithm)

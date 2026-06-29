@@ -4,8 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def generate_reward_analysis(file_path, output_dir="analysis_plots"):
-    """
-    Generates a dual-pane plot (Scatter + Histogram) for each simulation run 
+    """Generates a dual-pane plot (Scatter + Histogram) for each simulation run
     in the HDF5 file to analyze reward distribution.
     """
     if not os.path.exists(file_path):

@@ -24,8 +24,7 @@ def f(x, y):
 # ------------------------------------------------------------
 
 def estimate_EZ_monte_carlo(N=10_000):
-    """
-    Estimates E[f(X,Y)] via Monte Carlo simulation,
+    """Estimates E[f(X,Y)] via Monte Carlo simulation,
     given X ~ Beta(alpha, beta) and Y ~ Weibull(k, lambda).
     """
     # Sample from Beta(alpha, beta_)
@@ -57,15 +56,13 @@ def weibull_pdf(y, k, lambda_):
     return weibull_dist.pdf(y, k, scale=lambda_)
 
 def integrand(y, x, alpha, beta_, k, lambda_):
-    """
-    integrand = f(x, y) * g(x) * h(y)
+    """integrand = f(x, y) * g(x) * h(y)
     The dblquad function signature for integrand is integrand(y, x).
     """
     return f(x, y) * beta_pdf(x, alpha, beta_) * weibull_pdf(y, k, lambda_)
 
 def estimate_EZ_numerical_integration():
-    """
-    Numerically evaluates the double integral of f(x,y) * g(x) * h(y) dx dy.
+    """Numerically evaluates the double integral of f(x,y) * g(x) * h(y) dx dy.
     Uses scipy.integrate.dblquad over x in [0,1] and y in [0,∞).
     """
     # Inner integral: integrate over y from 0 to ∞

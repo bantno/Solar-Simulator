@@ -37,8 +37,7 @@ def _derive_histcube_path(data_path: str) -> str:
 
 
 def _load_wind_chain(config: Dict, location: Dict):
-    """
-    Return the wind-chain artifact dict if config enables it, else None.
+    """Return the wind-chain artifact dict if config enables it, else None.
 
     Config:
         wind_chain:
@@ -53,8 +52,7 @@ def _load_wind_chain(config: Dict, location: Dict):
 
 
 def _load_historical_cube(config: Dict, location: Dict) -> dict:
-    """
-    Load the historical-weather calendar cube artifact for `location`.
+    """Load the historical-weather calendar cube artifact for `location`.
 
     Config:
         historical_weather:
@@ -68,9 +66,7 @@ def _load_historical_cube(config: Dict, location: Dict) -> dict:
 
 
 class EnvironmentLoader:
-    """
-    Helper to load and prepare environmental data for a given location.
-    """
+    """Helper to load and prepare environmental data for a given location."""
     def __init__(
         self,
         data_path: str,
@@ -171,8 +167,7 @@ class SimulationFactory:
         failure_penalty: float,
         config_name: Optional[str] = None,
     ):
-        """
-        Factory to set up MDP parameters and simulations
+        """Factory to set up MDP parameters and simulations
         for given config, location, horizon, and penalty.
         """
         self.config_name = config_name
@@ -348,8 +343,7 @@ class YAMLSimulationRunner:
             }],
 
     def _build_param_list(self) -> List[Tuple]:
-        """
-        Build a list of parameters for each simulation type.
+        """Build a list of parameters for each simulation type.
         Each entry is a tuple of (factory, sim_type, cap, threshold, wind_threshold).
         """
 

@@ -1,5 +1,4 @@
-"""
-The metrics seam: turn one experiment's HDF5 output into a tidy, self-describing CSV.
+"""The metrics seam: turn one experiment's HDF5 output into a tidy, self-describing CSV.
 
 `summarize_hdf5` reads the per-simulation metadata that SimulationRunManager already writes
 as HDF5 group attributes (see BaseClasses/simulation_run_manager.py:_run_one_sim) and emits
@@ -71,10 +70,9 @@ def _attr(grp, key):
 
 
 def summarize_hdf5(h5_path: str, config: Optional[Dict] = None) -> pd.DataFrame:
-    """
-    Build a tidy one-row-per-simulation DataFrame from an experiment's HDF5 file.
+    """Build a tidy one-row-per-simulation DataFrame from an experiment's HDF5 file.
 
-    Parameters:
+    Args:
         h5_path: path to the batch HDF5 written by SimulationRunManager.
         config:  the (resolved) experiment config; supplies the experiment-level columns.
 

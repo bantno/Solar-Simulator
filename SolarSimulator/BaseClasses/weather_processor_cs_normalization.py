@@ -88,26 +88,19 @@ class WeatherDataProcessor:
 
     @staticmethod
     def clearsky_ghi_fatemi(times, lat, lon, A=1150.0):
-        """
-        Clear-sky GHI per Fatemi–Kuh–Fripp (2018):
+        """Clear-sky GHI per Fatemi–Kuh–Fripp (2018):
             GHI_cs(t) = A * cos(zenith(t))
         where 'A' is a fixed scale (paper uses ~1150 W/m^2) and
         zenith is the apparent solar zenith angle.
 
-        Parameters
-        ----------
-        times : pandas.DatetimeIndex or pd.Timestamp
-            TZ-aware timestamps (local or UTC). If you pass naive times,
-            pvlib will treat them as naive; prefer tz-aware.
-        lat, lon : float
-            Latitude [deg], Longitude [deg] (east positive).
-        A : float, default 1150.0
-            Scaling constant so that normalized irradiance r/(A cos z) lies in (0,1).
+        Args:
+            times (pandas.DatetimeIndex or pd.Timestamp): TZ-aware timestamps (local or UTC). If you pass naive times,
+                pvlib will treat them as naive; prefer tz-aware.
+            lat, lon (float): Latitude [deg], Longitude [deg] (east positive).
+            A (float, default 1150.0): Scaling constant so that normalized irradiance r/(A cos z) lies in (0,1).
 
-        Returns
-        -------
-        pandas.Series
-            Clear-sky GHI [W/m^2], clipped at 0 at night.
+        Returns:
+            pandas.Series: Clear-sky GHI [W/m^2], clipped at 0 at night.
         """
         # Ensure we always work with a DatetimeIndex
         if isinstance(times, pd.Timestamp):
@@ -212,27 +205,18 @@ class WeatherDataProcessor:
     
     @staticmethod
     def fit_beta_mom(data, eps: float = 1e-6):
-        """
-        Fit a Beta distribution to data in (0,1) using Method of Moments (MoM).
+        """Fit a Beta distribution to data in (0,1) using Method of Moments (MoM).
 
-        Parameters
-        ----------
-        data : array-like
-            1D array of observations, must lie in (0,1).
-        eps : float, optional
-            Small shift applied if values are exactly 0 or 1. Default 1e-6.
+        Args:
+            data (array-like): 1D array of observations, must lie in (0,1).
+            eps (float, optional): Small shift applied if values are exactly 0 or 1. Default 1e-6.
 
-        Returns
-        -------
-        alpha : float
-            Estimated alpha (shape1) parameter.
-        beta : float
-            Estimated beta (shape2) parameter.
+        Returns:
+            alpha (float): Estimated alpha (shape1) parameter.
+            beta (float): Estimated beta (shape2) parameter.
 
-        Raises
-        ------
-        ValueError
-            If the variance is too large or if the computed parameters are invalid.
+        Raises:
+            ValueError: If the variance is too large or if the computed parameters are invalid.
         """
         x = np.asarray(data, dtype=float)
 
@@ -278,8 +262,7 @@ def build_expected_data_artifact(
     longitude: float,
     interval_minutes: int = 15,
 ):
-    """
-    Build the expected-data (distribution fit) artifact from an hourly historical pkl.
+    """Build the expected-data (distribution fit) artifact from an hourly historical pkl.
     Fits Beta to clearsky-normalized irradiance and Weibull to wind speed for every
     (month, day, hour, minute) slot.  Saves and returns the resulting DataFrame.
     """

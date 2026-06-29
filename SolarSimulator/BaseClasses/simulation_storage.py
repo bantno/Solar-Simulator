@@ -6,14 +6,12 @@ from datetime import datetime
 import h5py
 
 class SimulationStorage:
-    """
-    Manages simulation result storage by grouping all episodes from a single simulation run
+    """Manages simulation result storage by grouping all episodes from a single simulation run
     into one compressed .npz file. A unique timestamp is added so that each file is unique.
     """
     
     def __init__(self, storage_dir: str):
-        """
-        Parameters:
+        """Args:
             storage_dir (str): Directory where simulation files will be stored.
         """
         self.storage_dir = storage_dir
@@ -23,16 +21,13 @@ class SimulationStorage:
         self.simulation_counter = 0
     
     def _get_simulation_filename(self, simulation_id: int) -> str:
-        """
-        Generate a filename that includes the unique timestamp and simulation counter.
-        """
+        """Generate a filename that includes the unique timestamp and simulation counter."""
         return os.path.join(self.storage_dir, f"simulation_{self.run_timestamp}_{simulation_id:04d}.npz")
     
     def store_simulation(self, simulation_metadata: dict, episodes: list):
-        """
-        Stores all episodes from a single simulation run in one file.
+        """Stores all episodes from a single simulation run in one file.
         
-        Parameters:
+        Args:
             simulation_metadata (dict): Metadata describing the simulation run.
             episodes (list): A list of episode dictionaries.
         """
@@ -42,8 +37,7 @@ class SimulationStorage:
         self.simulation_counter += 1
     
     def load_simulation(self, simulation_id: int) -> dict:
-        """
-        Loads a single simulation file by simulation id.
+        """Loads a single simulation file by simulation id.
         
         Returns:
             dict: A dictionary with keys 'simulation_metadata' and 'episodes'.
@@ -67,8 +61,7 @@ class SimulationStorage:
             return {'simulation_metadata': simulation_metadata, 'episodes': episodes}
     
     def load_all_simulations(self) -> list:
-        """
-        Loads all simulation files from the storage directory.
+        """Loads all simulation files from the storage directory.
         
         Returns:
             list: A list of dictionaries, each containing simulation metadata and episodes.
@@ -85,28 +78,24 @@ class SimulationStorage:
 
 
 class SimulationStorageHDF5:
-    """
-    HDF5-based storage for batches of simulations.
+    """HDF5-based storage for batches of simulations.
     Each simulation is stored as a top-level group within one file.
     """
     def __init__(self, file_path: str):
-        """
-        Open the HDF5 file in append mode (creates if not exists).
-        """
+        """Open the HDF5 file in append mode (creates if not exists)."""
         self.h5file = h5py.File(file_path, "a")
 
     def store_simulation(self,
                         sim_metadata: dict,
                         episodes: list,
                         group_name: str = None):
-        """
-        Store a batch of episodes under a unique top-level group,
+        """Store a batch of episodes under a unique top-level group,
         using gzip compression for array datasets.
 
-        Parameters:
-        - sim_metadata: dict of simple metadata entries for the simulation
-        - episodes: list of dicts, each dict represents one episode
-        - group_name: mandatory name for the group identifying this simulation
+        Args:
+            sim_metadata: dict of simple metadata entries for the simulation
+            episodes: list of dicts, each dict represents one episode
+            group_name: mandatory name for the group identifying this simulation
 
         Raises:
             ValueError: if group_name missing or already exists.
@@ -179,7 +168,5 @@ class SimulationStorageHDF5:
                 )
 
     def close(self):
-        """
-        Close the underlying HDF5 file.
-        """
+        """Close the underlying HDF5 file."""
         self.h5file.close()

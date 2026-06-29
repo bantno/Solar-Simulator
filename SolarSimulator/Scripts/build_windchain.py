@@ -1,5 +1,4 @@
-"""
-Build a wind Markov-chain artifact for one location.
+"""Build a wind Markov-chain artifact for one location.
 
 Usage (pvlib conda env, from the SolarSimulator dir or repo root):
 

@@ -128,17 +128,28 @@ def _ensure_location_data(config: dict, location: dict) -> None:
     chain_path = wc_cfg.get("path") or _derive_chain_path(data_path)
     cube_path = hw_cfg.get("path") or _derive_histcube_path(data_path)
 
-    # Chain: missing file OR configured edges have changed since last build.
+    # Chain: missing file OR the configured binning has changed since last build.
     missing_chain = False
     if wc_cfg.get("enabled", False):
         configured_edges = _configured_bin_edges(wc_cfg)
         explicit_path = bool(wc_cfg.get("path"))
         if not os.path.exists(chain_path):
             missing_chain = True
-        elif not explicit_path and configured_edges is not None:
+        elif not explicit_path:
             existing = pd.read_pickle(chain_path)
-            if not np.allclose(existing["bin_edges"], configured_edges):
-                print(f"[provision] wind_chain bin_edges changed - rebuilding {chain_path}")
+            if configured_edges is not None:
+                stale = (len(existing["bin_edges"]) != len(configured_edges)
+                         or not np.allclose(existing["bin_edges"], configured_edges))
+                reason = "bin_edges changed"
+            else:
+                # Quantile mode: rebuild if the bin count differs or the existing
+                # artifact was built from explicit (non-quantile) edges.
+                n_bins = int(wc_cfg.get("n_bins", 3))
+                stale = (int(existing["n_bins"]) != n_bins
+                         or not existing.get("quantile_derived", False))
+                reason = f"quantile bins (n_bins={n_bins}) requested"
+            if stale:
+                print(f"[provision] wind_chain {reason} - rebuilding {chain_path}")
                 missing_chain = True
 
     missing_cube = hw_cfg.get("enabled", False) and not os.path.exists(cube_path)

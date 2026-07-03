@@ -1,0 +1,22 @@
+experiment_name: cvi_capgrid_lat58.0_lon-161.0_chain_native
+description: 'Chain-vs-IID evaluation sweep ''capgrid'' at lat58.0_lon-161.0: chain-solved
+  optimal policy, episodes in its own synthetic world. Paired with the other arm;
+  configs differ only in wind_chain.enabled.'
+battery_capacities: [150.0, 200.0, 250.0, 300.0, 400.0, 500.0]
+horizons: [2880]
+start_datetime: '2020-07-01T00:00:00'
+failure_penalties: [5.0]
+threshold_values: []
+wind_thresholds: []
+episodes: 3000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+locations:
+- {latitude: 58.0, longitude: -161.0, data_path: Data/EXPECTED_DATA/data_expected_lat58.0_lon-161.0_15min.pkl}
+wind_chain: {enabled: true, n_bins: 4}

@@ -69,8 +69,37 @@ the full cross-product of the matrix below is run (× optimal and/or threshold p
 
 **Self-describing:** unlike the GUI/`run_batch.py` path, `include_optimal`, `save_states`, and
 `full_history_episodes` are read from the YAML — no behavior comes from CLI flags. i.i.d. and
-chain experiments are kept as **separate configs** (see `examples/`); a comparison script is a
-later task.
+chain experiments are kept as **separate configs** (see `examples/`).
+
+**Chain-vs-IID evaluation sweep:** `Scripts/generate_chain_sweep_configs.py` emits paired
+configs (identical except `wind_chain.enabled` / `historical_weather`) into
+`configs/chain_vs_iid_sweep[_smoke]/` plus a manifest; `Scripts/run_chain_sweep.py` provisions
+location data and runs them all (`--resume` to continue an interrupted sweep);
+`Scripts/compare_chain_sweep.py` joins the pairs into per-cell deltas with paired bootstrap CIs
+(hist-world pairs see identical bootstrap weather — verified with `--verify`), CVaR tail metrics,
+and native-vs-historical calibration gaps; `Scripts/plot_chain_sweep.py` draws the evaluation
+figures (capacity–reliability frontier, delta panels, reward CDFs, benefit-vs-persistence,
+calibration, storm-onset composites, value-table diagnostics, three-way policy comparison).
+
+**Threshold-policy benchmark:** `generate_chain_sweep_configs.py --thresholds` additionally
+emits one arm-agnostic hist-world config per sweep scenario running the full
+observation-threshold × wind-threshold grid (no value-function solve; the bootstrap weather is
+identical to both optimal arms episode-for-episode, so three-way paired comparisons hold).
+These configs store scalars only (`full_history_episodes: 0`); after each one the runner
+compacts the HDF5 into the `_episode_scalars.csv` analysis cache (a 210-sim × 3000-episode
+config is ~1.7 GB raw vs ~40 MB compacted; disable with `--keep-h5`). The comparison script
+selects the per-cell best combo by mean reward (with a split-half selection-bias check and a
+min-failure envelope) and reports optimal-vs-threshold paired deltas; figures 1, 3, and 8 show
+the threshold benchmark in green.
+
+**Wind-bin selection:** sweep configs specify `wind_chain: {n_bins: N}` with no `bin_edges`
+key, which builds equal-occupancy (quantile) bins per location from its historical record at
+artifact-build time; explicit `bin_edges` (interior cutpoints, m/s) are still honored.
+Provisioning rebuilds a stale chain artifact whenever the configured binning differs from the
+one on disk (edge array mismatch, bin-count mismatch, or quantile-vs-explicit mode mismatch —
+artifacts record a `quantile_derived` flag). Because quantile edges differ per location, the
+analysis scripts read edges from each location's `*_windchain.pkl`
+(`compare_chain_sweep.chain_edges_for`), never from the sweep manifest.
 
 ## `summary.csv`
 

@@ -1,0 +1,24 @@
+experiment_name: cvi_duration_lat30.0_lon-90.0_iid_hist
+description: 'Chain-vs-IID evaluation sweep ''duration'' at lat30.0_lon-90.0: iid-solved
+  optimal policy, episodes on historical bootstrap weather. Paired with the other
+  arm; configs differ only in wind_chain.enabled (weather draws are identical across
+  the pair).'
+battery_capacities: [300.0]
+horizons: [672, 1344, 2880, 5760]
+start_datetime: '2020-07-01T00:00:00'
+failure_penalties: [5.0]
+threshold_values: []
+wind_thresholds: []
+episodes: 3000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+locations:
+- {latitude: 30.0, longitude: -90.0, data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min.pkl}
+wind_chain: {enabled: false, n_bins: 4}
+historical_weather: {enabled: true, block_length_days: 7}

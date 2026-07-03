@@ -375,6 +375,7 @@ def fit_wind_transition_chain(
     vals = w.values
 
     # Bin edges (equal-occupancy interior cutpoints) -> [0, q1, ..., q_{n-1}, inf]
+    quantile_derived = bin_edges is None
     if bin_edges is None:
         qs = np.linspace(0.0, 1.0, n_bins + 1)[1:-1]
         interior = np.quantile(vals[~np.isnan(vals)], qs)
@@ -406,6 +407,7 @@ def fit_wind_transition_chain(
     return {
         "n_bins": int(n_bins),
         "bin_edges": bin_edges,
+        "quantile_derived": quantile_derived,
         "conditioning": conditioning,
         "transition_by_month_hour": transition,
     }

@@ -1,0 +1,254 @@
+{
+  "generated": "2026-07-03T02:30:27",
+  "smoke": true,
+  "full_date_grid": false,
+  "thresholds": true,
+  "threshold_values": [
+    0.1,
+    0.25
+  ],
+  "wind_thresholds": [
+    6.0,
+    12.0
+  ],
+  "wind_bins": {
+    "mode": "quantile",
+    "n_bins": 4
+  },
+  "block_length_days": 7,
+  "episodes": 200,
+  "full_history_episodes": 8,
+  "baseline": {
+    "location_id": "lat30.0_lon-90.0",
+    "capacity": 300.0,
+    "start": "2020-07-01T00:00:00",
+    "horizon": 300
+  },
+  "cells": [
+    {
+      "sweep": "capgrid",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "iid",
+      "world": "hist",
+      "config_basename": "smoke_cvi_capgrid_lat30.0_lon-90.0_iid_hist",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_capgrid_lat30.0_lon-90.0_iid_hist.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        250.0,
+        300.0
+      ],
+      "pair_key": "smoke_cvi_capgrid_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "smoke_cvi_capgrid_lat30.0_lon-90.0_iid_WORLD"
+    },
+    {
+      "sweep": "capgrid",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "iid",
+      "world": "native",
+      "config_basename": "smoke_cvi_capgrid_lat30.0_lon-90.0_iid_native",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_capgrid_lat30.0_lon-90.0_iid_native.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        250.0,
+        300.0
+      ],
+      "pair_key": "smoke_cvi_capgrid_lat30.0_lon-90.0_ARM_native",
+      "world_key": "smoke_cvi_capgrid_lat30.0_lon-90.0_iid_WORLD"
+    },
+    {
+      "sweep": "capgrid",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "chain",
+      "world": "hist",
+      "config_basename": "smoke_cvi_capgrid_lat30.0_lon-90.0_chain_hist",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_capgrid_lat30.0_lon-90.0_chain_hist.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        250.0,
+        300.0
+      ],
+      "pair_key": "smoke_cvi_capgrid_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "smoke_cvi_capgrid_lat30.0_lon-90.0_chain_WORLD"
+    },
+    {
+      "sweep": "capgrid",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "chain",
+      "world": "native",
+      "config_basename": "smoke_cvi_capgrid_lat30.0_lon-90.0_chain_native",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_capgrid_lat30.0_lon-90.0_chain_native.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        250.0,
+        300.0
+      ],
+      "pair_key": "smoke_cvi_capgrid_lat30.0_lon-90.0_ARM_native",
+      "world_key": "smoke_cvi_capgrid_lat30.0_lon-90.0_chain_WORLD"
+    },
+    {
+      "sweep": "capgrid",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "thresh",
+      "world": "hist",
+      "config_basename": "smoke_cvi_capgrid_lat30.0_lon-90.0_thresh_hist",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_capgrid_lat30.0_lon-90.0_thresh_hist.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        250.0,
+        300.0
+      ],
+      "pair_key": "smoke_cvi_capgrid_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "smoke_cvi_capgrid_lat30.0_lon-90.0_thresh_WORLD"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "iid",
+      "world": "hist",
+      "config_basename": "smoke_cvi_startdate_lat30.0_lon-90.0_iid_hist",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_startdate_lat30.0_lon-90.0_iid_hist.yaml",
+      "swept_field": "start_datetimes",
+      "swept_values": [
+        "2020-05-01T00:00:00",
+        "2020-07-01T00:00:00"
+      ],
+      "pair_key": "smoke_cvi_startdate_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "smoke_cvi_startdate_lat30.0_lon-90.0_iid_WORLD"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "iid",
+      "world": "native",
+      "config_basename": "smoke_cvi_startdate_lat30.0_lon-90.0_iid_native",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_startdate_lat30.0_lon-90.0_iid_native.yaml",
+      "swept_field": "start_datetimes",
+      "swept_values": [
+        "2020-05-01T00:00:00",
+        "2020-07-01T00:00:00"
+      ],
+      "pair_key": "smoke_cvi_startdate_lat30.0_lon-90.0_ARM_native",
+      "world_key": "smoke_cvi_startdate_lat30.0_lon-90.0_iid_WORLD"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "chain",
+      "world": "hist",
+      "config_basename": "smoke_cvi_startdate_lat30.0_lon-90.0_chain_hist",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_startdate_lat30.0_lon-90.0_chain_hist.yaml",
+      "swept_field": "start_datetimes",
+      "swept_values": [
+        "2020-05-01T00:00:00",
+        "2020-07-01T00:00:00"
+      ],
+      "pair_key": "smoke_cvi_startdate_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "smoke_cvi_startdate_lat30.0_lon-90.0_chain_WORLD"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "chain",
+      "world": "native",
+      "config_basename": "smoke_cvi_startdate_lat30.0_lon-90.0_chain_native",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_startdate_lat30.0_lon-90.0_chain_native.yaml",
+      "swept_field": "start_datetimes",
+      "swept_values": [
+        "2020-05-01T00:00:00",
+        "2020-07-01T00:00:00"
+      ],
+      "pair_key": "smoke_cvi_startdate_lat30.0_lon-90.0_ARM_native",
+      "world_key": "smoke_cvi_startdate_lat30.0_lon-90.0_chain_WORLD"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "thresh",
+      "world": "hist",
+      "config_basename": "smoke_cvi_startdate_lat30.0_lon-90.0_thresh_hist",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_startdate_lat30.0_lon-90.0_thresh_hist.yaml",
+      "swept_field": "start_datetimes",
+      "swept_values": [
+        "2020-05-01T00:00:00",
+        "2020-07-01T00:00:00"
+      ],
+      "pair_key": "smoke_cvi_startdate_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "smoke_cvi_startdate_lat30.0_lon-90.0_thresh_WORLD"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "iid",
+      "world": "hist",
+      "config_basename": "smoke_cvi_duration_lat30.0_lon-90.0_iid_hist",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_duration_lat30.0_lon-90.0_iid_hist.yaml",
+      "swept_field": "horizons",
+      "swept_values": [
+        192,
+        300
+      ],
+      "pair_key": "smoke_cvi_duration_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "smoke_cvi_duration_lat30.0_lon-90.0_iid_WORLD"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "iid",
+      "world": "native",
+      "config_basename": "smoke_cvi_duration_lat30.0_lon-90.0_iid_native",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_duration_lat30.0_lon-90.0_iid_native.yaml",
+      "swept_field": "horizons",
+      "swept_values": [
+        192,
+        300
+      ],
+      "pair_key": "smoke_cvi_duration_lat30.0_lon-90.0_ARM_native",
+      "world_key": "smoke_cvi_duration_lat30.0_lon-90.0_iid_WORLD"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "chain",
+      "world": "hist",
+      "config_basename": "smoke_cvi_duration_lat30.0_lon-90.0_chain_hist",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_duration_lat30.0_lon-90.0_chain_hist.yaml",
+      "swept_field": "horizons",
+      "swept_values": [
+        192,
+        300
+      ],
+      "pair_key": "smoke_cvi_duration_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "smoke_cvi_duration_lat30.0_lon-90.0_chain_WORLD"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "chain",
+      "world": "native",
+      "config_basename": "smoke_cvi_duration_lat30.0_lon-90.0_chain_native",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_duration_lat30.0_lon-90.0_chain_native.yaml",
+      "swept_field": "horizons",
+      "swept_values": [
+        192,
+        300
+      ],
+      "pair_key": "smoke_cvi_duration_lat30.0_lon-90.0_ARM_native",
+      "world_key": "smoke_cvi_duration_lat30.0_lon-90.0_chain_WORLD"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "thresh",
+      "world": "hist",
+      "config_basename": "smoke_cvi_duration_lat30.0_lon-90.0_thresh_hist",
+      "config_path": "configs/chain_vs_iid_sweep_smoke/smoke_cvi_duration_lat30.0_lon-90.0_thresh_hist.yaml",
+      "swept_field": "horizons",
+      "swept_values": [
+        192,
+        300
+      ],
+      "pair_key": "smoke_cvi_duration_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "smoke_cvi_duration_lat30.0_lon-90.0_thresh_WORLD"
+    }
+  ]
+}

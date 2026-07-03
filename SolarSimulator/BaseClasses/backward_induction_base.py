@@ -215,9 +215,15 @@ class mdpAnalyticalBackwardSolver:
         self.states = self.mdp._get_states()
         self._GAMMA = 1.0
 
-        # ─── Wind Markov-chain dimension (n_bins==1 => original i.i.d. behavior) ───
+        # ─── Exogenous-chain dimensions (n_bins==1 => original i.i.d. behavior) ───
+        # The DP's exogenous state is the JOINT regime index z = b * n_g + g over the
+        # wind bin b and solar bin g; either chain alone (or both off) is a special
+        # case, so the value-table shape and every lookup key off self.n_bins only.
         env = self.mdp.env_provider
-        self.n_bins: int = int(getattr(env, "n_wind_bins", 1))
+        self.n_wind_bins: int = int(getattr(env, "n_wind_bins", 1))
+        self.n_solar_bins: int = int(getattr(env, "n_solar_bins", 1))
+        self.n_bins: int = self.n_wind_bins * self.n_solar_bins
+        self.solar_valid = getattr(env, "solar_valid", None)
         self.wind_bin_edges: np.ndarray = np.asarray(
             getattr(env, "wind_bin_edges", np.array([0.0, np.inf])), dtype=float
         )
@@ -393,8 +399,26 @@ class mdpAnalyticalBackwardSolver:
             alpha_k, beta_k, p_fail, V_next,
         )
 
+    def _solar_cdf(self, t: int, g, u):
+        """Stage-t clear-sky-index CDF, conditioned on solar quantile bin g.
+
+        Solar bins are the stage Beta's own quantile bands (bin g = [g/n, (g+1)/n) in
+        CDF space, mass exactly 1/n), so the truncated, renormalized CDF needs no bin
+        edges at all:  F(u | g) = clip(n * I_u(alpha, beta) - g, 0, 1).
+        With n_solar_bins == 1, or at stages where the index is undefined (night /
+        twilight below the artifact's clear-sky gate), this is exactly the
+        unconditional regularized Beta CDF the published model uses.
+        """
+        env = self.mdp.env_provider
+        F = betainc(env.get_solar_alpha(t), env.get_solar_beta(t), u)
+        if self.n_solar_bins == 1 or g is None:
+            return F
+        if self.solar_valid is not None and not self.solar_valid[t]:
+            return F
+        return np.clip(self.n_solar_bins * F - g, 0.0, 1.0)
+
     def _compute_survival_contribution_batch(
-        self, Ck, Ek, G_max, alpha, beta, p_fail, V_next,
+        self, Ck, Ek, G_max, alpha, beta, p_fail, V_next, t=None, sol_bin=None,
     ) -> np.ndarray:
         """Batched survival contribution.
 
@@ -408,7 +432,12 @@ class mdpAnalyticalBackwardSolver:
         shift = (Ek - Ck)[:, None]                       # (n, 1)
         u_lower = np.clip((self._e_lower[None, :] + shift) / G_max, 0.0, 1.0)  # (n, n_soc)
         u_upper = np.clip((self._e_upper[None, :] + shift) / G_max, 0.0, 1.0)  # (n, n_soc)
-        deltaP = betainc(alpha, beta, u_upper) - betainc(alpha, beta, u_lower)
+        if sol_bin is None:
+            deltaP = betainc(alpha, beta, u_upper) - betainc(alpha, beta, u_lower)
+        else:
+            # Solar chain: energy-bin masses under the stage Beta conditioned on the
+            # current solar quantile bin (truncated, renormalized CDF differences).
+            deltaP = self._solar_cdf(t, sol_bin, u_upper) - self._solar_cdf(t, sol_bin, u_lower)
         survival_mass = (1.0 - p_fail)[:, None] * deltaP  # (n, n_soc)
         return survival_mass @ V_next                     # (n,)
 
@@ -416,7 +445,15 @@ class mdpAnalyticalBackwardSolver:
     # Wind Markov-chain (n_bins > 1) machinery
     # ──────────────────────────────────────────────────────────────────────────
     def _get_wind_grid_bin(self, t: int, b: int, grid_size: int = 100):
-        """Stage-t Weibull grid + pdf truncated and renormalized to wind bin b."""
+        """Stage-t Weibull grid + pdf truncated and renormalized to wind bin b.
+
+        When the stage Weibull puts essentially no mass in the bin (e.g. the top bin in a
+        calm season), renormalizing by the analytic mass amplifies quadrature error without
+        bound, and for the open top bin ppf(0.9999999) can fall below the bin's lower edge,
+        making the grid decrease and np.trapz negative -- which drives the backward
+        induction to diverge. Guard both: normalize by the grid's own quadrature mass, and
+        collapse degenerate bins to a point mass at the bin's lower edge.
+        """
         key = (t, b)
         hit = self._wind_bin_cache.get(key)
         if hit is not None:
@@ -426,11 +463,17 @@ class mdpAnalyticalBackwardSolver:
         lo = self.wind_bin_edges[b]
         hi = self.wind_bin_edges[b + 1]
         hi_eff = wd.ppf(0.9999999) if np.isinf(hi) else hi
-        F_lo = wd.cdf(lo)
-        F_hi = 1.0 if np.isinf(hi) else wd.cdf(hi)
-        w = np.linspace(lo, hi_eff, grid_size)
-        mass = F_hi - F_lo
-        pdf = wd.pdf(w) / mass if mass > 0 else wd.pdf(w)
+        pdf = None
+        if np.isfinite(hi_eff) and hi_eff > lo:
+            w = np.linspace(lo, hi_eff, grid_size)
+            raw = wd.pdf(w)
+            norm = np.trapz(raw, w)
+            if np.isfinite(norm) and norm > 1e-12:
+                pdf = raw / norm
+        if pdf is None:
+            eps = max(1e-3, 1e-3 * lo)
+            w = np.array([lo, lo + eps])
+            pdf = np.array([1.0, 1.0]) / eps
         self._wind_bin_cache[key] = (w, pdf)
         return w, pdf
 
@@ -446,8 +489,9 @@ class mdpAnalyticalBackwardSolver:
         succ = tl.transition_model.compute_probability(w_mat, action_mat, state_mat).reshape(gs, n)
         return np.trapz((1.0 - succ) * pdf[:, None], w, axis=0)
 
-    def _compute_failure_probability_bin(self, states, actions, t, b):
-        """Failure prob with the mechanical (wind) part conditioned on wind bin b."""
+    def _compute_failure_probability_bin(self, states, actions, t, b, g=None):
+        """Failure prob conditioned on the current regime: mechanical (wind) part on
+        wind bin b, energy (solar) part on solar quantile bin g."""
         tl = self.mdp.transition_logic
         env = self.mdp.env_provider
         C_joules = tl.soc_to_energy(states[:, 0])
@@ -455,21 +499,27 @@ class mdpAnalyticalBackwardSolver:
         deficits = required - C_joules
         G_MAX = np.max((env.get_solar_cs_joules(t), 10))
         u = np.clip(deficits / G_MAX, 0.0, 1.0)
-        p_B = betainc(env.get_solar_alpha(t), env.get_solar_beta(t), u)
+        p_B = self._solar_cdf(t, g, u)
         p_M = self._mechanical_failure_probability_bin(states, actions, t, b)
         return p_B + (1.0 - p_B) * p_M
 
     def _vnext_eff(self, stage: int, a_scalar: int, P_row: np.ndarray) -> np.ndarray:
-        """Effective next-stage value over SoC for action a from current bin: Σ_b' P[b,b'] V[b',·]."""
+        """Effective next-stage value over SoC for action a from current regime z:
+        Σ_z' P[z,z'] V[z',·] (z is the joint wind-solar index; wind-only when solar off)."""
         block = slice(a_scalar * self.n_soc_levels, (a_scalar + 1) * self.n_soc_levels)
         V_next = self.future_value_table[:, block, stage + 1]   # (n_bins, n_soc)
         return P_row @ V_next                                   # (n_soc,)
 
-    def _value_batch_bin(self, states, a_scalar, t, b, P_row, last_stage=False):
-        """Vectorized state-action values for all states, action a, current wind bin b."""
+    def _value_batch_bin(self, states, a_scalar, t, z, P_row, last_stage=False):
+        """Vectorized state-action values for all states, action a, current regime z.
+
+        z is the joint exogenous index; the wind bin is z // n_solar_bins and the
+        solar bin z % n_solar_bins (identity components when a chain is off).
+        """
         n = states.shape[0]
         actions = np.full(n, a_scalar, dtype=int)
-        p_fail = self._compute_failure_probability_bin(states, actions, t, b)
+        b, g = divmod(int(z), self.n_solar_bins)
+        p_fail = self._compute_failure_probability_bin(states, actions, t, b, g)
         reward = self.expected_reward(actions, self.mdp.get_obs(t), self.mdp.failure_penalty, p_fail)
         if last_stage:
             return reward
@@ -478,7 +528,9 @@ class mdpAnalyticalBackwardSolver:
         alpha_k, beta_k = self.get_beta_params(t)
         G = self.mdp.env_provider.get_solar_cs_joules(t)
         V_next_eff = self._vnext_eff(t, a_scalar, P_row)
-        future = self._compute_survival_contribution_batch(Ck, Ek, G, alpha_k, beta_k, p_fail, V_next_eff)
+        future = self._compute_survival_contribution_batch(
+            Ck, Ek, G, alpha_k, beta_k, p_fail, V_next_eff,
+            t=t, sol_bin=(g if self.n_solar_bins > 1 else None))
         return reward + self._GAMMA * future
 
     def solve(self) -> None:
@@ -504,13 +556,14 @@ class mdpAnalyticalBackwardSolver:
     def _solve_chain(self) -> None:
         non_broken = self.states[:-1]
         env = self.mdp.env_provider
+        get_P = getattr(env, "get_exo_transition", env.get_wind_transition)
         for t in tqdm(range(self.horizon - 1, -1, -1)):
             last = (t == self.horizon - 1)
-            P = env.get_wind_transition(t)            # (n_bins, n_bins)
-            for b in range(self.n_bins):
-                v0 = self._value_batch_bin(non_broken, 0, t, b, P[b], last)
-                v1 = self._value_batch_bin(non_broken, 1, t, b, P[b], last)
-                self.future_value_table[b, :-1, t] = np.maximum(v0, v1)
+            P = get_P(t)                              # (n_bins, n_bins), joint regime z
+            for z in range(self.n_bins):
+                v0 = self._value_batch_bin(non_broken, 0, t, z, P[z], last)
+                v1 = self._value_batch_bin(non_broken, 1, t, z, P[z], last)
+                self.future_value_table[z, :-1, t] = np.maximum(v0, v1)
 
     def lookup_future_values(self, states: np.ndarray, stages: np.ndarray) -> np.ndarray:
         is_broken_state = (self.states[:, 1] == 2) & (self.states[:, 0] == -1.0)

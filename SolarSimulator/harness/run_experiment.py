@@ -39,7 +39,9 @@ if PKG_DIR not in sys.path:
 
 from BaseClasses.run_sim import YAMLSimulationRunner          # noqa: E402
 from BaseClasses.simulation_run_manager import SimulationRunManager  # noqa: E402
-from BaseClasses.run_sim import _derive_chain_path, _derive_histcube_path  # noqa: E402
+from BaseClasses.run_sim import (  # noqa: E402
+    _derive_chain_path, _derive_histcube_path, _derive_solar_chain_path,
+)
 from harness import HARNESS_VERSION                            # noqa: E402
 from harness.summarize import write_summary_csv                # noqa: E402
 from harness.figures import plot_sweep_summary, plot_trajectory_replay, render_paper_figure  # noqa: E402
@@ -110,6 +112,7 @@ def _ensure_location_data(config: dict, location: dict) -> None:
     """
     from Scripts.create_weather_distributions import (  # noqa: E402
         build_wind_chain_artifact,
+        build_solar_chain_artifact,
         build_historical_cube_artifact,
     )
 
@@ -119,6 +122,7 @@ def _ensure_location_data(config: dict, location: dict) -> None:
     interval_min = int(config.get("delta_t", 15))
 
     wc_cfg = config.get("wind_chain") or {}
+    sc_cfg = config.get("solar_chain") or {}
     hw_cfg = config.get("historical_weather") or {}
 
     import numpy as np    # noqa: E402
@@ -126,6 +130,7 @@ def _ensure_location_data(config: dict, location: dict) -> None:
 
     missing_base = not os.path.exists(data_path)
     chain_path = wc_cfg.get("path") or _derive_chain_path(data_path)
+    solar_chain_path = sc_cfg.get("path") or _derive_solar_chain_path(data_path)
     cube_path = hw_cfg.get("path") or _derive_histcube_path(data_path)
 
     # Chain: missing file OR the configured binning has changed since last build.
@@ -152,9 +157,24 @@ def _ensure_location_data(config: dict, location: dict) -> None:
                 print(f"[provision] wind_chain {reason} - rebuilding {chain_path}")
                 missing_chain = True
 
+    # Solar chain: missing file OR a different bin count requested (stage-quantile
+    # bins have no edge array; n_bins is the only binning knob).
+    missing_solar_chain = False
+    if sc_cfg.get("enabled", False):
+        explicit_path = bool(sc_cfg.get("path"))
+        if not os.path.exists(solar_chain_path):
+            missing_solar_chain = True
+        elif not explicit_path:
+            existing = pd.read_pickle(solar_chain_path)
+            n_bins = int(sc_cfg.get("n_bins", 3))
+            if int(existing["n_bins"]) != n_bins:
+                print(f"[provision] solar_chain n_bins={n_bins} requested - "
+                      f"rebuilding {solar_chain_path}")
+                missing_solar_chain = True
+
     missing_cube = hw_cfg.get("enabled", False) and not os.path.exists(cube_path)
 
-    if not missing_base and not missing_chain and not missing_cube:
+    if not missing_base and not missing_chain and not missing_solar_chain and not missing_cube:
         return
 
     if lat is None or lon is None:
@@ -184,6 +204,16 @@ def _ensure_location_data(config: dict, location: dict) -> None:
             interval_minutes=interval_min,
             n_bins=n_bins,
             bin_edges=configured_edges,
+        )
+
+    if missing_solar_chain:
+        os.makedirs(os.path.dirname(solar_chain_path), exist_ok=True)
+        print(f"[provision] Building solar-chain artifact -> {solar_chain_path}")
+        build_solar_chain_artifact(
+            hist_pkl, solar_chain_path,
+            latitude=lat, longitude=lon,
+            interval_minutes=interval_min,
+            n_bins=int(sc_cfg.get("n_bins", 3)),
         )
 
     if missing_cube:
@@ -234,6 +264,9 @@ def _resolve_paths_in_place(config: dict) -> None:
     wc = config.get("wind_chain")
     if isinstance(wc, dict) and wc.get("path"):
         wc["path"] = _abspath(wc["path"])
+    sc = config.get("solar_chain")
+    if isinstance(sc, dict) and sc.get("path"):
+        sc["path"] = _abspath(sc["path"])
     hw = config.get("historical_weather")
     if isinstance(hw, dict) and hw.get("path"):
         hw["path"] = _abspath(hw["path"])

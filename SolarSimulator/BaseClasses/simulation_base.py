@@ -340,10 +340,12 @@ class AbstractContinuousEnergySimulation(ABC):
             wind  = self.env_provider.sample_wind_speed(t, n)[active_idx]
             whale = self.env_provider.sample_whale_observation(t, n)[active_idx]
 
-            # Current wind bin per active lane (only when the Markov chain is active).
+            # Current exogenous-regime bin per active lane (joint wind-solar index;
+            # only when a Markov chain is active).
             cur_bins = None
-            if getattr(self.env_provider, "use_wind_chain", False):
-                cur_bins = self.env_provider.last_wind_bins[active_idx]
+            if getattr(self.env_provider, "use_exo_chain",
+                       getattr(self.env_provider, "use_wind_chain", False)):
+                cur_bins = self.env_provider.last_exo_bins[active_idx]
 
             s = state[active_idx]
             e = energy[active_idx]
@@ -538,8 +540,9 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
 
         This mirrors ``choose_action`` but evaluates all n episodes at once and uses
         the solver's O(n) ``value_function_batch`` instead of the per-call state scan.
-        When the wind Markov chain is active, the future value is taken over the next
-        wind bin via the stage transition matrix conditioned on ``cur_bins``.
+        When a weather Markov chain is active, the future value is taken over the next
+        exogenous regime (joint wind-solar bin index) via the stage transition matrix
+        conditioned on ``cur_bins``.
         """
         n = state.shape[0]
         current_energy = self.mdp.transition_logic.soc_to_energy(state[:, 0])   # (n,)
@@ -547,7 +550,12 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
         values = np.empty((n, 2))
 
         # Stage transition matrix for the chain (None -> i.i.d. lookup).
-        P = self.env_provider.get_wind_transition(t) if cur_bins is not None else None
+        if cur_bins is not None:
+            get_P = getattr(self.env_provider, "get_exo_transition",
+                            self.env_provider.get_wind_transition)
+            P = get_P(t)
+        else:
+            P = None
 
         for action in (0, 1):
             actions_arr = np.full(n, action, dtype=int)

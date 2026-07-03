@@ -19,21 +19,24 @@ def generate_reward_analysis(file_path, output_dir="analysis_plots"):
         
         for sim_name in sim_keys:
             sim_grp = f[sim_name]
-            if "episodes" not in sim_grp:
-                continue
-            
+
             rewards = []
-            eps_grp = sim_grp["episodes"]
-            # Sort episodes numerically: "episode 1", "episode 2", etc.
-            ep_keys = sorted(eps_grp.keys(), key=lambda x: int(x.split()[-1]) if x.split()[-1].isdigit() else x)
-            
-            for ep_key in ep_keys:
-                ep_grp = eps_grp[ep_key]
-                # Target the scalar dataset format from SimulationStorageHDF5
-                if "total_reward" in ep_grp:
-                    rewards.append(float(ep_grp["total_reward"][()]))
-                elif "total_reward" in ep_grp.attrs:
-                    rewards.append(float(ep_grp.attrs["total_reward"]))
+            # Columnar layout: one (episodes,) dataset per scalar field
+            sc = sim_grp.get("episode_scalars")
+            if sc is not None and "total_reward" in sc:
+                rewards = [float(r) for r in sc["total_reward"][()]]
+            elif "episodes" in sim_grp:
+                # Legacy layout: one group of scalar datasets per episode
+                eps_grp = sim_grp["episodes"]
+                # Sort episodes numerically: "episode 1", "episode 2", etc.
+                ep_keys = sorted(eps_grp.keys(), key=lambda x: int(x.split()[-1]) if x.split()[-1].isdigit() else x)
+
+                for ep_key in ep_keys:
+                    ep_grp = eps_grp[ep_key]
+                    if "total_reward" in ep_grp:
+                        rewards.append(float(ep_grp["total_reward"][()]))
+                    elif "total_reward" in ep_grp.attrs:
+                        rewards.append(float(ep_grp.attrs["total_reward"]))
             
             if rewards:
                 # Create a figure with two subplots side-by-side

@@ -73,18 +73,34 @@ def load_episode_scalars(h5_path: str) -> pd.DataFrame:
             if not (is_optimal or is_threshold):
                 continue
 
+            base = {
+                "horizon": horizon,
+                "sim_type": sim_type,
+                "observation_threshold": float(obs_t) if obs_t is not None else np.nan,
+                "wind_threshold": float(wind_t) if wind_t is not None else np.nan,
+            }
+
+            # Columnar layout: one (episodes,) dataset per scalar field
+            sc = grp.get("episode_scalars")
+            if sc is not None and "total_reward" in sc:
+                cols = {k: np.asarray(sc[k][()])
+                        for k in ("total_reward", "flight_hrs", "failure", "failure_step")
+                        if k in sc}
+                for i in range(len(sc["total_reward"])):
+                    rec = dict(base)
+                    for k, v in cols.items():
+                        rec[k] = bool(v[i]) if k == "failure" else float(v[i])
+                    records.append(rec)
+                continue
+
+            # Legacy layout: one group of scalar datasets per episode
             eps = grp.get("episodes")
             if eps is None:
                 continue
 
             for ep_key in eps.keys():
                 ep = eps[ep_key]
-                rec = {
-                    "horizon": horizon,
-                    "sim_type": sim_type,
-                    "observation_threshold": float(obs_t) if obs_t is not None else np.nan,
-                    "wind_threshold": float(wind_t) if wind_t is not None else np.nan,
-                }
+                rec = dict(base)
                 if "total_reward" in ep:
                     rec["total_reward"] = float(ep["total_reward"][()])
                 if "flight_hrs" in ep:

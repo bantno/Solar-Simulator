@@ -112,10 +112,28 @@ def read_all_episode_scalars(run_dir):
         h5s = glob.glob(os.path.join(run_dir, "*.h5"))
         if not h5s:
             raise FileNotFoundError(f"no HDF5 in {run_dir}")
+        frames = []
         rows = []
         with h5py.File(h5s[0], "r") as f:
             for gname in f.keys():
-                eps = f[gname].get("episodes")
+                grp = f[gname]
+                sc = grp.get("episode_scalars")
+                if sc is not None and "total_reward" in sc:
+                    # Columnar layout: one 1-D dataset per scalar field.
+                    n = len(sc["total_reward"])
+                    idx = (np.asarray(sc["episode_index"][()], dtype=int)
+                           if "episode_index" in sc else np.arange(n))
+                    frames.append(pd.DataFrame({
+                        "group": gname,
+                        "episode_index": idx,
+                        "total_reward": np.asarray(sc["total_reward"][()], dtype=float),
+                        "failure": np.asarray(sc["failure"][()]).astype(int),
+                        "failure_step": np.asarray(sc["failure_step"][()], dtype=float),
+                        "flight_hrs": np.asarray(sc["flight_hrs"][()], dtype=float),
+                    }))
+                    continue
+                # Legacy layout: one group of scalar datasets per episode.
+                eps = grp.get("episodes")
                 if eps is None:
                     continue
                 for ename, ep in eps.items():
@@ -128,7 +146,11 @@ def read_all_episode_scalars(run_dir):
                         "failure_step": float(ep["failure_step"][()]),
                         "flight_hrs": float(ep["flight_hrs"][()]),
                     })
-        df = pd.DataFrame(rows)
+        if rows:
+            frames.append(pd.DataFrame(rows))
+        df = (pd.concat(frames, ignore_index=True) if frames
+              else pd.DataFrame(columns=["group", "episode_index", "total_reward",
+                                         "failure", "failure_step", "flight_hrs"]))
         df.to_csv(cache, index=False)
     _SCALARS_CACHE[run_dir] = df
     return df

@@ -41,6 +41,16 @@ path is a directory of configs).
 Re-running the same config creates a **new timestamped sub-run**; prior runs are never clobbered.
 `<storage_dir>` defaults to `config['storage_dir']` or `<repo>/results`.
 
+**HDF5 layout:** each simulation is one top-level group. Per-episode scalars
+(`total_reward`, `failure`, `failure_step`, `flight_hrs`, `failure_type`, `episode_index`)
+are stored as one 1-D `(episodes,)` dataset per field under `<group>/episode_scalars/`;
+`<group>/episodes/episode <i>` groups exist only for full-history episodes and hold their
+array series (`wind_series`, `trajectory`, ...). Older files stored every episode as its own
+group of scalar datasets, which cost ~0.5 KB of HDF5 metadata per object (a scalars-only
+210-sim x 3000-episode run was ~1.6 GB for ~40 MB of content); all readers
+(`compare_chain_sweep.read_all_episode_scalars`, the GUI, and the `Figures/Scripts` loaders)
+still fall back to that legacy layout.
+
 ## Config schema
 
 The harness keeps the existing YAML schema. Any value given as a **list is a swept dimension**;
@@ -86,8 +96,9 @@ emits one arm-agnostic hist-world config per sweep scenario running the full
 observation-threshold × wind-threshold grid (no value-function solve; the bootstrap weather is
 identical to both optimal arms episode-for-episode, so three-way paired comparisons hold).
 These configs store scalars only (`full_history_episodes: 0`); after each one the runner
-compacts the HDF5 into the `_episode_scalars.csv` analysis cache (a 210-sim × 3000-episode
-config is ~1.7 GB raw vs ~40 MB compacted; disable with `--keep-h5`). The comparison script
+writes the `_episode_scalars.csv` analysis cache (`--keep-h5` skips this). With the columnar
+`episode_scalars` layout the HDF5 stays small and is kept; legacy group-per-episode files
+(~1.7 GB for a 210-sim × 3000-episode config) are deleted once cached. The comparison script
 selects the per-cell best combo by mean reward (with a split-half selection-bias check and a
 min-failure envelope) and reports optimal-vs-threshold paired deltas; figures 1, 3, and 8 show
 the threshold benchmark in green.

@@ -1,5 +1,4 @@
-"""
-wind_persistence_precheck.py -- does the wind have memory beyond a first-order chain?
+"""wind_persistence_precheck.py -- does the wind have memory beyond a first-order chain?
 
 A diagnostic run BEFORE building any higher-order / history-augmented model. It answers
 two separate questions about the historical wind series:
@@ -22,6 +21,20 @@ two separate questions about the historical wind series:
         - (month,hour)-stratified I(Next ; Prev | Curr, month, hour)   <-- the fair test
      The stratified version removes the diurnal/seasonal persistence the chain models, so
      any remaining mutual information is *genuine higher-order memory* the chain cannot see.
+
+     CAVEAT -- plug-in bias. The stratified estimate fits a separate second-order table inside
+     up to 288 (month, hour) strata, and plug-in MI is *positively* biased, with bias that
+     grows with the number of strata and the per-stratum degrees of freedom. Left uncorrected
+     it can read ~3x the pooled value and falsely push the verdict from "negligible" into
+     "marginal gain." We therefore subtract an empirical bias floor estimated by a permutation
+     null: within each (curr, month, hour) stratum we shuffle the Prev labels, which destroys
+     any real Prev->Next information while preserving the Curr->Next structure and all marginal
+     counts, then recompute the stratified CMI. The mean shuffled CMI is the bias floor; the
+     reported quantity is observed - bias_floor. The permutation null is preferred over an
+     analytic Miller-Madow correction here because the wind transition matrix is near-tridiagonal,
+     so many of the nominal degrees of freedom correspond to structurally empty cells; the
+     permutation reproduces that emptiness exactly, whereas Miller-Madow would over-correct by
+     counting all (n_bins-1)^2 cells per stratum as occupied.
 
 Binning mirrors Scripts/create_weather_distributions.fit_wind_transition_chain exactly:
 quantile (equal-occupancy) bins via --n-bins, or explicit interior cutpoints via --bin-edges.
@@ -102,8 +115,7 @@ def make_bins(vals: np.ndarray, n_bins: int, bin_edges):
 
 
 def consecutive_triples(bins: np.ndarray, idx: pd.DatetimeIndex, step_min: int, n_bins: int):
-    """
-    Return (prev, curr, nxt, month, hour) for every position where the three consecutive
+    """Return (prev, curr, nxt, month, hour) for every position where the three consecutive
     samples (i-1, i, i+1) are each exactly `step_min` apart and all bins are valid.
     month/hour are taken at the *current* step i (the source of the curr->next transition,
     matching how the chain keys its transition matrix).
@@ -125,8 +137,7 @@ def consecutive_triples(bins: np.ndarray, idx: pd.DatetimeIndex, step_min: int, 
 
 
 def cmi_first_vs_second(prev, curr, nxt, n_bins):
-    """
-    Conditional mutual information I(Next ; Prev | Curr) and the G^2 likelihood-ratio
+    """Conditional mutual information I(Next ; Prev | Curr) and the G^2 likelihood-ratio
     statistic for first- vs second-order Markov, from triple counts.
 
     Returns dict with: mi_bits, g2, dof, n, h_next_given_curr_bits, h_next_given_both_bits.
@@ -180,8 +191,7 @@ def cmi_first_vs_second(prev, curr, nxt, n_bins):
 
 
 def cmi_stratified(prev, curr, nxt, month, hour, n_bins):
-    """
-    (month, hour)-stratified I(Next ; Prev | Curr, month, hour): sum the per-stratum G^2 and
+    """(month, hour)-stratified I(Next ; Prev | Curr, month, hour): sum the per-stratum G^2 and
     MI. This is the FAIR test against the chain, which already conditions on (month, hour).
     """
     g2 = 0.0
@@ -201,6 +211,70 @@ def cmi_stratified(prev, curr, nxt, month, hour, n_bins):
         n_strata += 1
     mi_bits = mi_bits_weighted / N_total if N_total else 0.0
     return dict(mi_bits=mi_bits, g2=g2, dof=dof, n=N_total, n_strata=n_strata)
+
+
+def _stratified_mi_bits(prev, curr, nxt, skey, n_strata, n_bins, n_total):
+    """Fully-vectorized (month,hour)-stratified I(Next ; Prev | Curr, m, h) in bits.
+
+    Numerically identical to summing cmi_stratified's per-stratum weighted MI, but built from
+    a single (n_strata, n_bins, n_bins, n_bins) count tensor so it is fast enough to call once
+    per permutation. `skey` is the per-row (month*24 + hour) stratum index in [0, n_strata).
+    Strata with fewer than n_bins**2 triples are excluded (same sparsity rule as cmi_stratified);
+    n_total is the full triple count (the denominator, including excluded strata).
+    """
+    nb = n_bins
+    flat = ((skey.astype(np.int64) * nb + prev) * nb + curr) * nb + nxt
+    c4 = np.bincount(flat, minlength=n_strata * nb * nb * nb).astype(np.float64)
+    c4 = c4.reshape(n_strata, nb, nb, nb)               # (s, prev, curr, next)
+    stratum_tot = c4.sum(axis=(1, 2, 3))                # (s,)
+    c_pc = c4.sum(axis=3)                               # (s, prev, curr)
+    c_cn = c4.sum(axis=1)                               # (s, curr, next)
+    c_c = c4.sum(axis=(1, 3))                           # (s, curr)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        p_both = c4 / c_pc[:, :, :, None]              # P(next | prev, curr, s)
+        p_curr = c_cn / c_c[:, :, None]               # P(next | curr, s)
+        ratio = p_both / p_curr[:, None, :, :]
+        term = c4 * np.log(ratio)
+    term = np.where(c4 > 0, term, 0.0)                  # cnt==0 -> no contribution
+    per_stratum = term.sum(axis=(1, 2, 3))             # sum cnt*log(ratio)
+    incl = stratum_tot >= (nb * nb)
+    total = float(np.where(incl, per_stratum, 0.0).sum())
+    return total / (LN2 * n_total) if n_total else 0.0
+
+
+def permutation_bias_floor(prev, curr, nxt, month, hour, n_bins, observed_mi,
+                           n_perm=100, seed=None):
+    """Empirical bias floor for the stratified CMI via a permutation null.
+
+    Within each (curr, month, hour) stratum the Prev labels are shuffled, destroying any genuine
+    Prev->Next information while exactly preserving the Curr->Next transition structure and every
+    marginal count. The stratified plug-in CMI recomputed on the shuffled triples then measures
+    only estimator bias. Repeating n_perm times gives the bias floor (mean) and its spread (std).
+
+    The shuffle is vectorized: a single np.lexsort per permutation reorders Prev within every
+    stratum at once (no Python loop over rows). Returns mean/std of the shuffled CMI, the
+    bias-corrected CMI (observed - mean), and an empirical p-value = fraction of shuffles whose
+    CMI meets or exceeds the observed value.
+    """
+    rng = np.random.default_rng(seed)
+    skey = month.astype(np.int64) * 24 + hour.astype(np.int64)
+    n_strata = int(skey.max()) + 1 if skey.size else 1
+    n_total = prev.size
+    gkey = curr.astype(np.int64) * n_strata + skey      # (curr, month, hour) group id
+    base_order = np.argsort(gkey, kind="stable")        # rows grouped by stratum
+    shuffled = np.empty(n_perm, dtype=np.float64)
+    for j in range(n_perm):
+        r = rng.random(n_total)
+        order = np.lexsort((r, gkey))                   # within-group random order
+        prev_perm = np.empty_like(prev)
+        prev_perm[base_order] = prev[order]             # permute Prev within each group only
+        shuffled[j] = _stratified_mi_bits(prev_perm, curr, nxt, skey, n_strata, n_bins, n_total)
+    bias = float(shuffled.mean())
+    std = float(shuffled.std(ddof=1)) if n_perm > 1 else 0.0
+    p_emp = float(np.mean(shuffled >= observed_mi)) if n_perm else float("nan")
+    return dict(bias_floor_bits=bias, shuffle_std_bits=std,
+                mi_strat_corrected_bits=observed_mi - bias,
+                p_emp=p_emp, n_perm=n_perm, shuffled_bits=shuffled)
 
 
 def chi2_sf(stat: float, dof: int) -> float:
@@ -260,11 +334,16 @@ def main():
                          "resolution). NOTE: resampling interpolates and inflates short-lag "
                          "persistence; leave unset for the honest test.")
     ap.add_argument("--out-dir", default=".", help="Directory for the ACF/PACF figure.")
+    ap.add_argument("--n-perm", type=int, default=100,
+                    help="Permutation shuffles for the stratified-CMI bias floor (0 disables).")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="Seed for the permutation null (reproducibility).")
     args = ap.parse_args()
 
     results = analyze(
         args.historical, n_bins=args.n_bins, bin_edges=args.bin_edges,
         dt=args.dt, wind_col=args.wind_col, max_lag_hours=args.max_lag_hours,
+        n_perm=args.n_perm, seed=args.seed,
     )
     print_report(results)
 
@@ -278,9 +357,8 @@ def main():
 
 
 def analyze(historical, n_bins=3, bin_edges=None, dt=None,
-            wind_col="wind_speed_10m", max_lag_hours=72):
-    """
-    Run the full persistence pre-check and return a structured results dict.
+            wind_col="wind_speed_10m", max_lag_hours=72, n_perm=100, seed=None):
+    """Run the full persistence pre-check and return a structured results dict.
 
     Importable single source of truth: the CLI and the visualization/sweep scripts all
     call this so the numbers and the figures can never drift apart.
@@ -313,6 +391,15 @@ def analyze(historical, n_bins=3, bin_edges=None, dt=None,
     pooled = cmi_first_vs_second(prev, curr, nxt, n_bins)
     strat = cmi_stratified(prev, curr, nxt, month, hour, n_bins)
 
+    # Permutation bias floor for the stratified CMI (positively biased plug-in estimator).
+    if n_perm and n_perm > 0:
+        perm = permutation_bias_floor(prev, curr, nxt, month, hour, n_bins,
+                                      strat["mi_bits"], n_perm=n_perm, seed=seed)
+    else:
+        perm = dict(bias_floor_bits=float("nan"), shuffle_std_bits=float("nan"),
+                    mi_strat_corrected_bits=float("nan"), p_emp=float("nan"),
+                    n_perm=0, shuffled_bits=np.array([]))
+
     # Pooled first-order transition matrix P(next|curr) and bin occupancy, for plotting.
     c2 = np.zeros((n_bins, n_bins), dtype=np.float64)
     np.add.at(c2, (curr, nxt), 1.0)
@@ -337,6 +424,13 @@ def analyze(historical, n_bins=3, bin_edges=None, dt=None,
         "mi_strat_bits": strat["mi_bits"],
         "pct_entropy": 100.0 * strat["mi_bits"] / max(h_curr, 1e-9),
         "h_next_given_curr_bits": h_curr,
+        # permutation bias correction (the verdict-driving numbers):
+        "mi_strat_corrected_bits": perm["mi_strat_corrected_bits"],
+        "bias_floor_bits": perm["bias_floor_bits"],
+        "shuffle_std_bits": perm["shuffle_std_bits"],
+        "p_emp": perm["p_emp"],
+        "n_perm": perm["n_perm"],
+        "pct_entropy_corrected": 100.0 * perm["mi_strat_corrected_bits"] / max(h_curr, 1e-9),
     }
 
 
@@ -375,21 +469,31 @@ def print_report(r):
     print("    (this mixes in diurnal/seasonal memory the chain already models)")
     print("\n  -- (month, hour)-stratified  <-- FAIR test vs BI-chain --")
     print(f"    I(Next ; Prev | Curr, m, h)  : {strat['mi_bits']:.4f} bits   "
-          f"({r['pct_entropy']:.1f}% of H(Next|Curr))")
+          f"({r['pct_entropy']:.1f}% of H(Next|Curr))   [raw, plug-in biased]")
     print(f"    G^2 / dof                    : {strat['g2']:.1f} / {strat['dof']}  "
           f"(p={chi2_sf(strat['g2'], strat['dof']):.2e}, {strat['n_strata']} strata)")
+    if r["n_perm"]:
+        print(f"    bias floor (perm null)       : {r['bias_floor_bits']:.4f} "
+              f"+/- {r['shuffle_std_bits']:.4f} bits   ({r['n_perm']} shuffles)")
+        print(f"    bias-corrected CMI           : {r['mi_strat_corrected_bits']:.4f} bits   "
+              f"({r['pct_entropy_corrected']:.1f}% of H(Next|Curr))   <-- drives verdict")
+        print(f"    empirical p (shuffled >= obs): {r['p_emp']:.3f}")
+    else:
+        print("    (permutation bias correction disabled; verdict falls back to raw stratified)")
 
     print("\n=== verdict ===")
-    mi = strat["mi_bits"]
+    use_corrected = bool(r["n_perm"])
+    mi = r["mi_strat_corrected_bits"] if use_corrected else strat["mi_bits"]
+    tag = "bias-corrected" if use_corrected else "raw, UNcorrected"
     if mi < 0.005:
-        print(f"  Genuine higher-order memory is negligible ({mi:.4f} bits beyond the chain).")
+        print(f"  Genuine higher-order memory is negligible ({mi:.4f} bits beyond the chain, {tag}).")
         print("  -> A first-order (month,hour)-conditioned chain is ~sufficient; a history-")
         print("     augmented model is unlikely to beat BI-chain. That is itself a clean result.")
     elif mi < 0.02:
-        print(f"  Small residual higher-order memory ({mi:.4f} bits). A history-augmented model")
-        print("  may yield a marginal gain over BI-chain; weigh against added complexity.")
+        print(f"  Small residual higher-order memory ({mi:.4f} bits, {tag}). A history-augmented")
+        print("  model may yield a marginal gain over BI-chain; weigh against added complexity.")
     else:
-        print(f"  Substantial higher-order memory ({mi:.4f} bits beyond Curr, within month/hour).")
+        print(f"  Substantial higher-order memory ({mi:.4f} bits beyond Curr, within month/hour, {tag}).")
         print("  -> A history-augmented (k-step) state is justified; BI-chain likely leaves")
         print("     persistence structure on the table. Proceed with the richer-state learner.")
     print("\n  NOTE: statistical significance (tiny p) is near-certain with this much data; judge")

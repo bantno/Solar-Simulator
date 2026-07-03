@@ -8,4 +8,6 @@ Figures/archive/
 *.npz
 *.h5
 *.html
-./claude
+.claude
+*.ulg
+.gitignore

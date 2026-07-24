@@ -1,0 +1,23 @@
+experiment_name: mkvsr_natlantic_solar_g2
+description: 'Solar-resolution study: solar-only chain n_bins=2 @ natlantic, full
+  conditions. Paired vs the same-condition iid.'
+battery_capacities: [150.0, 300.0, 600.0]
+horizons: [5760]
+failure_penalties: [5.0, 20.0, 80.0]
+threshold_values: []
+wind_thresholds: []
+episodes: 3000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+locations:
+- {latitude: 45.0, longitude: -45.0, data_path: Data/EXPECTED_DATA/data_expected_lat45.0_lon-45.0_15min.pkl}
+historical_weather: {enabled: true, block_length_days: 7}
+start_datetimes: ['2025-06-10T00:00:00', '2025-12-10T00:00:00']
+wind_chain: {enabled: false}
+solar_chain: {enabled: true, n_bins: 2, path: Data/EXPECTED_DATA/data_expected_lat45.0_lon-45.0_15min_solarchain_g2.pkl}

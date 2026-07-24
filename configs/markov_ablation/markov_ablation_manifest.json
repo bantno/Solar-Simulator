@@ -1,0 +1,219 @@
+{
+  "generated": "2026-07-06T06:15:41",
+  "mode": "full",
+  "arms": [
+    "iid",
+    "wind",
+    "solar",
+    "joint",
+    "thresh"
+  ],
+  "wind_bins": {
+    "mode": "quantile",
+    "n_bins": 5,
+    "artifact_suffix": "_windchain_wind5.pkl"
+  },
+  "solar_bins": 2,
+  "threshold_values": [
+    0.0,
+    0.1,
+    0.2,
+    0.3
+  ],
+  "wind_thresholds": [
+    0.0,
+    4.0,
+    8.0,
+    12.0
+  ],
+  "threshold_penalty": 5.0,
+  "penalties": [
+    5.0,
+    20.0,
+    80.0
+  ],
+  "block_length_days": 7,
+  "baseline_location": "florida",
+  "cells": [
+    {
+      "arm": "iid",
+      "location_id": "florida",
+      "config_basename": "mkv_florida_iid",
+      "config_path": "configs/markov_ablation/mkv_florida_iid.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "wind",
+      "location_id": "florida",
+      "config_basename": "mkv_florida_wind",
+      "config_path": "configs/markov_ablation/mkv_florida_wind.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat27.0_lon-79.5_15min_windchain_wind5.pkl",
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "solar",
+      "location_id": "florida",
+      "config_basename": "mkv_florida_solar",
+      "config_path": "configs/markov_ablation/mkv_florida_solar.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": "Data/EXPECTED_DATA/data_expected_lat27.0_lon-79.5_15min_solarchain_g2.pkl",
+      "solar_bins": 2
+    },
+    {
+      "arm": "joint",
+      "location_id": "florida",
+      "config_basename": "mkv_florida_joint",
+      "config_path": "configs/markov_ablation/mkv_florida_joint.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat27.0_lon-79.5_15min_windchain_wind5.pkl",
+      "solar_chain_path": "Data/EXPECTED_DATA/data_expected_lat27.0_lon-79.5_15min_solarchain_g2.pkl",
+      "solar_bins": 2
+    },
+    {
+      "arm": "thresh",
+      "location_id": "florida",
+      "config_basename": "mkv_florida_thresh",
+      "config_path": "configs/markov_ablation/mkv_florida_thresh.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "iid",
+      "location_id": "hawaii",
+      "config_basename": "mkv_hawaii_iid",
+      "config_path": "configs/markov_ablation/mkv_hawaii_iid.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "wind",
+      "location_id": "hawaii",
+      "config_basename": "mkv_hawaii_wind",
+      "config_path": "configs/markov_ablation/mkv_hawaii_wind.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat21.0_lon-158.0_15min_windchain_wind5.pkl",
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "solar",
+      "location_id": "hawaii",
+      "config_basename": "mkv_hawaii_solar",
+      "config_path": "configs/markov_ablation/mkv_hawaii_solar.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": "Data/EXPECTED_DATA/data_expected_lat21.0_lon-158.0_15min_solarchain_g2.pkl",
+      "solar_bins": 2
+    },
+    {
+      "arm": "joint",
+      "location_id": "hawaii",
+      "config_basename": "mkv_hawaii_joint",
+      "config_path": "configs/markov_ablation/mkv_hawaii_joint.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat21.0_lon-158.0_15min_windchain_wind5.pkl",
+      "solar_chain_path": "Data/EXPECTED_DATA/data_expected_lat21.0_lon-158.0_15min_solarchain_g2.pkl",
+      "solar_bins": 2
+    },
+    {
+      "arm": "thresh",
+      "location_id": "hawaii",
+      "config_basename": "mkv_hawaii_thresh",
+      "config_path": "configs/markov_ablation/mkv_hawaii_thresh.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "iid",
+      "location_id": "natlantic",
+      "config_basename": "mkv_natlantic_iid",
+      "config_path": "configs/markov_ablation/mkv_natlantic_iid.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "wind",
+      "location_id": "natlantic",
+      "config_basename": "mkv_natlantic_wind",
+      "config_path": "configs/markov_ablation/mkv_natlantic_wind.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat45.0_lon-45.0_15min_windchain_wind5.pkl",
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "solar",
+      "location_id": "natlantic",
+      "config_basename": "mkv_natlantic_solar",
+      "config_path": "configs/markov_ablation/mkv_natlantic_solar.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": "Data/EXPECTED_DATA/data_expected_lat45.0_lon-45.0_15min_solarchain_g2.pkl",
+      "solar_bins": 2
+    },
+    {
+      "arm": "joint",
+      "location_id": "natlantic",
+      "config_basename": "mkv_natlantic_joint",
+      "config_path": "configs/markov_ablation/mkv_natlantic_joint.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat45.0_lon-45.0_15min_windchain_wind5.pkl",
+      "solar_chain_path": "Data/EXPECTED_DATA/data_expected_lat45.0_lon-45.0_15min_solarchain_g2.pkl",
+      "solar_bins": 2
+    },
+    {
+      "arm": "thresh",
+      "location_id": "natlantic",
+      "config_basename": "mkv_natlantic_thresh",
+      "config_path": "configs/markov_ablation/mkv_natlantic_thresh.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "iid",
+      "location_id": "bering",
+      "config_basename": "mkv_bering_iid",
+      "config_path": "configs/markov_ablation/mkv_bering_iid.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "wind",
+      "location_id": "bering",
+      "config_basename": "mkv_bering_wind",
+      "config_path": "configs/markov_ablation/mkv_bering_wind.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat65.0_lon-169.0_15min_windchain_wind5.pkl",
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "solar",
+      "location_id": "bering",
+      "config_basename": "mkv_bering_solar",
+      "config_path": "configs/markov_ablation/mkv_bering_solar.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": "Data/EXPECTED_DATA/data_expected_lat65.0_lon-169.0_15min_solarchain_g2.pkl",
+      "solar_bins": 2
+    },
+    {
+      "arm": "joint",
+      "location_id": "bering",
+      "config_basename": "mkv_bering_joint",
+      "config_path": "configs/markov_ablation/mkv_bering_joint.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat65.0_lon-169.0_15min_windchain_wind5.pkl",
+      "solar_chain_path": "Data/EXPECTED_DATA/data_expected_lat65.0_lon-169.0_15min_solarchain_g2.pkl",
+      "solar_bins": 2
+    },
+    {
+      "arm": "thresh",
+      "location_id": "bering",
+      "config_basename": "mkv_bering_thresh",
+      "config_path": "configs/markov_ablation/mkv_bering_thresh.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+experiment_name: mkv_bering_thresh
+description: 'Markov ablation, arm ''thresh'' @ bering: threshold-policy benchmark
+  (no solve, penalty-invariant, fp=5 only) evaluated on historical bootstrap weather;
+  paired with the other arms episode-for-episode (seed-0 CRN). See docs/markov_ablation_experiment.md.'
+battery_capacities: [150.0, 300.0, 600.0]
+horizons: [5760]
+failure_penalties: [5.0]
+threshold_values: [0.0, 0.1, 0.2, 0.3]
+wind_thresholds: [0.0, 4.0, 8.0, 12.0]
+episodes: 3000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: false
+save_states: false
+full_history_episodes: 0
+locations:
+- {latitude: 65.0, longitude: -169.0, data_path: Data/EXPECTED_DATA/data_expected_lat65.0_lon-169.0_15min.pkl}
+historical_weather: {enabled: true, block_length_days: 7}
+start_datetimes: ['2025-06-10T00:00:00', '2025-12-10T00:00:00']
+wind_chain: {enabled: false}
+solar_chain: {enabled: false}

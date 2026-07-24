@@ -1,0 +1,174 @@
+{
+  "generated": "2026-07-12T11:26:17",
+  "mode": "penalty_ext",
+  "arms": [
+    "iid",
+    "wind",
+    "solar",
+    "joint",
+    "thresh"
+  ],
+  "wind_bins": {
+    "mode": "quantile",
+    "n_bins": 5,
+    "artifact_suffix": "_windchain_wind5.pkl"
+  },
+  "solar_bins": 3,
+  "threshold_values": [
+    0.0,
+    0.1,
+    0.2,
+    0.3
+  ],
+  "wind_thresholds": [
+    0.0,
+    4.0,
+    8.0,
+    12.0
+  ],
+  "threshold_penalty": 5.0,
+  "penalties": [
+    5.0,
+    20.0,
+    80.0
+  ],
+  "block_length_days": 7,
+  "baseline_location": "florida",
+  "cells": [
+    {
+      "arm": "iid",
+      "location_id": "florida",
+      "config_basename": "pex_florida_iid",
+      "config_path": "configs/penalty_ext/pex_florida_iid.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "wind",
+      "location_id": "florida",
+      "config_basename": "pex_florida_wind",
+      "config_path": "configs/penalty_ext/pex_florida_wind.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat27.0_lon-79.5_15min_windchain_wind5.pkl",
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "thresh",
+      "location_id": "florida",
+      "config_basename": "pex_florida_thresh",
+      "config_path": "configs/penalty_ext/pex_florida_thresh.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "iid",
+      "location_id": "hawaii",
+      "config_basename": "pex_hawaii_iid",
+      "config_path": "configs/penalty_ext/pex_hawaii_iid.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "wind",
+      "location_id": "hawaii",
+      "config_basename": "pex_hawaii_wind",
+      "config_path": "configs/penalty_ext/pex_hawaii_wind.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat21.0_lon-158.0_15min_windchain_wind5.pkl",
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "thresh",
+      "location_id": "hawaii",
+      "config_basename": "pex_hawaii_thresh",
+      "config_path": "configs/penalty_ext/pex_hawaii_thresh.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "iid",
+      "location_id": "natlantic",
+      "config_basename": "pex_natlantic_iid",
+      "config_path": "configs/penalty_ext/pex_natlantic_iid.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "wind",
+      "location_id": "natlantic",
+      "config_basename": "pex_natlantic_wind",
+      "config_path": "configs/penalty_ext/pex_natlantic_wind.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat45.0_lon-45.0_15min_windchain_wind5.pkl",
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "thresh",
+      "location_id": "natlantic",
+      "config_basename": "pex_natlantic_thresh",
+      "config_path": "configs/penalty_ext/pex_natlantic_thresh.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "iid",
+      "location_id": "bering",
+      "config_basename": "pex_bering_iid",
+      "config_path": "configs/penalty_ext/pex_bering_iid.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "wind",
+      "location_id": "bering",
+      "config_basename": "pex_bering_wind",
+      "config_path": "configs/penalty_ext/pex_bering_wind.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat65.0_lon-169.0_15min_windchain_wind5.pkl",
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "thresh",
+      "location_id": "bering",
+      "config_basename": "pex_bering_thresh",
+      "config_path": "configs/penalty_ext/pex_bering_thresh.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "iid",
+      "location_id": "gulf",
+      "config_basename": "pex_gulf_iid",
+      "config_path": "configs/penalty_ext/pex_gulf_iid.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "wind",
+      "location_id": "gulf",
+      "config_basename": "pex_gulf_wind",
+      "config_path": "configs/penalty_ext/pex_gulf_wind.yaml",
+      "wind_chain_path": "Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min_windchain_wind5.pkl",
+      "solar_chain_path": null,
+      "solar_bins": null
+    },
+    {
+      "arm": "thresh",
+      "location_id": "gulf",
+      "config_basename": "pex_gulf_thresh",
+      "config_path": "configs/penalty_ext/pex_gulf_thresh.yaml",
+      "wind_chain_path": null,
+      "solar_chain_path": null,
+      "solar_bins": null
+    }
+  ]
+}

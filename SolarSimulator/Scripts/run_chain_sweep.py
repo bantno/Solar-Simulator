@@ -40,40 +40,35 @@ def _configs_in(config_dir):
     return cfgs
 
 
-def _unique_locations(config_paths):
-    seen, locs = set(), []
-    for p in config_paths:
-        with open(p, "r") as f:
-            cfg = yaml.safe_load(f)
-        for loc in cfg.get("locations", []) or []:
-            key = (loc.get("latitude"), loc.get("longitude"))
-            if key not in seen:
-                seen.add(key)
-                loc = dict(loc)
-                loc["data_path"] = _abspath(loc["data_path"])
-                locs.append(loc)
-    return locs
-
-
 def provision_all(config_paths):
-    """Build every artifact any config will need (chain + histcube for all locations)."""
-    # Take the wind-chain binning spec from the configs themselves so provisioning
-    # builds (or rebuilds) exactly the artifact the runs will load.
-    wind_chain = {"enabled": True, "n_bins": 3}
+    """Build every artifact any config will need (chains + histcube for all locations).
+
+    Provisions per (location, chain-spec) from the actual configs rather than a single
+    superset spec, so explicit wind/solar chain paths and per-config bin counts are
+    respected -- and solar-chain artifacts get built up front instead of lazily
+    mid-sweep.
+    """
+    seen = set()
     for p in config_paths:
         with open(p, "r") as f:
-            wc = (yaml.safe_load(f) or {}).get("wind_chain") or {}
-        if wc.get("enabled", False):
-            wind_chain = dict(wc)
-            break
-    superset_cfg = {
-        "delta_t": 15,
-        "wind_chain": wind_chain,
-        "historical_weather": {"enabled": True},
-    }
-    for loc in _unique_locations(config_paths):
-        print(f"[provision] checking lat{loc['latitude']}_lon{loc['longitude']} ...")
-        _ensure_location_data(superset_cfg, loc)
+            cfg = yaml.safe_load(f) or {}
+        for loc in cfg.get("locations", []) or []:
+            loc = dict(loc)
+            loc["data_path"] = _abspath(loc["data_path"])
+            wc = cfg.get("wind_chain") or {}
+            sc = cfg.get("solar_chain") or {}
+            key = (
+                loc.get("latitude"), loc.get("longitude"),
+                wc.get("enabled", False), wc.get("path"), wc.get("n_bins"),
+                str(wc.get("bin_edges")),
+                sc.get("enabled", False), sc.get("path"), sc.get("n_bins"),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            print(f"[provision] checking lat{loc['latitude']}_lon{loc['longitude']} "
+                  f"(wind={wc.get('enabled', False)}, solar={sc.get('enabled', False)}) ...")
+            _ensure_location_data(cfg, loc)
     print("[provision] all locations ready.")
 
 

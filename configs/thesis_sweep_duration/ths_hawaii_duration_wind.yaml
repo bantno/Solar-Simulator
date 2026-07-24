@@ -1,0 +1,24 @@
+experiment_name: ths_hawaii_duration_wind
+description: 'Thesis sweep ''duration'', arm ''wind'' @ hawaii: 6 mission durations
+  (30-365 d) x 3 penalties at 300 Wh. Paired on seed-0 bootstrap weather. See docs/markov_ablation_experiment.md
+  section 8.'
+battery_capacities: [300.0]
+horizons: [2880, 5760, 8640, 17280, 25920, 35040]
+failure_penalties: [5.0, 20.0, 80.0]
+threshold_values: []
+wind_thresholds: []
+episodes: 3000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+locations:
+- {latitude: 21.0, longitude: -158.0, data_path: Data/EXPECTED_DATA/data_expected_lat21.0_lon-158.0_15min.pkl}
+historical_weather: {enabled: true, block_length_days: 7}
+start_datetime: '2025-06-10T00:00:00'
+wind_chain: {enabled: true, n_bins: 5, path: Data/EXPECTED_DATA/data_expected_lat21.0_lon-158.0_15min_windchain_wind5.pkl}
+solar_chain: {enabled: false}

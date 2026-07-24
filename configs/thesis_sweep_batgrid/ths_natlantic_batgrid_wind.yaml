@@ -1,0 +1,25 @@
+experiment_name: ths_natlantic_batgrid_wind
+description: 'Thesis sweep ''batgrid'', arm ''wind'' @ natlantic: 11 capacities x
+  6 penalties x 2 seasons at 60 days. Paired on seed-0 bootstrap weather. See docs/markov_ablation_experiment.md
+  section 8.'
+battery_capacities: [100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 400.0, 450.0, 500.0,
+  550.0, 600.0]
+horizons: [5760]
+failure_penalties: [2.5, 5.0, 10.0, 20.0, 40.0, 80.0]
+threshold_values: []
+wind_thresholds: []
+episodes: 3000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+locations:
+- {latitude: 45.0, longitude: -45.0, data_path: Data/EXPECTED_DATA/data_expected_lat45.0_lon-45.0_15min.pkl}
+historical_weather: {enabled: true, block_length_days: 7}
+start_datetimes: ['2025-06-10T00:00:00', '2025-12-10T00:00:00']
+wind_chain: {enabled: true, n_bins: 5, path: Data/EXPECTED_DATA/data_expected_lat45.0_lon-45.0_15min_windchain_wind5.pkl}
+solar_chain: {enabled: false}

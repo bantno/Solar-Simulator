@@ -387,12 +387,16 @@ def fit_wind_transition_chain(
     interior = bin_edges[1:-1]
     bins = np.digitize(vals, interior)  # 0..n_bins-1 ; NaN -> n_bins (dropped below)
 
-    # Consecutive (source -> dest) pairs on the continuous 15-min grid.
+    # Consecutive (source -> dest) pairs on the continuous model-step grid. The step is
+    # inferred from the series itself (median spacing) so the fit is correct at any
+    # delta_t, mirroring fit_solar_transition_chain.
     src = bins[:-1]
     dst = bins[1:]
     month = idx.month.values[:-1]
     hour = idx.hour.values[:-1]
-    step_ok = (np.diff(idx.values).astype("timedelta64[m]").astype(int) == 15)
+    diffs_min = np.diff(idx.values).astype("timedelta64[m]").astype(int)
+    step_min = int(np.median(diffs_min))
+    step_ok = (diffs_min == step_min)
     valid = step_ok & (src < n_bins) & (dst < n_bins) & ~np.isnan(vals[:-1]) & ~np.isnan(vals[1:])
 
     counts = np.zeros((13, 24, n_bins, n_bins), dtype=np.float64)

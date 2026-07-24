@@ -26,11 +26,15 @@ class Seaplane:
         af_mass=6,
         voltage=22.2,
         capacity=150,
+        delta_t_min=15,
     ):
         # Define solar parameters
         self.lat = lat
         self.lon = lon
         self.tz = tz
+        # Model step (minutes): takeoff/landing average powers spread a fixed maneuver
+        # energy over one step, so they must know the real step length.
+        self.delta_t_min = delta_t_min
         self.collected_energy = 0  # kWh
         self.idle_power = 0.0      # W
         self.mean_chord = 0.33        # Mean aerodynamic chord (m)
@@ -192,7 +196,7 @@ class Seaplane:
         For this heuristic, the takeoff power is assumed to be twice the level-flight (cruise) power.
         """
         liftoff_energy = self.calculate_liftoff_energy()
-        TIMESTEP_MIN = 15
+        TIMESTEP_MIN = self.delta_t_min
         climb_energy, climb_time_s = self.climb_energy(self.cruise_speed,np.radians(2),0,300,1)
         cruise_power = self.cruise_power
         cruise_time = TIMESTEP_MIN*60 - climb_time_s
@@ -298,7 +302,7 @@ class Seaplane:
         For this heuristic, the takeoff power is assumed to be twice the level-flight (cruise) power.
         """
         
-        TIMESTEP_MIN = 15
+        TIMESTEP_MIN = self.delta_t_min
         descent_energy, descent_time_s = self.descent_energy(self.cruise_speed,np.radians(-2),300,0,1)
         # cruise_power = self.cruise_power
         # cruise_time = TIMESTEP_MIN*60 - descent_time_s

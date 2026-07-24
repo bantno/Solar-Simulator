@@ -29,6 +29,16 @@ class AbstractMDP(ABC):
         self.soc_increment = soc_increment
         self.env_provider = env_provider
         self.transition_model = ProbabilityModelFactory.select_probability_model(transition_model_name)
+        # The constant floating/flying hazards are per-STEP probabilities calibrated at
+        # a 15-min step. Rescale them so the cumulative wall-clock hazard over a mission
+        # is delta_t-invariant (p_step = 1-(1-p_15)^(dt/15)); identity at delta_t=15.
+        # Takeoff/landing sigmoids are per-maneuver, not per-step, and stay unscaled.
+        if delta_t != 15:
+            for attr in ("floating_failure", "flying_failure"):
+                if hasattr(self.transition_model, attr):
+                    p15 = float(getattr(self.transition_model, attr))
+                    setattr(self.transition_model, attr,
+                            1.0 - (1.0 - p15) ** (delta_t / 15.0))
         self.actions = [0, 1]
 
     def _get_states(self):

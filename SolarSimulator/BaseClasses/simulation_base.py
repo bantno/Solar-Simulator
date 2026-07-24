@@ -134,7 +134,7 @@ class AbstractSimulation(ABC):
                     'whale_series': whale,
                     'metadata': {'episode_index': episode_index},
                     'total_reward': float(sum(rews)),
-                    'flight_hrs': float(sum(acts)/4.), # TODO: Make this not hardcoded for 15min time step
+                    'flight_hrs': float(sum(acts) * self.mdp.delta_t / 60.0),
                 }
             else:
                 # summary only
@@ -143,7 +143,7 @@ class AbstractSimulation(ABC):
                     'failure': bool(traj[-1][1] == 2),
                     'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
                     'total_reward': float(sum(rews)),
-                    'flight_hrs': float(sum(acts)/4.), # TODO: Make this not hardcoded for 15min time step
+                    'flight_hrs': float(sum(acts) * self.mdp.delta_t / 60.0),
 
                 }
 
@@ -411,7 +411,7 @@ class AbstractContinuousEnergySimulation(ABC):
             failed = bool(res['done'][episode_index])
             last_idx = int(res['failure_step'][episode_index])
             total_reward = float(res['total_reward'][episode_index])
-            flight_hrs = float(res['action_sum'][episode_index]) / 4  # TODO: hardcoded 15min step
+            flight_hrs = float(res['action_sum'][episode_index]) * self.mdp.delta_t / 60.0
             failure_type = int(res['failure_type'][episode_index])
 
             if K > 0 and episode_index < K:
@@ -598,7 +598,7 @@ class UnifiedThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
         """Calculate the low battery threshold based on the MDP's transition logic.
         This is a placeholder for a more complex calculation if needed.
         """
-        timestep = 15*60 # 15 minutes in seconds TODO: make this not hardcoded
+        timestep = mdp.delta_t * 60  # one model step in seconds
         cruise_power = mdp.cruise_power
         landing_power = mdp.landing_power
         total_reserve_energy = (cruise_power + landing_power) * timestep

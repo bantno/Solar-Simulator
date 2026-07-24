@@ -136,7 +136,7 @@ class EnvironmentLoader:
         wind_dist = np.column_stack(tup=(wind_k, wind_scale))
         solar_dist = np.column_stack(tup=(solar_a, solar_b, cs))
         whale_series = WhaleRewardSeriesFactory.create_series(
-            self.whale_type, self.horizon
+            self.whale_type, self.horizon, delta_t_min=self.delta_t
         )
         return wind_dist, solar_dist, whale_series
 
@@ -272,7 +272,8 @@ class SimulationFactory:
         hw_cfg = config.get("historical_weather") or {}
         if hw_cfg.get("enabled", False):
             cube = _load_historical_cube(config, location)
-            whale_series = WhaleRewardSeriesFactory.create_series(self.whale_type, self.horizon)
+            whale_series = WhaleRewardSeriesFactory.create_series(
+                self.whale_type, self.horizon, delta_t_min=self.delta_t)
             block_days = float(hw_cfg.get("block_length_days", 7))
             block_steps = int(block_days * 24 * 60 / self.delta_t)
             # For chain-solved evaluation: share the distributional provider's bin edges /
@@ -308,6 +309,7 @@ class SimulationFactory:
             lon=self.location.get("longitude", 0.0),
             tz=self.location.get("timezone", "UTC"),
             capacity=capacity_wh / 22.2,
+            delta_t_min=self.delta_t,
         )
         return plane.get_mdp_power_params()
 

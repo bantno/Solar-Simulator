@@ -1,0 +1,30 @@
+experiment_name: smoke_florida_iid
+description: 'failbin validation: smoke_florida_iid @ Florida Atlantic coast (calm,
+  variable)'
+start_datetime: '2025-06-10T00:00:00'
+battery_capacities:
+- 300.0
+horizons:
+- 192
+failure_penalties:
+- 20.0
+episodes: 50
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+save_states: false
+full_history_episodes: 0
+locations:
+- latitude: 27.0
+  longitude: -79.5
+  data_path: Data/EXPECTED_DATA/data_expected_lat27.0_lon-79.5_15min.pkl
+historical_weather:
+  enabled: true
+  block_length_days: 7
+include_optimal: true
+threshold_values: []
+wind_thresholds: []
+wind_chain:
+  enabled: false

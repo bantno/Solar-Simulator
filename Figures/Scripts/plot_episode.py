@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Plot a single episode (multi-panel) from a results HDF5.
+"""Plot a single episode (multi-panel) from a results HDF5.
 
 Panels (top→bottom):
   1) G_k (Wh)    [black]

@@ -1,0 +1,23 @@
+experiment_name: mkv3_florida_joint
+description: All-arm smoke gate, arm 'joint'. Gate criteria in docs/markov_ablation_experiment.md
+  Phase 3.
+battery_capacities: [300.0]
+horizons: [480]
+failure_penalties: [5.0]
+threshold_values: []
+wind_thresholds: []
+episodes: 300
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 8
+locations:
+- {latitude: 27.0, longitude: -79.5, data_path: Data/EXPECTED_DATA/data_expected_lat27.0_lon-79.5_15min.pkl}
+historical_weather: {enabled: true, block_length_days: 7}
+start_datetime: '2025-06-10T00:00:00'
+wind_chain: {enabled: true, n_bins: 5, path: Data/EXPECTED_DATA/data_expected_lat27.0_lon-79.5_15min_windchain_wind5.pkl}
+solar_chain: {enabled: true, n_bins: 2, path: Data/EXPECTED_DATA/data_expected_lat27.0_lon-79.5_15min_solarchain_g2.pkl}

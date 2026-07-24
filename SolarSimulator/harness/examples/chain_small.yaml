@@ -1,0 +1,36 @@
+experiment_name: chain_small
+description: >
+  Small wind-persistence (Markov-modulated wind) validation sweep at lat30/lon-90, matching
+  iid_small.yaml so the two run directories can be compared by a later comparison script.
+start_datetime: '2020-04-01T00:00:00'
+
+# --- sweep matrix (any list is a swept dimension) ---
+battery_capacities: [300.0, 400.0]
+threshold_values: [0.25]
+wind_thresholds: [8.0, 12.0]
+horizons: [150]
+failure_penalties: [5.0]
+episodes: 500
+
+# --- model settings ---
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+
+locations:
+- latitude: 30.0
+  longitude: -90.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min.pkl
+
+# Wind persistence ON. `path` defaults to the data_path with `_windchain` inserted
+# (Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min_windchain.pkl); set explicitly to override.
+# bin_edges: interior cutpoints in m/s (aircraft-based thresholds). Omit to use equal-occupancy
+# quantile bins derived from historical data. Changing these triggers an automatic artifact rebuild.
+wind_chain:
+  enabled: true
+  bin_edges: [5.0, 10.0]   # [0,5) safe, [5,10) marginal, [10,∞) unsafe

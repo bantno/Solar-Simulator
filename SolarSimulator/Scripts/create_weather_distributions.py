@@ -18,8 +18,7 @@ except Exception:
 
 
 class WeatherDataProcessor:
-    """
-    Fetches historical weather from Open-Meteo, resamples it, and fits
+    """Fetches historical weather from Open-Meteo, resamples it, and fits
     parametric distributions for wind (Weibull) and irradiance (Beta),
     implementing the Fatemi–Kuh–Fripp (2018) normalization:
         x(n) = r(n) / (A * cos(z))  in (0, 1), with clipping of rare x>=1 to 0.99999.
@@ -48,9 +47,7 @@ class WeatherDataProcessor:
         hourly_vars: list[str],
         timezone: str = "auto",
     ):
-        """
-        Download historical weather data from Open-Meteo archive.
-        """
+        """Download historical weather data from Open-Meteo archive."""
         params = {
             "latitude": latitude,
             "longitude": longitude,
@@ -106,9 +103,7 @@ class WeatherDataProcessor:
             raise ImportError("pvlib is required for solar zenith calculation. `pip install pvlib`. ")
 
     def _compute_cos_zenith(self, index: pd.DatetimeIndex, latitude: float, longitude: float) -> pd.Series:
-        """
-        Compute cos(zenith) for each timestamp. zenith >= 90° => set to NaN (night).
-        """
+        """Compute cos(zenith) for each timestamp. zenith >= 90° => set to NaN (night)."""
         self._require_pvlib()
         solpos = pvlib.solarposition.get_solarposition(index, latitude, longitude)
         zenith = solpos["zenith"]
@@ -117,8 +112,7 @@ class WeatherDataProcessor:
         return pd.Series(cos_z.values, index=index, name="cos_zenith")
 
     def resample_data(self, interval_minutes: int = 15, filename: str | None = None) -> pd.DataFrame:
-        """
-        Resample to a finer grid, interpolate linearly, then compute cos(zenith),
+        """Resample to a finer grid, interpolate linearly, then compute cos(zenith),
         and create normalized irradiance x = r / (A * cos z) for valid daytime points
         with r > MIN_GHI_WM2 and cos z > 0. Rare x>=1 are clipped to 0.99999.
         """
@@ -162,8 +156,7 @@ class WeatherDataProcessor:
 
     # ---------- Distribution fitting ----------
     def fit_distributions(self, data: pd.DataFrame, filename: str = "data_expected.pkl") -> pd.DataFrame:
-        """
-        Group by (month, day, hour, minute) and fit:
+        """Group by (month, day, hour, minute) and fit:
           • Beta to normalized irradiance (ghi_norm)
           • Weibull to 10m wind speed
         Also store an expected irradiance for the slot by mapping Beta mean back using
@@ -214,8 +207,8 @@ class WeatherDataProcessor:
 
     @staticmethod
     def _fit_beta_normalized(x: pd.Series) -> tuple[tuple[float, float], float]:
-        """
-        Fit Beta(alpha, beta) to normalized irradiance x in (0,1).
+        """Fit Beta(alpha, beta) to normalized irradiance x in (0,1).
+
         Returns ((alpha, beta), mean_x).
         """
         x = x.dropna()
@@ -238,8 +231,7 @@ class WeatherDataProcessor:
 
     # ---------- Sampling helper (optional) ----------
     def sample_irradiance(self, alpha: float, beta_param: float, target_ts: pd.Timestamp) -> float:
-        """
-        Sample irradiance at a target timestamp by:
+        """Sample irradiance at a target timestamp by:
           1) draw x ~ Beta(alpha, beta)
           2) scale by A * cos(zenith(target_ts))
           3) enforce MIN_GHI_WM2 near night
@@ -343,6 +335,359 @@ def generate_yearly_weather_data(historical_data: pd.DataFrame, N: int, latitude
         pool.terminate()  # Immediately terminate workers
         pool.join()       # Ensure all worker processes are cleaned up
         raise  # Re-raise the exception for visibility
+
+
+# --------- Wind Markov-chain fitting (persistence model) ---------
+
+def fit_wind_transition_chain(
+    wind_15min: pd.Series,
+    n_bins: int = 3,
+    bin_edges: np.ndarray | None = None,
+    conditioning: tuple = ("month", "hour"),
+):
+    """Fit a time-conditioned discrete Markov chain over wind-speed bins.
+
+    The chain governs *which bin* the wind is in (its persistence); the continuous
+    within-bin distribution is supplied at run time by the stage's Weibull truncated to
+    the bin, so this only needs the bin edges and the transition matrices.
+
+    Args:
+        wind_15min (pd.Series): Wind speed [m/s] on the model timestep (15 min) with a DatetimeIndex. Typically
+            the hourly historical series resampled+interpolated to 15 min.
+            NOTE: interpolation inflates short-lag persistence; fit on the model timestep for
+            consistency with the simulator, but treat the diagonal magnitude with caution.
+        n_bins (int): Number of wind bins (default 3).
+        bin_edges (np.ndarray, optional): Full edge array of length n_bins+1 (first 0, last np.inf). If None, derived from
+            global quantiles (equal-occupancy bins).
+        conditioning (tuple): Time keys the transition matrix is conditioned on. Only ("month", "hour") is
+            implemented (288 matrices), which preserves diurnal + seasonal structure.
+
+    Returns:
+        dict artifact with keys: n_bins, bin_edges, conditioning,
+            transition_by_month_hour (shape (13, 24, n_bins, n_bins); index [month, hour],
+            month 1..12 used).
+    """
+    if conditioning != ("month", "hour"):
+        raise NotImplementedError("Only conditioning=('month','hour') is implemented.")
+
+    w = wind_15min.astype(float)
+    idx = pd.DatetimeIndex(w.index)
+    vals = w.values
+
+    # Bin edges (equal-occupancy interior cutpoints) -> [0, q1, ..., q_{n-1}, inf]
+    quantile_derived = bin_edges is None
+    if bin_edges is None:
+        qs = np.linspace(0.0, 1.0, n_bins + 1)[1:-1]
+        interior = np.quantile(vals[~np.isnan(vals)], qs)
+        bin_edges = np.concatenate(([0.0], interior, [np.inf]))
+    else:
+        bin_edges = np.asarray(bin_edges, dtype=float)
+        n_bins = len(bin_edges) - 1
+
+    interior = bin_edges[1:-1]
+    bins = np.digitize(vals, interior)  # 0..n_bins-1 ; NaN -> n_bins (dropped below)
+
+    # Consecutive (source -> dest) pairs on the continuous model-step grid. The step is
+    # inferred from the series itself (median spacing) so the fit is correct at any
+    # delta_t, mirroring fit_solar_transition_chain.
+    src = bins[:-1]
+    dst = bins[1:]
+    month = idx.month.values[:-1]
+    hour = idx.hour.values[:-1]
+    diffs_min = np.diff(idx.values).astype("timedelta64[m]").astype(int)
+    step_min = int(np.median(diffs_min))
+    step_ok = (diffs_min == step_min)
+    valid = step_ok & (src < n_bins) & (dst < n_bins) & ~np.isnan(vals[:-1]) & ~np.isnan(vals[1:])
+
+    counts = np.zeros((13, 24, n_bins, n_bins), dtype=np.float64)
+    np.add.at(counts, (month[valid], hour[valid], src[valid], dst[valid]), 1.0)
+
+    # Row-normalize; rows with no observations -> uniform (no information).
+    transition = np.empty_like(counts)
+    row_sums = counts.sum(axis=-1, keepdims=True)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        transition = np.where(row_sums > 0, counts / row_sums, 1.0 / n_bins)
+
+    return {
+        "n_bins": int(n_bins),
+        "bin_edges": bin_edges,
+        "quantile_derived": quantile_derived,
+        "conditioning": conditioning,
+        "transition_by_month_hour": transition,
+    }
+
+
+def build_wind_chain_artifact(
+    historical_pkl: str,
+    out_path: str,
+    interval_minutes: int = 15,
+    n_bins: int = 3,
+    wind_col: str = "wind_speed_10m",
+    bin_edges: np.ndarray | None = None,
+):
+    """Resample an hourly HISTORICAL_DATA pickle to the model timestep and fit the wind chain.
+    Saves the artifact dict (pickle) to out_path and returns it.
+
+    If bin_edges is provided (full edge array: [0, cutpoint1, ..., inf]) it is used directly
+    and n_bins is ignored.  If omitted, n_bins equal-occupancy quantile bins are derived from
+    the data.
+    """
+    hist = pd.read_pickle(historical_pkl)
+    hist = hist[~((hist.index.month == 2) & (hist.index.day == 29))]  # keep 365-day alignment
+    wind = hist[wind_col].resample(f"{interval_minutes}min").interpolate(method="linear")
+    artifact = fit_wind_transition_chain(wind, n_bins=n_bins, bin_edges=bin_edges)
+    pd.to_pickle(artifact, out_path)
+    print(f"Wind-chain artifact saved to {out_path} "
+          f"(n_bins={artifact['n_bins']}, edges={np.round(artifact['bin_edges'], 3)})")
+    return artifact
+
+
+def build_historical_cube_artifact(
+    historical_pkl: str,
+    out_path: str,
+    interval_minutes: int = 15,
+    wind_col: str = "wind_speed_10m",
+    solar_col: str = "shortwave_radiation",
+):
+    """Build a (slots_per_year, n_years) calendar cube from historical weather data.
+
+    Resamples the hourly HISTORICAL_DATA pickle to `interval_minutes`, drops Feb 29
+    for 365-day alignment, and packs wind speed and solar irradiance into two 2-D arrays
+    indexed by (calendar_slot, year_index).  The cube is used by
+    HistoricalBootstrapEnvironmentProvider for per-lane block-bootstrap episodes.
+
+    Args:
+        historical_pkl (str): Path to an hourly HISTORICAL_DATA pickle (DatetimeIndex tz-aware, columns
+            `wind_speed_10m` and `shortwave_radiation`).
+        out_path (str): Destination path for the artifact pickle (dict).
+        interval_minutes (int): Model timestep in minutes; must match the expected-data file timestep.
+
+    Returns:
+        dict with keys: delta_t_min, slots_per_year, years, n_years, wind_cube, solar_cube.
+    """
+    hist = pd.read_pickle(historical_pkl)
+    hist = hist[~((hist.index.month == 2) & (hist.index.day == 29))]
+    resampled = hist[[wind_col, solar_col]].resample(f"{interval_minutes}min").interpolate(method="linear")
+    # Drop any Feb 29 introduced by interpolation near year boundaries.
+    resampled = resampled[~((resampled.index.month == 2) & (resampled.index.day == 29))]
+
+    slots_per_day = 1440 // interval_minutes
+    slots_per_year = 365 * slots_per_day
+
+    years = sorted(int(y) for y in resampled.index.year.unique())
+    n_years = len(years)
+    year_to_idx = {y: i for i, y in enumerate(years)}
+
+    wind_cube = np.full((slots_per_year, n_years), np.nan)
+    solar_cube = np.full((slots_per_year, n_years), np.nan)
+
+    # Cumulative days before each month (non-leap year, 0-indexed: Jan=0 ... Dec=334).
+    days_before = np.array([0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334])
+
+    idx = resampled.index
+    months = idx.month.values
+    days = idx.day.values
+    hours = idx.hour.values
+    minutes = idx.minute.values
+    yr_arr = idx.year.values
+
+    doy_0 = days_before[months - 1] + days - 1
+    slots = doy_0 * slots_per_day + hours * (60 // interval_minutes) + minutes // interval_minutes
+    yr_indices = np.array([year_to_idx[y] for y in yr_arr])
+
+    valid = (slots >= 0) & (slots < slots_per_year)
+    wind_cube[slots[valid], yr_indices[valid]] = resampled[wind_col].values[valid]
+    solar_cube[slots[valid], yr_indices[valid]] = resampled[solar_col].values[valid]
+
+    artifact = {
+        "delta_t_min": int(interval_minutes),
+        "slots_per_year": slots_per_year,
+        "years": years,
+        "n_years": n_years,
+        "wind_cube": wind_cube,    # shape (slots_per_year, n_years)
+        "solar_cube": solar_cube,  # shape (slots_per_year, n_years)
+    }
+    pd.to_pickle(artifact, out_path)
+    n_valid = int(np.isfinite(wind_cube).sum())
+    print(f"Historical cube saved to {out_path} "
+          f"(shape {wind_cube.shape}, {n_valid}/{wind_cube.size} valid slots, {n_years} years)")
+    return artifact
+
+
+def _fatemi_clearsky_series(index: pd.DatetimeIndex, latitude: float, longitude: float,
+                            A: float = 1150.0) -> np.ndarray:
+    """Vectorized Fatemi clear-sky GHI, A * max(cos(apparent zenith), 0), over a full index.
+
+    Series counterpart of the scalar
+    `weather_processor_cs_normalization.WeatherDataProcessor.clearsky_ghi_fatemi`;
+    used to normalize the historical GHI record into the clear-sky index the solar
+    chain is fitted on.
+    """
+    if pvlib is None:
+        raise ImportError("pvlib is required for solar-chain fitting. `pip install pvlib`.")
+    sp = pvlib.solarposition.get_solarposition(index, latitude, longitude)
+    cosz = np.cos(np.deg2rad(sp["apparent_zenith"].to_numpy()))
+    return A * np.clip(cosz, 0.0, None)
+
+
+def fit_solar_transition_chain(
+    k_15min: pd.Series,
+    n_bins: int = 3,
+    conditioning: tuple = ("month", "hour"),
+    valid_threshold_wm2: float = 200.0,
+):
+    """Fit a time-conditioned discrete Markov chain over clear-sky-index quantile bins.
+
+    The solar analogue of `fit_wind_transition_chain`, with one structural difference:
+    bins are **stage-relative quantile bands**, not global cutpoints. Bin g at a stage
+    is the [g/n, (g+1)/n) quantile band of that stage's own index distribution --
+    fitted here as the empirical within-(month, hour) rank, consumed at run time as
+    the stage Beta's quantile band (bin masses exactly 1/n_bins by construction).
+
+    Global edges are unusable for solar: the hour-averaged GHI record biases K low
+    near sunrise/sunset (part of the averaging window is dark), so globally-binned
+    dusk/dawn slots degenerate into the bottom bin under every weather regime and the
+    day-to-day channel carries nothing. Rank bins are comparable across hours by
+    construction (verified: global bins give a dusk->dawn diagonal of [~1, 0, 0];
+    rank bins give [0.53, 0.36, 0.45] against 0.33 memoryless).
+
+    The index is undefined at night. Intra-day transitions are counted only between
+    consecutive *solar-valid* slots; the day-to-day channel is a separate per-month
+    dusk->dawn matrix (last valid bin of day d -> first valid bin of day d+1), which
+    the loader places at the last night stage before each dawn (identity elsewhere at
+    night), so the matrix product across the night equals the fitted day transition.
+
+    Args:
+        k_15min (pd.Series): Clear-sky index K = GHI / (A cos z) on the model timestep with a
+            DatetimeIndex; invalid (night/twilight) slots must be NaN.
+            NOTE: hourly->15-min interpolation inflates the intra-day diagonal (same
+            caveat as wind); the dusk->dawn matrix is unaffected.
+        n_bins (int): Number of quantile bins (default 3).
+        conditioning (tuple): Only ("month", "hour") is implemented (288 matrices).
+        valid_threshold_wm2 (float): Recorded in the artifact so run-time validity (from the expected-data
+            window's clearsky_irradiance) matches the fit-time gate.
+
+    Returns:
+        dict artifact with keys: kind ('solar'), n_bins, bin_mode ('stage_quantile'),
+            conditioning, transition_by_month_hour (13, 24, n_bins, n_bins),
+            dawn_transition_by_month (13, n_bins, n_bins), valid_threshold_wm2.
+    """
+    if conditioning != ("month", "hour"):
+        raise NotImplementedError("Only conditioning=('month','hour') is implemented.")
+
+    k = k_15min.astype(float)
+    idx = pd.DatetimeIndex(k.index)
+    vals = k.values
+    valid_slot = ~np.isnan(vals)
+
+    # Stage-relative rank bins: tercile (n-tile) of each sample within its own
+    # (month, hour) slot population across years. -1 marks invalid slots.
+    bins = np.full(vals.size, -1, dtype=int)
+    slot_key = idx.month.values[valid_slot] * 100 + idx.hour.values[valid_slot]
+    ranks = (
+        pd.Series(vals[valid_slot])
+        .groupby(slot_key)
+        .rank(pct=True, method="average")
+        .values
+    )
+    bins[valid_slot] = np.minimum((ranks * n_bins).astype(int), n_bins - 1)
+
+    # ── Intra-day transitions: consecutive valid->valid pairs on the model grid ──
+    src = bins[:-1]
+    dst = bins[1:]
+    month = idx.month.values[:-1]
+    hour = idx.hour.values[:-1]
+    step_min = int(np.median(np.diff(idx.values).astype("timedelta64[m]").astype(int)))
+    step_ok = (np.diff(idx.values).astype("timedelta64[m]").astype(int) == step_min)
+    valid = step_ok & valid_slot[:-1] & valid_slot[1:] & (src < n_bins) & (dst < n_bins)
+
+    counts = np.zeros((13, 24, n_bins, n_bins), dtype=np.float64)
+    np.add.at(counts, (month[valid], hour[valid], src[valid], dst[valid]), 1.0)
+
+    row_sums = counts.sum(axis=-1, keepdims=True)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        transition = np.where(row_sums > 0, counts / row_sums, 1.0 / n_bins)
+
+    # ── Day-to-day channel: dusk(d) -> dawn(d+1), stratified by the dawn day's month ──
+    vdates = idx[valid_slot]
+    vbins = bins[valid_slot]
+    day_key = vdates.normalize()
+    df = pd.DataFrame({"bin": vbins}, index=day_key)
+    grouped = df.groupby(level=0)["bin"]
+    dusk = grouped.last()
+    dawn = grouped.first()
+    dates = dusk.index
+    gap_days = np.diff(dates.values).astype("timedelta64[D]").astype(int)
+    d_src = dusk.values[:-1]
+    d_dst = dawn.values[1:]
+    d_month = dates.month.values[1:]
+    d_ok = (gap_days == 1) & (d_src < n_bins) & (d_dst < n_bins)
+
+    dawn_counts = np.zeros((13, n_bins, n_bins), dtype=np.float64)
+    np.add.at(dawn_counts, (d_month[d_ok], d_src[d_ok], d_dst[d_ok]), 1.0)
+    d_rows = dawn_counts.sum(axis=-1, keepdims=True)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        dawn_transition = np.where(d_rows > 0, dawn_counts / d_rows, 1.0 / n_bins)
+
+    return {
+        "kind": "solar",
+        "n_bins": int(n_bins),
+        "bin_mode": "stage_quantile",
+        "conditioning": conditioning,
+        "transition_by_month_hour": transition,
+        "dawn_transition_by_month": dawn_transition,
+        "valid_threshold_wm2": float(valid_threshold_wm2),
+    }
+
+
+def build_solar_chain_artifact(
+    historical_pkl: str,
+    out_path: str,
+    latitude: float,
+    longitude: float,
+    interval_minutes: int = 15,
+    n_bins: int = 3,
+    solar_col: str = "shortwave_radiation",
+    valid_threshold_wm2: float = 200.0,
+):
+    """Resample an hourly HISTORICAL_DATA pickle, normalize GHI to the clear-sky index,
+    and fit the solar chain. Saves the artifact dict (pickle) to out_path and returns it.
+
+    The index uses the same normalization as the Beta fits the solver consumes
+    (`weather_processor_cs_normalization._fit_beta`): K = GHI / (1150 cos z), clipped
+    to [0, 0.999999], defined only where the clear-sky envelope exceeds
+    `valid_threshold_wm2` (night/twilight slots are NaN and never enter the transition
+    counts; G_cs is unimodal within a day, so valid slots stay contiguous per day at
+    any threshold). The default is 200, not _fit_beta's 50: the hour-averaged GHI
+    record biases the index low near the terminator, and raising the gate measurably
+    cleans the dusk/dawn anchors (dawn-channel MI 0.126 vs 0.097 bits at 50 on the
+    lat30/lon-90 record) at the cost of ~11% of valid slots -- all twilight, where
+    little energy arrives. The chain is simply inert (bin held, Beta unconditioned)
+    on stages below the gate, exactly as at night.
+
+    Unlike the wind chain, latitude/longitude are required (pvlib solar geometry).
+    """
+    hist = pd.read_pickle(historical_pkl)
+    hist = hist[~((hist.index.month == 2) & (hist.index.day == 29))]  # 365-day alignment
+    ghi = hist[solar_col].resample(f"{interval_minutes}min").interpolate(method="linear")
+    ghi = ghi[~((ghi.index.month == 2) & (ghi.index.day == 29))]
+
+    g_cs = _fatemi_clearsky_series(pd.DatetimeIndex(ghi.index), latitude, longitude)
+    valid = g_cs > valid_threshold_wm2
+    with np.errstate(divide="ignore", invalid="ignore"):
+        k = np.where(valid, np.clip(ghi.values / g_cs, 0.0, 0.999999), np.nan)
+    k_series = pd.Series(k, index=ghi.index)
+
+    artifact = fit_solar_transition_chain(
+        k_series, n_bins=n_bins, valid_threshold_wm2=valid_threshold_wm2)
+    pd.to_pickle(artifact, out_path)
+    dawn_diag = np.nanmean(
+        [np.diag(artifact["dawn_transition_by_month"][m]) for m in range(1, 13)], axis=0
+    )
+    print(f"Solar-chain artifact saved to {out_path} "
+          f"(n_bins={artifact['n_bins']}, stage-quantile bins, "
+          f"dusk->dawn diag {np.round(dawn_diag, 3)})")
+    return artifact
 
 
 if __name__ == "__main__":

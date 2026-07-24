@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Value-function visualisation: difference heatmap + 3D surface plot.
+"""Value-function visualisation: difference heatmap + 3D surface plot.
 
 Usage:
     python plot_value_function.py path/to/file.npy \

@@ -1,5 +1,4 @@
-"""
-Script 3 (subfig set): Location × Capacity sweep → paper subfigures
+"""Script 3 (subfig set): Location × Capacity sweep → paper subfigures
 
 Outputs:
   (a) subfig_a_world_map.{ext}                         # study locations on a world map

@@ -1,0 +1,24 @@
+experiment_name: smoke_cvi_startdate_lat30.0_lon-90.0_thresh_hist
+description: 'Threshold-policy benchmark for sweep ''startdate'' at lat30.0_lon-90.0:
+  the full observation-threshold x wind-threshold grid rolled out on historical bootstrap
+  weather. No value-function solve; arm-agnostic (weather draws are identical to both
+  optimal arms episode-for-episode, so paired comparisons hold).'
+battery_capacities: [300.0]
+horizons: [300]
+failure_penalties: [5.0]
+threshold_values: [0.1, 0.25]
+wind_thresholds: [6.0, 12.0]
+episodes: 200
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: false
+save_states: false
+full_history_episodes: 0
+locations:
+- {latitude: 30.0, longitude: -90.0, data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min.pkl}
+wind_chain: {enabled: false, n_bins: 4}
+historical_weather: {enabled: true, block_length_days: 7}
+start_datetimes: ['2020-05-01T00:00:00', '2020-07-01T00:00:00']

@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""
-Histogram of episode total rewards by failure penalty (one figure per sim).
+"""Histogram of episode total rewards by failure penalty (one figure per sim).
 
-Assumptions / notes
--------------------
+Assumptions / notes:
 - The HDF5 file stores results as *per-episode* groups or datasets.
 - Each episode group (or its ancestors) must contain:
     - a simulation type (e.g., 'Optimal', 'Threshold') discoverable via:
@@ -15,14 +13,12 @@ Assumptions / notes
 - Each episode must contain ONE of these datasets with a scalar float:
     'total_reward' (preferred), 'reward', or 'episode_reward'.
 
-What it does
-------------
+What it does:
 - Builds a dictionary: rewards[sim_type][penalty] = list of episode rewards.
 - For a user-provided list of penalties, plots stacked subplots of histograms.
 - Creates ONE figure per sim type (no mixing). Saves PNG/PDF/SVG.
 
-Example
--------
+Example:
 python hist_episode_rewards_by_penalty.py \
   --h5 /path/to/results.h5 \
   --penalties 0 5 20 40 \
@@ -31,8 +27,7 @@ python hist_episode_rewards_by_penalty.py \
   --figwidth 6 --figheight 10 \
   --dpi 200
 
-Tips
-----
+Tips:
 - If your HDF5 field names differ, adjust DATASET_CANDIDATES or the
   key-parsing regex in `_extract_meta_from_path`.
 """

@@ -1,5 +1,4 @@
-"""
-Horizon Sweep — paper subfigures (explicit; no inference)
+"""Horizon Sweep — paper subfigures (explicit; no inference)
 
 Required columns:
 sim_type, observation_threshold, wind_threshold, battery_capacity, horizon,

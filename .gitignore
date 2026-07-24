@@ -1,7 +1,6 @@
 Results/
 Data/
 Figures/archive/
-Figures/5191Results
 **/__pycache__/
 *.pyc
 *.pkl
@@ -9,4 +8,6 @@ Figures/5191Results
 *.npz
 *.h5
 *.html
-./claude
+.claude
+*.ulg
+.gitignore

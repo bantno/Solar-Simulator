@@ -29,9 +29,7 @@ class TestSimulationSOCBounds(unittest.TestCase):
         )
 
     def check_soc_bounds(self, trajectory):
-        """
-        Helper method that asserts each state in the trajectory has an SOC between -1 and 100.
-        """
+        """Helper method that asserts each state in the trajectory has an SOC between -1 and 100."""
         for state in trajectory:
             soc = state[0]  # Assuming state is [SOC, mode]
             self.assertGreaterEqual(soc, -1.0, "SOC is below -1.")

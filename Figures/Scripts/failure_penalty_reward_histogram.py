@@ -1,5 +1,4 @@
-"""
-Histogram of episode total rewards across failure penalties.
+"""Histogram of episode total rewards across failure penalties.
 
 Shows Optimal and Threshold (obs=0.2, wind=6.0) as overlaid histograms,
 one subplot per selected failure penalty value (phi).
@@ -73,18 +72,28 @@ def load_episode_scalars(h5_path: str,
             if not (is_optimal or is_threshold):
                 continue
 
+            base = {
+                "failure_penalty": float(fp),
+                "sim_type": sim_type,
+                "observation_threshold": float(obs_t) if obs_t is not None else np.nan,
+                "wind_threshold": float(wind_t) if wind_t is not None else np.nan,
+            }
+
+            # Columnar layout: one (episodes,) dataset per scalar field
+            sc = grp.get("episode_scalars")
+            if sc is not None and "total_reward" in sc:
+                for r in np.asarray(sc["total_reward"][()], dtype=float):
+                    records.append({**base, "total_reward": float(r)})
+                continue
+
+            # Legacy layout: one group of scalar datasets per episode
             eps = grp.get("episodes")
             if eps is None:
                 continue
 
             for ep_key in eps.keys():
                 ep = eps[ep_key]
-                rec = {
-                    "failure_penalty": float(fp),
-                    "sim_type": sim_type,
-                    "observation_threshold": float(obs_t) if obs_t is not None else np.nan,
-                    "wind_threshold": float(wind_t) if wind_t is not None else np.nan,
-                }
+                rec = dict(base)
                 if "total_reward" in ep:
                     rec["total_reward"] = float(ep["total_reward"][()])
                 records.append(rec)

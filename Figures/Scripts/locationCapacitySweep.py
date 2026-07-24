@@ -1,5 +1,4 @@
-"""
-Script 3: Location × Capacity sweep (standalone; one figure per location × metric)
+"""Script 3: Location × Capacity sweep (standalone; one figure per location × metric)
 
 For each location (lat, lon) and for each metric (defaults to all), this script
 creates a figure of the metric vs battery capacity. Within each figure, a line

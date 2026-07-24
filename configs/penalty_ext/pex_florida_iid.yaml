@@ -1,0 +1,24 @@
+experiment_name: pex_florida_iid
+description: 'Penalty-extension, arm ''iid'' @ florida: penalties {160, 320, 640}
+  at 300 Wh / 60 d / both seasons. Pools with the thesis batgrid 300 Wh cells. See
+  docs section 9.'
+battery_capacities: [300.0]
+horizons: [5760]
+failure_penalties: [160.0, 320.0, 640.0]
+threshold_values: []
+wind_thresholds: []
+episodes: 3000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 8
+locations:
+- {latitude: 27.0, longitude: -79.5, data_path: Data/EXPECTED_DATA/data_expected_lat27.0_lon-79.5_15min.pkl}
+historical_weather: {enabled: true, block_length_days: 7}
+start_datetimes: ['2025-06-10T00:00:00', '2025-12-10T00:00:00']
+wind_chain: {enabled: false}
+solar_chain: {enabled: false}

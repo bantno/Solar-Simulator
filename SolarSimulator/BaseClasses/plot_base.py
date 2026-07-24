@@ -6,19 +6,17 @@ from BaseClasses.simulation_storage import SimulationStorage
 
 class SimulationPlotter:
     def __init__(self, storage_dir=None):
-        """
-        Initialize the plotter.
+        """Initialize the plotter.
         
-        Parameters:
+        Args:
             storage_dir (str): Optional default directory where simulation files are stored.
         """
         self.storage_dir = storage_dir
 
     def plot_episode(self, episode):
-        """
-        Plot an episode's trajectory, actions, and rewards on separate subplots.
+        """Plot an episode's trajectory, actions, and rewards on separate subplots.
         
-        Parameters:
+        Args:
             episode (dict): An episode dictionary containing keys:
                 - 'trajectory': list/array of states (each a 1D array)
                 - 'actions': list of actions taken
@@ -71,10 +69,9 @@ class SimulationPlotter:
         plt.show()
 
     def plot_specific_episode(self, simulation_id, episode_index, storage_dir=None):
-        """
-        Loads a simulation run from a directory and plots the specified episode.
+        """Loads a simulation run from a directory and plots the specified episode.
         
-        Parameters:
+        Args:
             simulation_id (int): The simulation counter (ID) used in the filename.
             episode_index (int): The index of the episode within that simulation to plot.
             storage_dir (str): Directory where simulation files are stored. If not provided, self.storage_dir is used.
@@ -98,10 +95,9 @@ class SimulationPlotter:
         self.plot_episode(episode)
 
     def plot_multiple_episodes(self, episodes, episode_indices=None):
-        """
-        Plot multiple episodes (potentially from different simulations) on the same figure.
+        """Plot multiple episodes (potentially from different simulations) on the same figure.
         
-        Parameters:
+        Args:
             episodes (list): List of episode dictionaries.
             episode_indices (list): List of indices to plot. If None, all episodes are plotted.
         """
@@ -173,10 +169,9 @@ class SimulationPlotter:
         plt.show()
 
     def plot_multiple_episodes_from_simulation(self, simulation_id, episode_indices=None, storage_dir=None):
-        """
-        Load a simulation run by ID, then plot multiple episodes (by index) on the same figure.
+        """Load a simulation run by ID, then plot multiple episodes (by index) on the same figure.
         
-        Parameters:
+        Args:
             simulation_id (int): The simulation counter (ID) in the filename.
             episode_indices (list): Which episodes to plot. If None, plots all.
             storage_dir (str): Directory where simulation files are stored. If not provided, self.storage_dir is used.
@@ -201,11 +196,10 @@ class SimulationPlotter:
         self.plot_multiple_episodes(episodes, episode_indices)
 
     def compare_episodes_across_simulations(self, sims_and_episodes=None, storage_dir=None):
-        """
-        Loads multiple simulations from the same directory and plots selected episodes
+        """Loads multiple simulations from the same directory and plots selected episodes
         from each of them on the same figure.
         
-        Parameters:
+        Args:
             sims_and_episodes (dict or list of tuples):
                 A structure indicating which simulation IDs to load, and which episodes.
                 For example:
@@ -256,10 +250,9 @@ class SimulationPlotter:
         self.plot_multiple_episodes(combined_episodes)
 
     def plot_reward_distribution(self, sim_results, alpha=0.5, jitter=0.1):
-        """
-        Create a scatter plot of the total reward for each episode for each simulation.
+        """Create a scatter plot of the total reward for each episode for each simulation.
         
-        Parameters:
+        Args:
             sim_results (dict): A dictionary where keys are simulation IDs (or names) and values are lists of episodes.
                                 Each episode is expected to be a dictionary containing a 'total_reward' key.
             alpha (float): The opacity of the scatter points (default 0.5, less than 1 for transparency).
@@ -286,10 +279,9 @@ class SimulationPlotter:
         plt.show()
 
     def load_and_plot_reward_distribution(self, simulation_ids, alpha=0.5, jitter=0.1, storage_dir=None):
-        """
-        Loads episodes from the specified simulation IDs (from a directory) and plots the reward distribution.
+        """Loads episodes from the specified simulation IDs (from a directory) and plots the reward distribution.
         
-        Parameters:
+        Args:
             simulation_ids (list): List of simulation IDs to load.
             alpha (float): Opacity for scatter points (default 0.5).
             jitter (float): Horizontal jitter (default 0.1).
@@ -319,10 +311,9 @@ class SimulationPlotter:
         self.plot_reward_distribution(sim_results, alpha=alpha, jitter=jitter)
 
     def plot_reward_histogram_subplots(self, sim_results, alpha=0.5, bins=100):
-        """
-        Create a histogram of the total rewards for each simulation on separate subplots.
+        """Create a histogram of the total rewards for each simulation on separate subplots.
 
-        Parameters:
+        Args:
             sim_results (dict): A dictionary where keys are simulation IDs (or names) and values are lists of episodes.
                                 Each episode should be a dictionary containing a 'total_reward' key (or a 'rewards' list).
             alpha (float): Opacity of the histogram bars (default 0.5).
@@ -353,11 +344,10 @@ class SimulationPlotter:
 
 
     def load_and_plot_reward_histogram_subplots(self, simulation_ids, alpha=0.5, bins=20, storage_dir=None):
-        """
-        Loads episodes from the specified simulation IDs (from a directory) and plots a histogram
+        """Loads episodes from the specified simulation IDs (from a directory) and plots a histogram
         of the reward distribution for each simulation on separate subplots.
 
-        Parameters:
+        Args:
             simulation_ids (list): List of simulation IDs to load.
             alpha (float): Opacity for histogram bars (default 0.5).
             bins (int): Number of bins in the histogram (default 20).
@@ -387,8 +377,7 @@ class SimulationPlotter:
         self.plot_reward_histogram_subplots(sim_results, alpha=alpha, bins=bins)
 
     def plot_reward_violin(self, sim_results):
-        """
-        Create a violin plot of the total rewards for each simulation using Plotly.
+        """Create a violin plot of the total rewards for each simulation using Plotly.
         For each run, summary statistics (n, mean, median, std) are shown as an annotation,
         and the legend entry is set to the run's metadata (if available).
         """
@@ -457,11 +446,10 @@ class SimulationPlotter:
         fig.show()
 
     def load_and_plot_reward_violin(self, simulation_ids, storage_dir=None):
-        """
-        Loads episodes from the specified simulation IDs (from a directory) and plots a violin chart 
+        """Loads episodes from the specified simulation IDs (from a directory) and plots a violin chart 
         of the reward distribution.
 
-        Parameters:
+        Args:
             simulation_ids (list): List of simulation IDs to load.
             storage_dir (str): Directory where simulation files are stored. If not provided, self.storage_dir is used.
         """
@@ -489,8 +477,7 @@ class SimulationPlotter:
         self.plot_reward_violin(sim_results)
 
     def plot_reward_stats_by_battery_capacity(self, simulation_ids, storage_dir=None):
-        """
-        Load simulation data for each simulation ID provided, compute the mean and median total reward for each simulation,
+        """Load simulation data for each simulation ID provided, compute the mean and median total reward for each simulation,
         and plot these values segmented by battery capacity (in watt-hours). The results are grouped by the simulation's
         algorithm/parameters as follows:
         
@@ -499,7 +486,7 @@ class SimulationPlotter:
             - If simulation_type is 'OptimalSimulation', group name is "OptimalSimulation"
             - Otherwise, the group name defaults to the simulation_type value.
         
-        Parameters:
+        Args:
             simulation_ids (list): List of simulation IDs to load.
             storage_dir (str): Directory where simulation files are stored. If not provided, self.storage_dir is used.
         """
@@ -625,8 +612,7 @@ class SimulationPlotter:
         plt.show()
 
     def load_and_plot_threshold_sweep(self, simulation_ids,storage_dir=None):
-        """
-        Loads episodes from the specified simulation IDs (from a directory) and plots the average reward
+        """Loads episodes from the specified simulation IDs (from a directory) and plots the average reward
         versus the observation threshold for the threshold-based approach, segmented by wind_threshold values.
         """
 
@@ -654,12 +640,11 @@ class SimulationPlotter:
         self.plot_threshold_sweep(sim_results)
 
     def plot_threshold_sweep(self, sim_results):
-        """
-        Plots the average reward versus the observation threshold for the threshold-based approach,
+        """Plots the average reward versus the observation threshold for the threshold-based approach,
         segmented into series based on wind_threshold values. Also adds horizontal lines for the
         greedy and optimal approaches.
 
-        Parameters:
+        Args:
             sim_results (dict): A dictionary where keys are simulation IDs (or names) and values
                                 are lists of episodes. Each episode is expected to be a dictionary
                                 with a 'total_reward' key (or a 'rewards' list) and a 'metadata'

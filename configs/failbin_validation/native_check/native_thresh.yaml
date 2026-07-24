@@ -1,0 +1,28 @@
+experiment_name: native_thresh
+description: >
+  Threshold grid evaluated on the IID-sampled world (same grid as the historical arms).
+  If its best point beats IID-optimal here, the IID solve is buggy.
+start_datetime: '2025-06-10T00:00:00'
+battery_capacities: [300.0]
+horizons: [2880]
+failure_penalties: [20.0]
+episodes: 20000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+save_states: false
+full_history_episodes: 0
+include_optimal: false
+threshold_values: [0.0, 0.1, 0.2, 0.3]
+wind_thresholds: [0.0, 4.0, 8.0, 12.0]
+wind_chain:
+  enabled: false
+locations:
+- latitude: 65.0
+  longitude: -169.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat65.0_lon-169.0_15min.pkl
+- latitude: 21.0
+  longitude: -158.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat21.0_lon-158.0_15min.pkl

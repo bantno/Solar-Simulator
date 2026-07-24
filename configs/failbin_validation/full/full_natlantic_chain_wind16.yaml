@@ -1,0 +1,32 @@
+experiment_name: full_natlantic_chain_wind16
+description: 'failbin validation: full_natlantic_chain_wind16 @ N. Atlantic storm
+  track (windy, storm persistence)'
+start_datetime: '2025-06-10T00:00:00'
+battery_capacities:
+- 300.0
+horizons:
+- 2880
+failure_penalties:
+- 20.0
+episodes: 10000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+save_states: false
+full_history_episodes: 0
+locations:
+- latitude: 45.0
+  longitude: -45.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat45.0_lon-45.0_15min.pkl
+historical_weather:
+  enabled: true
+  block_length_days: 7
+include_optimal: true
+threshold_values: []
+wind_thresholds: []
+wind_chain:
+  enabled: true
+  path: Data/EXPECTED_DATA/data_expected_lat45.0_lon-45.0_15min_windchain_wind16.pkl
+  n_bins: 16

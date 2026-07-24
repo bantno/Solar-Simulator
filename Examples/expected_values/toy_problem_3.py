@@ -40,13 +40,12 @@ def h_y(y):
 
 def integrand(y, x):
     """Return [p(x,y)*f(x,y) + (1 - p(x,y))*c] * g(x)*h(y).
-       Note dblquad integrates in the order: integrand(y, x).
+    Note dblquad integrates in the order: integrand(y, x).
     """
     return (p_xy(x, y)*f_xy(x, y) + (1 - p_xy(x, y))*c) * g_x(x) * h_y(y)
 
 def compute_EZ_analytical():
-    """
-    Numerically integrates the above expression:
+    """Numerically integrates the above expression:
     x in [0, 1],  y in [0, ∞).
     """
     result, abserr = dblquad(
@@ -63,12 +62,12 @@ def compute_EZ_analytical():
 # ---------------------------------------------------------------------
 
 def compute_EZ_mcs(N=10_000_00):
-    """
-    Estimates E[Z] by:
-      1) Drawing N samples of (X, Y).
-      2) For each (x_i, y_i), draw Bernoulli(p(x_i,y_i)).
-      3) If Bernoulli=1, Z_i = f(x_i,y_i), else Z_i = c.
-      4) Average all Z_i.
+    """Estimates E[Z] by:
+
+    1) Drawing N samples of (X, Y).
+    2) For each (x_i, y_i), draw Bernoulli(p(x_i,y_i)).
+    3) If Bernoulli=1, Z_i = f(x_i,y_i), else Z_i = c.
+    4) Average all Z_i.
     """
     # 1) Sample X ~ Beta(alpha, beta_)
     X_samples = beta_dist.rvs(alpha, beta_, size=N)

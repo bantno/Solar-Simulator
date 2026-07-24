@@ -13,8 +13,7 @@ logger.setLevel(logging.DEBUG)  # Adjust the logging level as needed.
 # Metaclass for Automatic Registration
 ###############################################################################
 class SolarPanelMeta(ABCMeta):
-    """
-    Metaclass for automatic registration of concrete SolarPanel subclasses.
+    """Metaclass for automatic registration of concrete SolarPanel subclasses.
     Any non-abstract subclass with a defined `model_name` attribute will
     automatically register itself with the SolarPanelFactory.
     """
@@ -32,10 +31,9 @@ class SolarPanelMeta(ABCMeta):
 # Solar Panel Base Interface
 ###############################################################################
 class SolarPanel(ABC, metaclass=SolarPanelMeta):
-    """
-    Abstract base class for different solar panel models.
-    
-    Concrete implementations must define their own `area` and `efficiency` 
+    """Abstract base class for different solar panel models.
+
+    Concrete implementations must define their own `area` and `efficiency`
     properties and set the class variable `model_name` to a unique identifier.
     """
     model_name: str = None  # Unique identifier for registration; must be overridden.
@@ -43,8 +41,7 @@ class SolarPanel(ABC, metaclass=SolarPanelMeta):
     @property
     @abstractmethod
     def area(self) -> float:
-        """
-        Returns:
+        """Returns:
             float: The surface area of the solar panel in square meters.
         """
         pass
@@ -52,8 +49,7 @@ class SolarPanel(ABC, metaclass=SolarPanelMeta):
     @property
     @abstractmethod
     def efficiency(self) -> float:
-        """
-        Returns:
+        """Returns:
             float: The efficiency of the solar panel (a value between 0.0 and 1.0).
         """
         pass
@@ -63,17 +59,15 @@ class SolarPanel(ABC, metaclass=SolarPanelMeta):
 # Solar Panel Factory
 ###############################################################################
 class SolarPanelFactory:
-    """
-    Factory class to instantiate solar panel models.
-    
+    """Factory class to instantiate solar panel models.
+
     Solar panel models are automatically registered via the SolarPanelMeta metaclass.
     """
     _registry: Dict[str, Type[SolarPanel]] = {}
 
     @classmethod
     def register_panel(cls, model_name: str, panel_class: Type[SolarPanel]) -> None:
-        """
-        Registers a new solar panel model by its unique name.
+        """Registers a new solar panel model by its unique name.
 
         Args:
             model_name (str): The unique identifier for the solar panel model.
@@ -86,8 +80,7 @@ class SolarPanelFactory:
 
     @classmethod
     def create_solar_panel(cls, model_name: str, **kwargs) -> SolarPanel:
-        """
-        Instantiates and returns a solar panel model based on the model name.
+        """Instantiates and returns a solar panel model based on the model name.
 
         Args:
             model_name (str): The registered name of the solar panel model.
@@ -110,9 +103,7 @@ class SolarPanelFactory:
 # Concrete Solar Panel Models
 ###############################################################################
 class ConstantSolarPanel(SolarPanel):
-    """
-    A simple solar panel model with a fixed area and efficiency.
-    """
+    """A simple solar panel model with a fixed area and efficiency."""
     model_name: str = "constant"
 
     def __init__(self, area: float = 0.65, efficiency: float = 0.1):
@@ -128,10 +119,9 @@ class ConstantSolarPanel(SolarPanel):
         return self._efficiency
 
 class VariableEfficiencySolarPanel(SolarPanel):
-    """
-    A solar panel model with efficiency that degrades over time.
-    
-    The efficiency is computed based on a base efficiency and a degradation 
+    """A solar panel model with efficiency that degrades over time.
+
+    The efficiency is computed based on a base efficiency and a degradation
     factor applied incrementally over successive calls.
     """
     model_name: str = "variable"

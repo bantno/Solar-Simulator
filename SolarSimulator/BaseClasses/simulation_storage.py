@@ -6,14 +6,12 @@ from datetime import datetime
 import h5py
 
 class SimulationStorage:
-    """
-    Manages simulation result storage by grouping all episodes from a single simulation run
+    """Manages simulation result storage by grouping all episodes from a single simulation run
     into one compressed .npz file. A unique timestamp is added so that each file is unique.
     """
     
     def __init__(self, storage_dir: str):
-        """
-        Parameters:
+        """Args:
             storage_dir (str): Directory where simulation files will be stored.
         """
         self.storage_dir = storage_dir
@@ -23,16 +21,13 @@ class SimulationStorage:
         self.simulation_counter = 0
     
     def _get_simulation_filename(self, simulation_id: int) -> str:
-        """
-        Generate a filename that includes the unique timestamp and simulation counter.
-        """
+        """Generate a filename that includes the unique timestamp and simulation counter."""
         return os.path.join(self.storage_dir, f"simulation_{self.run_timestamp}_{simulation_id:04d}.npz")
     
     def store_simulation(self, simulation_metadata: dict, episodes: list):
-        """
-        Stores all episodes from a single simulation run in one file.
+        """Stores all episodes from a single simulation run in one file.
         
-        Parameters:
+        Args:
             simulation_metadata (dict): Metadata describing the simulation run.
             episodes (list): A list of episode dictionaries.
         """
@@ -42,8 +37,7 @@ class SimulationStorage:
         self.simulation_counter += 1
     
     def load_simulation(self, simulation_id: int) -> dict:
-        """
-        Loads a single simulation file by simulation id.
+        """Loads a single simulation file by simulation id.
         
         Returns:
             dict: A dictionary with keys 'simulation_metadata' and 'episodes'.
@@ -67,8 +61,7 @@ class SimulationStorage:
             return {'simulation_metadata': simulation_metadata, 'episodes': episodes}
     
     def load_all_simulations(self) -> list:
-        """
-        Loads all simulation files from the storage directory.
+        """Loads all simulation files from the storage directory.
         
         Returns:
             list: A list of dictionaries, each containing simulation metadata and episodes.
@@ -85,28 +78,37 @@ class SimulationStorage:
 
 
 class SimulationStorageHDF5:
-    """
-    HDF5-based storage for batches of simulations.
-    Each simulation is stored as a top-level group within one file.
+    """HDF5-based storage for batches of simulations.
+    Each simulation is stored as a top-level group within one file:
+
+        <group>/attrs                    simulation metadata
+        <group>/episode_scalars/<field>  per-episode scalars as one 1-D
+                                         (episodes,) dataset per field
+        <group>/episodes/episode <i>     one group per full-history episode,
+                                         holding its array fields (wind_series,
+                                         trajectory, ...)
+
+    Per-episode scalars are stored as columns rather than one dataset per
+    episode: every HDF5 object costs ~0.5 KB of file metadata, so the old
+    group-per-episode layout made a scalars-only 210-sim x 3000-episode run
+    ~1.6 GB for ~40 MB of actual content. Episodes without array fields get
+    no group at all.
     """
     def __init__(self, file_path: str):
-        """
-        Open the HDF5 file in append mode (creates if not exists).
-        """
+        """Open the HDF5 file in append mode (creates if not exists)."""
         self.h5file = h5py.File(file_path, "a")
 
     def store_simulation(self,
                         sim_metadata: dict,
                         episodes: list,
                         group_name: str = None):
-        """
-        Store a batch of episodes under a unique top-level group,
-        using gzip compression for array datasets.
+        """Store a batch of episodes under a unique top-level group,
+        using lzf compression for array datasets.
 
-        Parameters:
-        - sim_metadata: dict of simple metadata entries for the simulation
-        - episodes: list of dicts, each dict represents one episode
-        - group_name: mandatory name for the group identifying this simulation
+        Args:
+            sim_metadata: dict of simple metadata entries for the simulation
+            episodes: list of dicts, each dict represents one episode
+            group_name: mandatory name for the group identifying this simulation
 
         Raises:
             ValueError: if group_name missing or already exists.
@@ -124,31 +126,46 @@ class SimulationStorageHDF5:
             except TypeError:
                 grp.attrs[key] = str(val)
 
+        n_eps = len(episodes)
+        scalar_cols = {}
         eps_grp = grp.create_group("episodes")
-        for idx, ep in enumerate(episodes, start=1):
-            ep_grp = eps_grp.create_group(f"episode {idx}")
-            # metadata-specific attributes
-            meta = ep.get("metadata", {})
-            if isinstance(meta, dict):
-                for mkey, mval in meta.items():
-                    try:
-                        ep_grp.attrs[mkey] = mval
-                    except TypeError:
-                        ep_grp.attrs[mkey] = str(mval)
 
-            # now handle each dataset field
+        for pos, ep in enumerate(episodes, start=1):
+            meta = ep.get("metadata", {})
+            if not isinstance(meta, dict):
+                meta = {}
+
+            scalars = {}
+            arrays = {}
             for field, data in ep.items():
                 if field == "metadata":
                     continue
-
                 arr = np.asarray(data)
+                if arr.ndim == 0 and arr.dtype != object:
+                    scalars[field] = arr.item()
+                else:
+                    arrays[field] = arr
+            for mkey, mval in meta.items():
+                if isinstance(mval, (bool, int, float, np.generic)):
+                    scalars.setdefault(mkey, mval)
+            scalars.setdefault("episode_index", pos - 1)
 
-                # 1) Scalar case: store as plain scalar, no chunks/compression
-                if arr.ndim == 0:
-                    ep_grp.create_dataset(field, data=arr.item())
-                    continue
+            for field, val in scalars.items():
+                scalar_cols.setdefault(field, [None] * n_eps)[pos - 1] = val
 
-                # 2) Object-dtype: JSON-encode to bytes
+            if not arrays:
+                continue
+
+            # Full-history episode: keep the per-episode group for its arrays.
+            ep_grp = eps_grp.create_group(f"episode {pos}")
+            for mkey, mval in meta.items():
+                try:
+                    ep_grp.attrs[mkey] = mval
+                except TypeError:
+                    ep_grp.attrs[mkey] = str(mval)
+
+            for field, arr in arrays.items():
+                # Object-dtype: JSON-encode to bytes
                 if arr.dtype == object:
                     str_data = np.array([json.dumps(x) for x in arr.ravel()], dtype="S")
                     # reshape back to original shape
@@ -163,8 +180,8 @@ class SimulationStorageHDF5:
                     )
                     continue
 
-                # 3) Numeric arrays: choose a chunk size on the first axis
-                #    to keep each chunk ≲1 MB
+                # Numeric arrays: choose a chunk size on the first axis
+                # to keep each chunk ≲1 MB
                 item_bytes = arr.dtype.itemsize
                 max_elems = max(1, (1024 * 1024) // item_bytes)
                 chunk_len = min(arr.shape[0], max_elems)
@@ -178,8 +195,18 @@ class SimulationStorageHDF5:
                     chunks=chunk_shape
                 )
 
+        sc_grp = grp.create_group("episode_scalars")
+        for field, vals in scalar_cols.items():
+            if any(v is None for v in vals):
+                col = np.asarray([np.nan if v is None else v for v in vals],
+                                 dtype=float)
+            else:
+                col = np.asarray(vals)
+            if col.dtype == object:
+                # Non-numeric scalar field: not representable as a column.
+                continue
+            sc_grp.create_dataset(field, data=col)
+
     def close(self):
-        """
-        Close the underlying HDF5 file.
-        """
+        """Close the underlying HDF5 file."""
         self.h5file.close()

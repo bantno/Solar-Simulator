@@ -9,16 +9,14 @@ from tqdm import tqdm
 ####################################################################################
 
 class AbstractSimulation(ABC):
-    """
-    Abstract base class for simulating decision-making policies in an MDP.
+    """Abstract base class for simulating decision-making policies in an MDP.
 
     The simulation loop now relies on an environment provider to supply environmental
     data (solar, wind, whale observation) rather than passing these arrays explicitly.
     """
     # TODO: Add way to save simulation environment data when save_history is set to True.
     def __init__(self, mdp, horizon: int, initial_state: np.ndarray, env_provider: AbstractEnvironmentProvider = None, save_history = False):
-        """
-        Parameters:
+        """Args:
             mdp: An instance of a class that implements the MDP.
             horizon: Total number of simulation time steps.
             initial_state: The starting state.
@@ -36,14 +34,12 @@ class AbstractSimulation(ABC):
 
     @abstractmethod
     def choose_action(self, **kwargs) -> int:
-        """
-        Select an action given the current state and time step.
+        """Select an action given the current state and time step.
         """
         pass
 
     def simulate_episode(self):
-        """
-        Simulate a single episode using the policy and environment provider,
+        """Simulate a single episode using the policy and environment provider,
         using NumPy arrays for efficiency.
         """
         # Convert the initial state to a NumPy array and determine its shape.
@@ -98,11 +94,10 @@ class AbstractSimulation(ABC):
 
     
     def step(self,state,action,solar_sample,wind_sample,whale_observation,t):
-        """
-        Progress the simulation by one time step based on the vehicle state at the beginning of the time step,
+        """Progress the simulation by one time step based on the vehicle state at the beginning of the time step,
         the selected action, and the sampled environmental data.
 
-        Parameters:
+        Args:
             state (np.ndarray): Current state of the vehicle.
             action (int): Action taken by the vehicle.
             solar_sample (float): Sampled collected solar energy.
@@ -119,8 +114,7 @@ class AbstractSimulation(ABC):
         return next_state, reward
 
     def simulate_multiple_episodes(self, num_episodes: int):
-        """
-        Yield episode data; full history for first full_history_episodes,
+        """Yield episode data; full history for first full_history_episodes,
         then only summary for the remainder.
         """
         for episode_index in tqdm(range(num_episodes)):
@@ -140,7 +134,7 @@ class AbstractSimulation(ABC):
                     'whale_series': whale,
                     'metadata': {'episode_index': episode_index},
                     'total_reward': float(sum(rews)),
-                    'flight_hrs': float(sum(acts)/4.), # TODO: Make this not hardcoded for 15min time step
+                    'flight_hrs': float(sum(acts) * self.mdp.delta_t / 60.0),
                 }
             else:
                 # summary only
@@ -149,15 +143,14 @@ class AbstractSimulation(ABC):
                     'failure': bool(traj[-1][1] == 2),
                     'failure_step': len(traj) - 1 if traj[-1][1] == 2 else self.horizon,
                     'total_reward': float(sum(rews)),
-                    'flight_hrs': float(sum(acts)/4.), # TODO: Make this not hardcoded for 15min time step
+                    'flight_hrs': float(sum(acts) * self.mdp.delta_t / 60.0),
 
                 }
 
             yield episode_data
 
 class AbstractContinuousEnergySimulation(ABC):
-    """
-    Abstract base class for simulating decision-making policies in an MDP.
+    """Abstract base class for simulating decision-making policies in an MDP.
 
     The simulation loop now relies on an environment provider to supply environmental
     data (solar, wind, whale observation) rather than passing these arrays explicitly.
@@ -181,14 +174,12 @@ class AbstractContinuousEnergySimulation(ABC):
 
     @abstractmethod
     def choose_action(self, **kwargs) -> int:
-        """
-        Select an action given the current state and time step.
+        """Select an action given the current state and time step.
         """
         raise NotImplementedError("Subclasses must implement this method.")
 
     def simulate_episode(self):
-        """
-        Simulate a single episode using the policy and environment provider.
+        """Simulate a single episode using the policy and environment provider.
         Pre-allocates fixed-size arrays and truncates them at the first failure.
         """
         max_steps = self.horizon
@@ -281,10 +272,11 @@ class AbstractContinuousEnergySimulation(ABC):
         rewards = self.mdp.reward(states, actions, next_states, t)
         return next_states, rewards, next_energy
 
-    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
-        """
-        Vectorized policy: choose an action for every episode (row of ``state``) at once.
+    def choose_action_batch(self, state, solar, wind, whale, t, cur_bins=None) -> np.ndarray:
+        """Vectorized policy: choose an action for every episode (row of ``state``) at once.
         Subclasses must override. ``state`` is (n,2); solar/wind/whale are (n,).
+        ``cur_bins`` is the current wind-bin per lane (only used by the optimal policy when
+        the wind Markov chain is active; ignored otherwise).
         Returns an (n,) int array of actions.
         """
         raise NotImplementedError("Subclasses must implement choose_action_batch.")
@@ -298,8 +290,7 @@ class AbstractContinuousEnergySimulation(ABC):
         return next_states, rewards, next_energy
 
     def simulate_episode_batch(self, n: int):
-        """
-        Simulate n episodes simultaneously as vectorized (n,...) batches.
+        """Simulate n episodes simultaneously as vectorized (n,...) batches.
 
         Episodes are independent Monte Carlo rollouts; running them together replaces
         the per-episode Python loop with one vectorized pass per time step. Failed
@@ -349,9 +340,16 @@ class AbstractContinuousEnergySimulation(ABC):
             wind  = self.env_provider.sample_wind_speed(t, n)[active_idx]
             whale = self.env_provider.sample_whale_observation(t, n)[active_idx]
 
+            # Current exogenous-regime bin per active lane (joint wind-solar index;
+            # only when a Markov chain is active).
+            cur_bins = None
+            if getattr(self.env_provider, "use_exo_chain",
+                       getattr(self.env_provider, "use_wind_chain", False)):
+                cur_bins = self.env_provider.last_exo_bins[active_idx]
+
             s = state[active_idx]
             e = energy[active_idx]
-            a = self.choose_action_batch(s, solar, wind, whale, t).astype(int)
+            a = self.choose_action_batch(s, solar, wind, whale, t, cur_bins=cur_bins).astype(int)
 
             next_state, reward, next_energy = self.step_batch(e, s, a, solar, wind, t)
 
@@ -397,8 +395,7 @@ class AbstractContinuousEnergySimulation(ABC):
         return results
 
     def simulate_multiple_episodes(self, num_episodes: int):
-        """
-        Yield episode data; full history for first full_history_episodes,
+        """Yield episode data; full history for first full_history_episodes,
         then only summary for the remainder.
 
         All episodes are simulated in a single vectorized batch (see
@@ -414,7 +411,7 @@ class AbstractContinuousEnergySimulation(ABC):
             failed = bool(res['done'][episode_index])
             last_idx = int(res['failure_step'][episode_index])
             total_reward = float(res['total_reward'][episode_index])
-            flight_hrs = float(res['action_sum'][episode_index]) / 4  # TODO: hardcoded 15min step
+            flight_hrs = float(res['action_sum'][episode_index]) * self.mdp.delta_t / 60.0
             failure_type = int(res['failure_type'][episode_index])
 
             if K > 0 and episode_index < K:
@@ -463,8 +460,7 @@ class AlwaysFloatSimulation(AbstractSimulation):
 # Continuous Energy Simulation Classes
 ####################################################################################
 class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimulation):
-    """
-    Simulation class that selects the optimal action by evaluating the Bellman value 
+    """Simulation class that selects the optimal action by evaluating the Bellman value
     for each action (0 or 1) using a backward induction solver.
     """
 
@@ -484,8 +480,7 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
         self.mdp_solver = mdp_solver
 
     def choose_action(self, state, solar_sample_w, wind_sample_ms, whale_observation, t) -> int:
-        """
-        For the current state and time t, for each candidate action (0 or 1) we compute
+        """For the current state and time t, for each candidate action (0 or 1) we compute
         the success probability and then use a two-outcome integration:
         - With probability p_success, the transition is successful.
         - With probability (1 - p_success), the transition fails (yielding a failure state).
@@ -539,18 +534,28 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
         # Return the action with the highest expected value.
         return int(np.argmax(value_list))
 
-    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
-        """
-        Vectorized optimal policy: for every episode and both candidate actions,
+    def choose_action_batch(self, state, solar, wind, whale, t, cur_bins=None) -> np.ndarray:
+        """Vectorized optimal policy: for every episode and both candidate actions,
         compute the two-outcome expected value and return the argmax action.
 
         This mirrors ``choose_action`` but evaluates all n episodes at once and uses
         the solver's O(n) ``value_function_batch`` instead of the per-call state scan.
+        When a weather Markov chain is active, the future value is taken over the next
+        exogenous regime (joint wind-solar bin index) via the stage transition matrix
+        conditioned on ``cur_bins``.
         """
         n = state.shape[0]
         current_energy = self.mdp.transition_logic.soc_to_energy(state[:, 0])   # (n,)
         failure_state = np.tile(np.array([-1.0, 2]), (n, 1))                    # (n,2)
         values = np.empty((n, 2))
+
+        # Stage transition matrix for the chain (None -> i.i.d. lookup).
+        if cur_bins is not None:
+            get_P = getattr(self.env_provider, "get_exo_transition",
+                            self.env_provider.get_wind_transition)
+            P = get_P(t)
+        else:
+            P = None
 
         for action in (0, 1):
             actions_arr = np.full(n, action, dtype=int)
@@ -565,7 +570,7 @@ class OptimalContinuousAnalyticalPolicySimulation(AbstractContinuousEnergySimula
             )
             reward_success = self.mdp.reward(state, actions_arr, next_state_success, t)
             value_success = self.mdp_solver.value_function_batch(
-                t, reward_success, next_state_success
+                t, reward_success, next_state_success, cur_bins=cur_bins, P=P
             )
             reward_failure = self.mdp.reward(state, actions_arr, failure_state, t)
             values[:, action] = p_success * value_success + (1.0 - p_success) * reward_failure
@@ -590,11 +595,10 @@ class UnifiedThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
         self.low_battery_threshold = self.calculate_low_battery_threshold(mdp)
 
     def calculate_low_battery_threshold(self, mdp):
-        """
-        Calculate the low battery threshold based on the MDP's transition logic.
+        """Calculate the low battery threshold based on the MDP's transition logic.
         This is a placeholder for a more complex calculation if needed.
         """
-        timestep = 15*60 # 15 minutes in seconds TODO: make this not hardcoded
+        timestep = mdp.delta_t * 60  # one model step in seconds
         cruise_power = mdp.cruise_power
         landing_power = mdp.landing_power
         total_reserve_energy = (cruise_power + landing_power) * timestep
@@ -629,8 +633,8 @@ class UnifiedThresholdContinuousSimulation(AbstractContinuousEnergySimulation):
 
         return action
 
-    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
-        """Vectorized form of ``choose_action`` over n episodes."""
+    def choose_action_batch(self, state, solar, wind, whale, t, cur_bins=None) -> np.ndarray:
+        """Vectorized form of ``choose_action`` over n episodes (wind bin unused)."""
         soc = state[:, 0]
         mode = state[:, 1]
         action = np.zeros(state.shape[0], dtype=int)
@@ -684,8 +688,8 @@ class ObservationThresholdContinuousSimulation(AbstractContinuousEnergySimulatio
             action = 1
         return action
 
-    def choose_action_batch(self, state, solar, wind, whale, t) -> np.ndarray:
-        """Vectorized form of ``choose_action`` over n episodes."""
+    def choose_action_batch(self, state, solar, wind, whale, t, cur_bins=None) -> np.ndarray:
+        """Vectorized form of ``choose_action`` over n episodes (wind bin unused)."""
         soc = state[:, 0]
         action = np.zeros(state.shape[0], dtype=int)
         fly = (

@@ -1,0 +1,24 @@
+experiment_name: mkv_hawaii_wind
+description: 'Markov ablation, arm ''wind'' @ hawaii: optimal policy evaluated on
+  historical bootstrap weather; paired with the other arms episode-for-episode (seed-0
+  CRN). See docs/markov_ablation_experiment.md.'
+battery_capacities: [150.0, 300.0, 600.0]
+horizons: [5760]
+failure_penalties: [5.0, 20.0, 80.0]
+threshold_values: []
+wind_thresholds: []
+episodes: 3000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+locations:
+- {latitude: 21.0, longitude: -158.0, data_path: Data/EXPECTED_DATA/data_expected_lat21.0_lon-158.0_15min.pkl}
+historical_weather: {enabled: true, block_length_days: 7}
+start_datetimes: ['2025-06-10T00:00:00', '2025-12-10T00:00:00']
+wind_chain: {enabled: true, n_bins: 5, path: Data/EXPECTED_DATA/data_expected_lat21.0_lon-158.0_15min_windchain_wind5.pkl}
+solar_chain: {enabled: false}

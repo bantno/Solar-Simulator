@@ -1,5 +1,4 @@
-"""
-Script 4: Failure Penalty sweep (single combined figure, one row per metric × one column per obs threshold)
+"""Script 4: Failure Penalty sweep (single combined figure, one row per metric × one column per obs threshold)
 
 Each subplot shows metric vs failure_penalty for a given observation-threshold.
 One line per wind-threshold. A common legend appears to the right.

@@ -1,5 +1,4 @@
-"""
-Verification for the runtime-optimization work (vectorized solver + batched episodes).
+"""Verification for the runtime-optimization work (vectorized solver + batched episodes).
 
 Strategy: the original scalar code paths (`_value`, `simulate_episode`, scalar
 `choose_action`, `lookup_future_values`) are still present alongside the vectorized

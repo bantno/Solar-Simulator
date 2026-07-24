@@ -1,0 +1,30 @@
+experiment_name: full_hawaii_iid
+description: 'failbin validation: full_hawaii_iid @ Hawaii offshore (steady trade
+  winds)'
+start_datetime: '2025-06-10T00:00:00'
+battery_capacities:
+- 300.0
+horizons:
+- 2880
+failure_penalties:
+- 20.0
+episodes: 10000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+save_states: false
+full_history_episodes: 0
+locations:
+- latitude: 21.0
+  longitude: -158.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat21.0_lon-158.0_15min.pkl
+historical_weather:
+  enabled: true
+  block_length_days: 7
+include_optimal: true
+threshold_values: []
+wind_thresholds: []
+wind_chain:
+  enabled: false

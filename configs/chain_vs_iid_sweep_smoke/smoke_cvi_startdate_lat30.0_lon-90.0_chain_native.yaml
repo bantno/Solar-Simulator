@@ -1,0 +1,22 @@
+experiment_name: smoke_cvi_startdate_lat30.0_lon-90.0_chain_native
+description: 'Chain-vs-IID evaluation sweep ''startdate'' at lat30.0_lon-90.0: chain-solved
+  optimal policy, episodes in its own synthetic world. Paired with the other arm;
+  configs differ only in wind_chain.enabled.'
+battery_capacities: [300.0]
+horizons: [300]
+failure_penalties: [5.0]
+threshold_values: []
+wind_thresholds: []
+episodes: 200
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+locations:
+- {latitude: 30.0, longitude: -90.0, data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min.pkl}
+wind_chain: {enabled: true, n_bins: 4}
+start_datetimes: ['2020-05-01T00:00:00', '2020-07-01T00:00:00']

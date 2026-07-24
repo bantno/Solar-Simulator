@@ -1,0 +1,42 @@
+experiment_name: journal_threshold_vs_optimal_chain_historical
+description: >
+  Chain-solved optimal policy vs threshold policy, both evaluated on real historical
+  weather (block bootstrap).  The optimal policy is solved with the Markov-modulated
+  wind chain; episodes are driven by the lat30/lon-90 historical record.  This is the
+  headline persistence comparison: does the chain-aware policy outperform the i.i.d.
+  policy on *real* weather with genuine wind autocorrelation?
+start_datetime: '2025-06-10T00:00:00'
+
+battery_capacities: [300.0]
+threshold_values: [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
+wind_thresholds: [0.0, 3.0, 6.0, 9.0, 12.0]
+horizons: [4000]
+failure_penalties: [5.0]
+episodes: 1000
+
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: true
+full_history_episodes: 20
+
+locations:
+- latitude: 30.0
+  longitude: -90.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min.pkl
+
+# Chain-solved optimal policy (Markov-modulated wind; 3D value table).
+# bin_edges: interior cutpoints in m/s (aircraft-based thresholds). Omit to use equal-occupancy
+# quantile bins derived from historical data. Changing these triggers an automatic artifact rebuild.
+wind_chain:
+  enabled: true
+  # path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min_windchain.pkl  # auto-derived
+
+# Historical weather for episode rollouts.  Chain bin edges are automatically
+# threaded through to the historical provider for chain-solved evaluation.
+historical_weather:
+  enabled: true
+  block_length_days: 7

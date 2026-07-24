@@ -276,10 +276,7 @@ def plot_data(
 
 
 def func(x, plane):
-    """
-    Define objective functions here.
-
-    """
+    """Define objective functions here."""
     days = 31
     f1, num_takeoffs = battery_sweep(plane, x, days=days, month=6)
     # # TODO: Create an objective function that accounts for the riskiness of taking off
@@ -322,13 +319,15 @@ def plot_yearly_dc(
 
 
 def generate_datetimes(start_index, end_index, timestep):
-    """
-    Generates a list of datetime objects between start_index and end_index.
+    """Generates a list of datetime objects between start_index and end_index.
 
-    :param start_index: Tuple representing (month, day, hour)
-    :param end_index: Tuple representing (month, day, hour)
-    :param timestep: Time difference between consecutive datetimes (in minutes)
-    :return: List of datetime objects
+    Args:
+        start_index: Tuple representing (month, day, hour)
+        end_index: Tuple representing (month, day, hour)
+        timestep: Time difference between consecutive datetimes (in minutes)
+
+    Returns:
+        List of datetime objects
     """
     # Unpack the tuples (month, day, hour)
     start_month, start_day, start_hour = start_index

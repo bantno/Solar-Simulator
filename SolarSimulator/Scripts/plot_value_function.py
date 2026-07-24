@@ -1,5 +1,4 @@
-"""
-Quick-plot a saved value-function table (.npy) from the backward-induction solver.
+"""Quick-plot a saved value-function table (.npy) from the backward-induction solver.
 
 Table layout (see mdpAnalyticalBackwardSolver / mdp._get_states):
   shape = (num_states, horizon)

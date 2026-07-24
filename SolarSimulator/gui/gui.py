@@ -15,10 +15,9 @@ from PyQt5.QtCore import QDateTime, Qt, QDate, QTime
 
 
 def create_simulation_wrapper(args):
-    """
-    Wrapper function to create a simulation using a factory and parameters.
+    """Wrapper function to create a simulation using a factory and parameters.
 
-    Parameters:
+    Args:
         args (tuple): A tuple containing:
             - factory: Simulation factory instance
             - sim_type (str): Type of simulation to run
@@ -43,26 +42,21 @@ def create_simulation_wrapper(args):
 
 
 class SimulationGUI(QWidget):
-    """
-    Qt-based graphical user interface for running and configuring simulation experiments.
+    """Qt-based graphical user interface for running and configuring simulation experiments.
 
     Provides two tabs:
       - Run Simulation: Select an existing YAML config and execute simulations.
       - Create Config: Build a new YAML config from user inputs.
     """
     def __init__(self):
-        """
-        Initialize the Simulation GUI window, set style, and build UI.
-        """
+        """Initialize the Simulation GUI window, set style, and build UI."""
         super().__init__()
         self.setWindowTitle("Simulation Runner")
         self.setMinimumSize(600, 400)
         self.init_ui()
 
     def init_ui(self):
-        """
-        Set up the main layout with tabs for running simulations and creating config files.
-        """
+        """Set up the main layout with tabs for running simulations and creating config files."""
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_run_tab(), "Run Simulation")
         self.tabs.addTab(self._build_config_tab(), "Create Config")
@@ -74,8 +68,7 @@ class SimulationGUI(QWidget):
         self.setLayout(main_layout)
 
     def _build_run_tab(self):
-        """
-        Construct the 'Run Simulation' tab contents.
+        """Construct the 'Run Simulation' tab contents.
 
         Returns:
             QWidget: The tab widget containing controls to run simulations.
@@ -121,8 +114,7 @@ class SimulationGUI(QWidget):
         return run_tab
 
     def _build_config_tab(self):
-        """
-        Construct the 'Create Config' tab contents.
+        """Construct the 'Create Config' tab contents.
 
         Returns:
             QWidget: The tab widget containing controls to build configuration.
@@ -187,8 +179,7 @@ class SimulationGUI(QWidget):
         return config_tab
 
     def browse_file(self):
-        """
-        Open a file dialog for selecting an existing YAML config file and
+        """Open a file dialog for selecting an existing YAML config file and
         update the config input field.
         """
         file_path, _ = QFileDialog.getOpenFileName(
@@ -198,8 +189,7 @@ class SimulationGUI(QWidget):
             self.config_input.setText(file_path)
 
     def browse_output(self):
-        """
-        Open a file dialog for choosing where to save the new YAML config file and
+        """Open a file dialog for choosing where to save the new YAML config file and
         update the output path input field.
         """
         file_path, _ = QFileDialog.getSaveFileName(
@@ -209,8 +199,7 @@ class SimulationGUI(QWidget):
             self.output_path_input.setText(file_path)
 
     def run_simulation(self):
-        """
-        Execute simulations based on the selected YAML configuration.
+        """Execute simulations based on the selected YAML configuration.
 
         Validates the config path, then builds simulation parameters,
         creates and runs simulations (optionally in parallel), and stores results.
@@ -263,8 +252,7 @@ class SimulationGUI(QWidget):
             QMessageBox.critical(self, "Error", f"Simulation failed with error:\n{str(e)}")
 
     def export_config(self):
-        """
-        Build a YAML configuration from user inputs and save it to the selected path.
+        """Build a YAML configuration from user inputs and save it to the selected path.
 
         Parses comma-separated lists and validates input before writing the file.
         """
@@ -322,8 +310,7 @@ class SimulationGUI(QWidget):
 
 
 def main():
-    """
-    Entry point for the Simulation GUI application.
+    """Entry point for the Simulation GUI application.
 
     Initializes QApplication, applies styling, and launches the GUI.
     """

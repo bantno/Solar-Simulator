@@ -6,8 +6,7 @@ import pandas as pd
 
 
 def validate_dataframes_in_directory(directory):
-    """
-    Reads all pickle files in a directory and ensures the DataFrames they store are all the same size.
+    """Reads all pickle files in a directory and ensures the DataFrames they store are all the same size.
 
     Args:
         directory (str): Path to the directory containing the pickle files.

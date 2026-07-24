@@ -1,5 +1,4 @@
-"""
-Script 2: Battery Capacity sweep (standalone, one figure per obs threshold)
+"""Script 2: Battery Capacity sweep (standalone, one figure per obs threshold)
 
 Generates individual figures showing metrics vs battery capacity. By default,
 all metrics are plotted separately. For each observation-threshold value and

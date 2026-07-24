@@ -3,10 +3,9 @@ import matplotlib.pyplot as plt
 
 
 def plot_weather_data(file1, file2):
-    """
-    Plots weather data (wind speed, wind direction, and shortwave radiation) from two files.
+    """Plots weather data (wind speed, wind direction, and shortwave radiation) from two files.
 
-    Parameters:
+    Args:
         file1 (str): Path to the first CSV or pickle file containing the weather data.
         file2 (str): Path to the second CSV or pickle file containing the weather data.
     """
@@ -69,11 +68,10 @@ def plot_weather_data(file1, file2):
 
 
 def plot_first_year_weather_data(file1, file2):
-    """
-    Plots the first year of weather data (wind speed, wind direction, and shortwave radiation)
+    """Plots the first year of weather data (wind speed, wind direction, and shortwave radiation)
     from two files, considering the first year in either file.
 
-    Parameters:
+    Args:
         file1 (str): Path to the first CSV or pickle file containing the weather data.
         file2 (str): Path to the second CSV or pickle file containing the weather data.
     """

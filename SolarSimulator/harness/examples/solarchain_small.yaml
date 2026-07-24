@@ -1,0 +1,41 @@
+experiment_name: solarchain_small
+description: >
+  Small solar-persistence (Markov-modulated clear-sky index) validation sweep at
+  lat30/lon-90, matching iid_small.yaml / chain_small.yaml so the run directories can be
+  compared. Solar chain only (wind stays i.i.d.); enable wind_chain too for the joint run.
+start_datetime: '2020-04-01T00:00:00'
+
+# --- sweep matrix (any list is a swept dimension) ---
+battery_capacities: [300.0, 400.0]
+threshold_values: [0.25]
+wind_thresholds: [8.0, 12.0]
+horizons: [150]
+failure_penalties: [5.0]
+episodes: 500
+
+# --- model settings ---
+transition_model: moderate
+solar_panel_model: constant
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+
+locations:
+- latitude: 30.0
+  longitude: -90.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min.pkl
+
+# Solar persistence ON. `path` defaults to the data_path with `_solarchain` inserted
+# (Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min_solarchain.pkl).
+# Bins are stage-relative quantile bands (no bin_edges option — see build_solarchain.py);
+# n_bins is the resolution knob. Changing it triggers an automatic artifact rebuild.
+solar_chain:
+  enabled: true
+  n_bins: 3
+
+# Wind persistence OFF here (solar-only comparison); set enabled: true for the joint run.
+wind_chain:
+  enabled: false

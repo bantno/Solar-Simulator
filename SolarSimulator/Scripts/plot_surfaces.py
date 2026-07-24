@@ -12,8 +12,8 @@ class EVTablePlotterPlotly:
         penalty: float = 0,
         outdir: str = "."
     ):
-        """
-        Overlaid moored/flying/broken surfaces in one 3D plot.
+        """Overlaid moored/flying/broken surfaces in one 3D plot.
+
         Saves both HTML and PNG versions.
         """
         # split states
@@ -86,9 +86,7 @@ class EVTablePlotterPlotly:
         penalty: float = 0,
         outdir: str = "."
     ):
-        """
-        Single surface Δ = flying − moored.
-        """
+        """Single surface Δ = flying − moored."""
         moored = data[:101, :]
         flying = data[101:202, :]
 
@@ -131,9 +129,7 @@ class EVTablePlotterPlotly:
 
 
 def parse_filename(filename: str):
-    """
-    As before: future_value_table_{cap}Wh_{horizon}h_{penalty}p.npy
-    """
+    """As before: future_value_table_{cap}Wh_{horizon}h_{penalty}p.npy"""
     base = os.path.basename(filename)
     pattern = (
         r"future_value_table_"

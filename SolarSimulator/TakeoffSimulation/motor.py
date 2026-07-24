@@ -1,9 +1,8 @@
 import numpy as np
 
 class Motor:
-    """
-    Motor model for HQ8040-3 based on static test data.
-    
+    """Motor model for HQ8040-3 based on static test data.
+
     Attributes:
         throttle_arr (np.ndarray): Throttle settings (%).
         thrust_g_arr  (np.ndarray): Thrust (g) at each throttle.
@@ -28,8 +27,7 @@ class Motor:
             dtype=float)
 
     def thrust(self, throttle: float, units: str = 'g') -> float:
-        """
-        Interpolate static thrust at a given throttle.
+        """Interpolate static thrust at a given throttle.
 
         Args:
             throttle (float): Throttle setting %.
@@ -48,8 +46,7 @@ class Motor:
             raise ValueError("Units must be 'g' or 'N'")
 
     def power(self, throttle: float, units: str = 'W') -> float:
-        """
-        Interpolate input power at a given throttle.
+        """Interpolate input power at a given throttle.
 
         Args:
             throttle (float): Throttle setting %.
@@ -68,8 +65,7 @@ class Motor:
             raise ValueError("Units must be 'W' or 'kW'")
 
     def efficiency(self, throttle: float) -> float:
-        """
-        Compute efficiency (thrust per watt) at a given throttle.
+        """Compute efficiency (thrust per watt) at a given throttle.
 
         Args:
             throttle (float): Throttle setting %.

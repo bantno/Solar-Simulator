@@ -1,5 +1,4 @@
-"""
-Start-date × Metric subfigures (external, compact legend; paper-ready)
+"""Start-date × Metric subfigures (external, compact legend; paper-ready)
 
 One figure per (location × metric):
   subfig_<letter>_<metric>_{lat}_{lon}.{ext}

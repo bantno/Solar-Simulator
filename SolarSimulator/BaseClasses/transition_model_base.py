@@ -9,31 +9,28 @@ class ActionSuccessProbabilityModel(ABC):
 
     @abstractmethod
     def compute_probability(self, wind_speed, action, state) -> np.ndarray:
-        """
-        Compute the probability of action success.
+        """Compute the probability of action success.
 
-        Parameters:
-        - wind_speed (float): Current wind speed.
-        - action (int): Control action (1 = active action, 0 = passive action).
-        - state (tuple): System state at the current stage.
+        Args:
+            wind_speed (float): Current wind speed.
+            action (int): Control action (1 = active action, 0 = passive action).
+            state (tuple): System state at the current stage.
 
         Returns:
-        - float: Probability of success P(S=1 | w_k).
+            float: Probability of success P(S=1 | w_k).
         """
 
     @staticmethod
     def check_and_broadcast(wind_speed, action, state) -> tuple:
-        """
-        Helper function to check the length of input variables and broadcast scalars
-        to match the length of the largest input.
+        """Helper function to check the length of input variables and broadcast scalars to match the length of the largest input.
 
-        Parameters:
-        - wind_speed: Either a scalar or vector of length n.
-        - action: Either a scalar or vector of length n.
-        - state: Either a tuple (x,y) or a list of tuples [(x,y),(a,b)...] or a numpy array [[x,y],[a,b],...]
+        Args:
+            wind_speed: Either a scalar or vector of length n.
+            action: Either a scalar or vector of length n.
+            state: Either a tuple (x,y) or a list of tuples [(x,y),(a,b)...] or a numpy array [[x,y],[a,b],...]
 
         Returns:
-        - list: List of broadcasted inputs, ensuring they all have the same length.
+            list: List of broadcasted inputs, ensuring they all have the same length.
         """
         wind_speed = np.atleast_1d(wind_speed)
         action = np.atleast_1d(action)
@@ -50,9 +47,7 @@ class ActionSuccessProbabilityModel(ABC):
         return wind_speed, action, state
 
     def visualize_success_probability(self):
-        """
-        Visualize the success probability for wind speeds from 0-40 for all combinations of action and state.
-        """
+        """Visualize the success probability for wind speeds from 0-40 for all combinations of action and state."""
         wind_speeds = np.linspace(0, 40, 400)
         actions = [0, 1]
         states = [(0, 0), (0, 1)]
@@ -82,9 +77,7 @@ class ActionSuccessProbabilityModel(ABC):
         plt.show()
 
     def visualize_failure_probability(self):
-        """
-        Visualize the success probability for wind speeds from 0-40 for all combinations of action and state.
-        """
+        """Visualize the success probability for wind speeds from 0-40 for all combinations of action and state."""
         wind_speeds = np.linspace(0, 40, 400)
         actions = [0, 1]
         states = [(0, 0), (0, 1)]
@@ -118,31 +111,29 @@ class SigmoidSuccessProbability(ActionSuccessProbabilityModel):
 
     @abstractmethod
     def compute_probability(self, wind_speed, action, state):
-        """
-        Compute the probability of success based on wind speed, action, and state.
+        """Compute the probability of success based on wind speed, action, and state.
 
-        Parameters:
-        - wind_speed (float): Current wind speed.
-        - action (int): Control action (e.g., 1 = active action, 0 = passive action).
-        - state (tuple): System state at the current stage.
+        Args:
+            wind_speed (float): Current wind speed.
+            action (int): Control action (e.g., 1 = active action, 0 = passive action).
+            state (tuple): System state at the current stage.
 
         Returns:
-        - float: Probability of success.
+            float: Probability of success.
         """
         pass
 
     @abstractmethod
     def sigmoid(self, x, a, b):
-        """
-        Compute the sigmoid function.
+        """Compute the sigmoid function.
 
-        Parameters:
-        - x (float): Input value (e.g., wind speed).
-        - a (float): Sigmoid parameter for shift.
-        - b (float): Sigmoid parameter for scale.
+        Args:
+            x (float): Input value (e.g., wind speed).
+            a (float): Sigmoid parameter for shift.
+            b (float): Sigmoid parameter for scale.
 
         Returns:
-        - float: Computed sigmoid value.
+            float: Computed sigmoid value.
         """
         pass
 
@@ -150,26 +141,24 @@ class LinearSuccessProbability(ActionSuccessProbabilityModel):
     """Alternative probability model where failure probability increases linearly with wind speed."""
 
     def __init__(self, failure_slope=0.05,name="linear"):
-        """
-        Initialize the linear failure probability model.
+        """Initialize the linear failure probability model.
 
-        Parameters:
-        - failure_slope (float): Slope controlling how fast failure probability increases with wind speed.
+        Args:
+            failure_slope (float): Slope controlling how fast failure probability increases with wind speed.
         """
         self.failure_slope = failure_slope
         self.name=name
 
     def compute_probability(self, wind_speed, action, state):
-        """
-        Compute P(S=1 | w_k) using a linear failure probability model.
+        """Compute P(S=1 | w_k) using a linear failure probability model.
 
-        Parameters:
-        - wind_speed (float or np.array): Current wind speed or an array of wind speeds.
-        - action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
-        - state (tuple or np.array): System state at the current stage, or an array of states.
+        Args:
+            wind_speed (float or np.array): Current wind speed or an array of wind speeds.
+            action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
+            state (tuple or np.array): System state at the current stage, or an array of states.
 
         Returns:
-        - np.array: Probabilities of success for each element.
+            np.array: Probabilities of success for each element.
         """
         # Use the helper function to handle broadcasting
         wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
@@ -185,22 +174,19 @@ class OnlySuccessProbability(ActionSuccessProbabilityModel):
     """Probability model using where a valid vehicle state and action always leads to a successful transition."""
 
     def __init__(self,name="nofail"):
-        """
-        Initialize the probability model with default parameters.
-        """
+        """Initialize the probability model with default parameters."""
         self.name=name
 
     def compute_probability(self, wind_speed, action, state):
-        """
-        Compute P(S=1 | w_k) based on the vehicle's state and action.
+        """Compute P(S=1 | w_k) based on the vehicle's state and action.
 
-        Parameters:
-        - wind_speed (float or np.array): Current wind speed or an array of wind speeds.
-        - action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
-        - state (tuple or np.array): System state at the current stage, or an array of states.
+        Args:
+            wind_speed (float or np.array): Current wind speed or an array of wind speeds.
+            action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
+            state (tuple or np.array): System state at the current stage, or an array of states.
 
         Returns:
-        - np.array: Probabilities of success for each element.
+            np.array: Probabilities of success for each element.
         """
 
         wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
@@ -238,22 +224,19 @@ class WindIndependentSuccessProbability(ActionSuccessProbabilityModel):
     """Probability model using where a valid vehicle state and action always leads to a successful transition."""
 
     def __init__(self,name="nowind"):
-        """
-        Initialize the probability model with default parameters.
-        """
+        """Initialize the probability model with default parameters."""
         self.name=name
 
     def compute_probability(self, wind_speed, action, state):
-        """
-        Compute P(S=1 | w_k) based on the vehicle's state and action.
+        """Compute P(S=1 | w_k) based on the vehicle's state and action.
 
-        Parameters:
-        - wind_speed (float or np.array): Current wind speed or an array of wind speeds.
-        - action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
-        - state (tuple or np.array): System state at the current stage, or an array of states.
+        Args:
+            wind_speed (float or np.array): Current wind speed or an array of wind speeds.
+            action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
+            state (tuple or np.array): System state at the current stage, or an array of states.
 
         Returns:
-        - np.array: Probabilities of success for each element.
+            np.array: Probabilities of success for each element.
         """
 
         wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
@@ -290,15 +273,14 @@ class WindIndependentSuccessProbability(ActionSuccessProbabilityModel):
 
 class DiscreteSuccessProbability(ActionSuccessProbabilityModel):
     def __init__(self, name="wind_based", wind_bins=None, wind_success_factors=None):
-        """
-        Initialize the probability model with wind speed based adjustments.
-        
-        Parameters:
-        - name (str): Identifier for the model.
-        - wind_bins (list): List of bin edges for wind speeds.
-          Defaults to [0, 5, 10, 15, np.inf], representing no, low, medium, and high wind speeds.
-        - wind_success_factors (list): Multiplicative factors for success probability corresponding to each bin.
-          Defaults to [1.0, 0.98, 0.95, 0.90] for the respective wind speed bins.
+        """Initialize the probability model with wind speed based adjustments.
+
+        Args:
+            name (str): Identifier for the model.
+            wind_bins (list): List of bin edges for wind speeds.
+                Defaults to [0, 5, 10, 15, np.inf], representing no, low, medium, and high wind speeds.
+            wind_success_factors (list): Multiplicative factors for success probability corresponding to each bin.
+                Defaults to [1.0, 0.98, 0.95, 0.90] for the respective wind speed bins.
         """
         self.name = name
         # Define wind speed bins: no wind, low, medium, high
@@ -307,20 +289,19 @@ class DiscreteSuccessProbability(ActionSuccessProbabilityModel):
         self.wind_success_factors = wind_success_factors if wind_success_factors is not None else [1.0, 0.98, 0.95, 0.90]
     
     def compute_probability(self, wind_speed, action, state):
-        """
-        Compute the success probability P(S=1 | wind_speed) for a given wind speed,
-        vehicle action, and state. The computation first determines a base probability
-        based on the vehicle mode and action, and then applies a wind speed adjustment
-        based on discrete bins.
-        
-        Parameters:
-        - wind_speed (float or np.array): Current wind speed(s).
-        - action (int or np.array): Control action (1 for active, 0 for passive).
-        - state (tuple or np.array): System state(s); expected to be indexable so that state[:, 1] 
-          yields the vehicle mode.
-        
+        """Compute the success probability P(S=1 | wind_speed) for a given wind speed, vehicle action, and state.
+
+        The computation first determines a base probability based on the vehicle mode
+        and action, and then applies a wind speed adjustment based on discrete bins.
+
+        Args:
+            wind_speed (float or np.array): Current wind speed(s).
+            action (int or np.array): Control action (1 for active, 0 for passive).
+            state (tuple or np.array): System state(s); expected to be indexable so that state[:, 1]
+                yields the vehicle mode.
+
         Returns:
-        - np.array: Adjusted probabilities of success for each element.
+            np.array: Adjusted probabilities of success for each element.
         """
         # Broadcast inputs to ensure matching dimensions
         wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
@@ -361,22 +342,19 @@ class TestSuccessProbability(ActionSuccessProbabilityModel):
     """Probability model using where a valid vehicle state and action always leads to a successful transition."""
 
     def __init__(self, name="test"):
-        """
-        Initialize the probability model with default parameters.
-        """
+        """Initialize the probability model with default parameters."""
         self.name = name
 
     def compute_probability(self, wind_speed, action, state):
-        """
-        Compute P(S=1 | w_k) based on the vehicle's state and action.
+        """Compute P(S=1 | w_k) based on the vehicle's state and action.
 
-        Parameters:
-        - wind_speed (float or np.array): Current wind speed or an array of wind speeds.
-        - action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
-        - state (tuple or np.array): System state at the current stage, or an array of states.
+        Args:
+            wind_speed (float or np.array): Current wind speed or an array of wind speeds.
+            action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
+            state (tuple or np.array): System state at the current stage, or an array of states.
 
         Returns:
-        - np.array: Probabilities of success for each element.
+            np.array: Probabilities of success for each element.
         """
         wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
 
@@ -416,16 +394,15 @@ class RealisticSuccessProbability(SigmoidSuccessProbability):
         self.name = name
 
     def compute_probability(self, wind_speed, action, state):
-        """
-        Compute P(S=1 | w_k) based on the vehicle's state and action.
+        """Compute P(S=1 | w_k) based on the vehicle's state and action.
 
-        Parameters:
-        - wind_speed (float or np.array): Current wind speed or an array of wind speeds.
-        - action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
-        - state (tuple or np.array): System state at the current stage, or an array of states.
+        Args:
+            wind_speed (float or np.array): Current wind speed or an array of wind speeds.
+            action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
+            state (tuple or np.array): System state at the current stage, or an array of states.
 
         Returns:
-        - np.array: Probabilities of success for each element.
+            np.array: Probabilities of success for each element.
         """
         wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
         vehicle_mode = state[:, 1]  # Mode: 0 = Floating, 1 = Flying, 2 = Broken
@@ -488,16 +465,15 @@ class ModerateSuccessProbability(SigmoidSuccessProbability):
         self.name = name
 
     def compute_probability(self, wind_speed, action, state):
-        """
-        Compute P(S=1 | w_k) based on the vehicle's state and action.
+        """Compute P(S=1 | w_k) based on the vehicle's state and action.
 
-        Parameters:
-        - wind_speed (float or np.array): Current wind speed or an array of wind speeds.
-        - action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
-        - state (tuple or np.array): System state at the current stage, or an array of states.
+        Args:
+            wind_speed (float or np.array): Current wind speed or an array of wind speeds.
+            action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
+            state (tuple or np.array): System state at the current stage, or an array of states.
 
         Returns:
-        - np.array: Probabilities of success for each element.
+            np.array: Probabilities of success for each element.
         """
         wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
         vehicle_mode = state[:, 1]  # Mode: 0 = Floating, 1 = Flying, 2 = Broken
@@ -543,16 +519,15 @@ class SomeSuccessProbability(SigmoidSuccessProbability):
         self.name = name
 
     def compute_probability(self, wind_speed, action, state):
-        """
-        Compute P(S=1 | w_k) based on the vehicle's state and action.
+        """Compute P(S=1 | w_k) based on the vehicle's state and action.
 
-        Parameters:
-        - wind_speed (float or np.array): Current wind speed or an array of wind speeds.
-        - action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
-        - state (tuple or np.array): System state at the current stage, or an array of states.
+        Args:
+            wind_speed (float or np.array): Current wind speed or an array of wind speeds.
+            action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
+            state (tuple or np.array): System state at the current stage, or an array of states.
 
         Returns:
-        - np.array: Probabilities of success for each element.
+            np.array: Probabilities of success for each element.
         """
         wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
         vehicle_mode = state[:, 1]  # Mode: 0 = Floating, 1 = Flying, 2 = Broken
@@ -598,16 +573,15 @@ class OptimisticSuccessProbability(SigmoidSuccessProbability):
         self.name=name
 
     def compute_probability(self, wind_speed, action, state):
-        """
-        Compute P(S=1 | w_k) based on the vehicle's state and action.
+        """Compute P(S=1 | w_k) based on the vehicle's state and action.
 
-        Parameters:
-        - wind_speed (float or np.array): Current wind speed or an array of wind speeds.
-        - action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
-        - state (tuple or np.array): System state at the current stage, or an array of states.
+        Args:
+            wind_speed (float or np.array): Current wind speed or an array of wind speeds.
+            action (int or np.array): Control action (1 = active action, 0 = passive action), or an array of actions.
+            state (tuple or np.array): System state at the current stage, or an array of states.
 
         Returns:
-        - np.array: Probabilities of success for each element.
+            np.array: Probabilities of success for each element.
         """
         wind_speed, action, state = self.check_and_broadcast(wind_speed, action, state)
         vehicle_mode = state[:, 1]  # Mode: 0 = Floating, 1 = Flying, 2 = Broken
@@ -669,15 +643,14 @@ class ProbabilityModelFactory:
 
     @staticmethod
     def select_probability_model(model_name: str, **kwargs) -> ActionSuccessProbabilityModel:
-        """
-        Select the probability model based on the given string.
+        """Select the probability model based on the given string.
 
-        Parameters:
-        - model_name (str): Name of the model (e.g., 'sigmoid', 'linear', etc.).
-        - kwargs: Additional parameters for model initialization.
+        Args:
+            model_name (str): Name of the model (e.g., 'sigmoid', 'linear', etc.).
+            kwargs: Additional parameters for model initialization.
 
         Returns:
-        - ActionSuccessProbabilityModel: An instance of the selected model.
+            ActionSuccessProbabilityModel: An instance of the selected model.
         """
         model_name = model_name.lower()  # Convert to lowercase to handle case insensitivity
 
@@ -690,20 +663,16 @@ class ProbabilityModelFactory:
 
     @staticmethod
     def list_models() -> list:
-        """
-        List available probability models.
+        """List available probability models.
 
         Returns:
-        - list: Names of available models.
+            list: Names of available models.
         """
         return list(ProbabilityModelFactory.models.keys())
 
     @staticmethod
     def is_model_available(model_name: str) -> bool:
-        """
-        Returns Boolean describing if the specified model name matches
-        one of the defined models.
-        """
+        """Returns Boolean describing if the specified model name matches one of the defined models."""
         return model_name.lower() in ProbabilityModelFactory.list_models()
 
 #################################################################################################
@@ -872,18 +841,14 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
         return next_states
 
     def nofail_transition(self, states: np.ndarray, actions: np.ndarray, solar_vals) -> np.ndarray:
-        """
-        Default transition: both energy gain and wind speeds are sampled.
-        """
+        """Default transition: both energy gain and wind speeds are sampled."""
         energy_consumption = self._calculate_energy_consumption(states, actions)
         energy_gain = self.env_provider._energy_gain_from_solar(solar_vals.flatten())
         next_states = self._update_energy_and_state(states, energy_gain, energy_consumption, actions)
         return next_states
 
     def transition(self, states: np.ndarray, actions: np.ndarray, t: int) -> np.ndarray:
-        """
-        Default transition: both energy gain and wind speeds are sampled.
-        """
+        """Default transition: both energy gain and wind speeds are sampled."""
         energy_consumption = self._calculate_energy_consumption(states, actions)
         energy_gain = self.sample_energy_gain(t, states.shape[0])
         next_state = self._update_energy_and_state(states, energy_gain, energy_consumption, actions)
@@ -892,9 +857,7 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
     
     def transition_with_wind_and_energy(self, states: np.ndarray, actions: np.ndarray,
                                       energy_gain: np.ndarray, wind_speeds: np.ndarray) -> np.ndarray:
-        """
-        Transition method that uses externally provided wind speeds and solar (energy) gain.
-        """
+        """Transition method that uses externally provided wind speeds and solar (energy) gain."""
         
         # Calculate the energy consumption based on current states and actions.
         energy_consumption = self._calculate_energy_consumption(states, actions)
@@ -907,13 +870,11 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
     
     def transition_continuous_energy(self, current_energy: np.ndarray, states: np.ndarray, 
                                    actions: np.ndarray, t: int):
-        """
-        Transition method using a continuous energy value (provided externally) and internally
-        sampled energy gain and wind speeds.
-        
+        """Transition method using a continuous energy value (provided externally) and internally sampled energy gain and wind speeds.
+
         Returns:
-        - next_states: the resulting state array after applying the transition.
-        - next_energy: the updated continuous energy values.
+            next_states: the resulting state array after applying the transition.
+            next_energy: the updated continuous energy values.
         """
         # Calculate energy consumption based on current states and actions.
         energy_consumption = self._calculate_energy_consumption(states, actions)
@@ -954,11 +915,11 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
 
     def _update_energy_and_state_continuous(self, current_energy: np.ndarray, energy_gain: np.ndarray,
                                             energy_consumption: np.ndarray, actions: np.ndarray):
-        """
-        Updates energy and state given the externally provided current energy.
+        """Updates energy and state given the externally provided current energy.
+
         Returns:
-        - next_state: an array with [soc, mode] per row
-        - next_energy: updated energy levels
+            next_state: an array with [soc, mode] per row
+            next_energy: updated energy levels
         """
         next_energy = np.clip(current_energy + energy_gain - energy_consumption, -1000, self.battery_capacity_joules)
         next_soc = np.clip(self.energy_to_soc(next_energy), -1., 100.)
@@ -982,11 +943,11 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
     def transition_continuous_energy_with_wind_and_energy(self, current_energy: np.ndarray, states: np.ndarray,
                                                         actions: np.ndarray, wind_speeds: np.ndarray,
                                                         energy_gain: np.ndarray):
-        """
-        Transition using both externally provided wind speeds and energy gain.
+        """Transition using both externally provided wind speeds and energy gain.
+
         Returns:
-        - next_states: the new states after transition
-        - next_energy: the updated continuous energy values
+            next_states: the new states after transition
+            next_energy: the updated continuous energy values
         """
         energy_consumption = self._calculate_energy_consumption(states, actions)
         next_state, next_energy = self._update_energy_and_state_continuous(current_energy, energy_gain,

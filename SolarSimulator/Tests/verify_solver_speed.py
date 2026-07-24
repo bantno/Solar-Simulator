@@ -1,5 +1,4 @@
-"""
-Quantify mdpAnalyticalBackwardSolver.solve() speedup: vectorized vs the original
+"""Quantify mdpAnalyticalBackwardSolver.solve() speedup: vectorized vs the original
 per-state scalar loop, and assert the resulting value tables are identical.
 
 The scalar loop here is an inlined copy of the ORIGINAL solve() body (it calls the

@@ -3,23 +3,23 @@ import matplotlib.pyplot as plt
 
 class WhaleRewardSeries:
     """Abstract base class for creating whale reward series."""
-    def create_series(self, horizon):
+    def create_series(self, horizon, delta_t_min=15):
         raise NotImplementedError("Subclasses must implement create_series()")
 
 class SinusoidalWhaleRewardSeries(WhaleRewardSeries):
     """Creates a sinusoidal whale reward series."""
-    def create_series(self, horizon):
+    def create_series(self, horizon, delta_t_min=15):
         x = np.linspace(np.pi, np.pi * 60, horizon)
         return 0.5 * np.sin(x) + 0.5
 
 class ConstantWhaleRewardSeries(WhaleRewardSeries):
     """Creates a constant whale reward series."""
-    def create_series(self, horizon):
+    def create_series(self, horizon, delta_t_min=15):
         return np.full(horizon, 0.5)
-    
+
 class RealWhaleRewardSeries(WhaleRewardSeries):
     """Creates a real whale reward series."""
-    def create_series(self, horizon):
+    def create_series(self, horizon, delta_t_min=15):
         # Define the base values for each 2-hour block (12 blocks per day)
         block_values = np.array([
             0.00,  # 00:00-02:00
@@ -36,12 +36,14 @@ class RealWhaleRewardSeries(WhaleRewardSeries):
             0.000   # 22:00-24:00
         ])
         
-        # Each 2-hour block corresponds to 8 steps of 15 minutes (2 hours = 120 minutes, and 120/15 = 8)
-        daily_series = np.repeat(block_values, 8)  # Creates an array of length 96 (12*8)
-        
+        # Each 2-hour block spans 120/delta_t model steps (8 at 15 min, 2 at 60 min).
+        steps_per_block = int(120 // delta_t_min)
+        steps_per_day = int(1440 // delta_t_min)
+        daily_series = np.repeat(block_values, steps_per_block)
+
         # If the simulation horizon exceeds one day, tile the daily series accordingly.
-        full_series = np.tile(daily_series, int(np.ceil(horizon / 96)))
-        
+        full_series = np.tile(daily_series, int(np.ceil(horizon / steps_per_day)))
+
         # Return the series truncated to the desired horizon length.
         return full_series[:horizon]
 
@@ -55,14 +57,15 @@ class WhaleRewardSeriesFactory:
     }
     
     @classmethod
-    def create_series(self, series_type, horizon):
-        """
-        Creates the desired whale reward series.
-        
-        Parameters:
+    def create_series(self, series_type, horizon, delta_t_min=15):
+        """Creates the desired whale reward series.
+
+        Args:
             series_type (str): The type of series ('sinusoidal', 'constant', 'real', etc.)
             horizon (int): Number of time steps to create the series for.
-        
+            delta_t_min (int): Model step in minutes; the 'real' diurnal pattern is
+                laid out in wall-clock time, so it needs the step to map blocks to steps.
+
         Returns:
             numpy.ndarray: The whale reward series.
         """
@@ -70,7 +73,7 @@ class WhaleRewardSeriesFactory:
             series_class = self._series_mapping[series_type]
         except KeyError:
             raise ValueError(f"Unknown whale reward series type: {series_type}")
-        return series_class().create_series(horizon)
+        return series_class().create_series(horizon, delta_t_min=delta_t_min)
     
 if __name__ == "__main__":
     # Generate one day's series (96 timesteps of 15 minutes each)

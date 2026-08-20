@@ -48,6 +48,7 @@ def _experiment_columns(config: Dict) -> Dict:
         "wind_chain_enabled": bool(wind_chain.get("enabled", False)),
         "transition_model": config.get("transition_model", "moderate"),
         "solar_panel_model": config.get("solar_panel_model", "constant"),
+        "clearsky_model": config.get("clearsky_model", "fatemi"),
         "whale_series": config.get("whale_series", "real"),
         "energy_increment_wh": config.get("energy_increment_wh"),
         # Backend selectors: only vectorized/batched are implemented today. Reserved so a future

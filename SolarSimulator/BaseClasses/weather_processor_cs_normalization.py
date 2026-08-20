@@ -13,13 +13,19 @@ from retry_requests import retry
 from tqdm import tqdm
 from multiprocessing import Pool
 
+from BaseClasses.clearsky_models import clearsky_ghi_series
+
 
 class WeatherDataProcessor:
-    def __init__(self, cache_file=".cache", retries=5, backoff_factor=0.2):
+    def __init__(self, cache_file=".cache", retries=5, backoff_factor=0.2,
+                 clearsky_model="fatemi"):
         session = requests_cache.CachedSession(cache_file, expire_after=-1)
         self.client = openmeteo_requests.Client(
             session=retry(session, retries=retries, backoff_factor=backoff_factor)
         )
+        # Clear-sky envelope used to normalize irradiance for the Beta fits.
+        # "fatemi" (A cos z) is the original model; see BaseClasses.clearsky_models.
+        self.clearsky_model = clearsky_model
 
     def fetch_weather_data(
         self, latitude, longitude, start_date, end_date, hourly_vars, timezone="auto"
@@ -158,7 +164,10 @@ class WeatherDataProcessor:
     def _fit_beta(self, data):
         # Compute clearsky irradiance for the first timestamp
         ts0 = data.index[0]
-        clearsky_irradiance = self.clearsky_ghi_fatemi(ts0, self.lat, self.lon)
+        clearsky_irradiance = float(
+            clearsky_ghi_series(ts0, self.lat, self.lon,
+                                model=getattr(self, "clearsky_model", "fatemi"))[0]
+        )
 
         # Only fit when all measurements exceed 15.0 (same condition)
         if clearsky_irradiance > 50:
@@ -261,18 +270,24 @@ def build_expected_data_artifact(
     latitude: float,
     longitude: float,
     interval_minutes: int = 15,
+    clearsky_model: str = "fatemi",
 ):
     """Build the expected-data (distribution fit) artifact from an hourly historical pkl.
     Fits Beta to clearsky-normalized irradiance and Weibull to wind speed for every
     (month, day, hour, minute) slot.  Saves and returns the resulting DataFrame.
+
+    `clearsky_model` selects the normalization envelope (see
+    BaseClasses.clearsky_models); artifacts built with different models are not
+    interchangeable, so non-default models should go to a distinct out_path
+    (run_sim._resolve_data_path derives one automatically).
     """
-    proc = WeatherDataProcessor()
+    proc = WeatherDataProcessor(clearsky_model=clearsky_model)
     proc.lat = latitude
     proc.lon = longitude
     proc.hourly_dataframe = pd.read_pickle(historical_pkl)
     resampled = proc.resample_data(interval_minutes=interval_minutes)
     df = proc.fit_distributions(resampled, filename=out_path)
-    print(f"Expected data saved to {out_path}")
+    print(f"Expected data saved to {out_path} (clearsky_model={clearsky_model})")
     return df
 
 

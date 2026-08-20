@@ -1,0 +1,46 @@
+experiment_name: pvlib_small
+description: >
+  Small pvlib-solar validation sweep at lat30/lon-90: Ineichen clear-sky
+  normalization + PVWatts panel. Mirrors solarchain_small.yaml so run
+  directories can be compared against the fatemi/constant baseline. First run
+  builds Ineichen-normalized artifacts (data_expected_..._15min_ineichen.pkl and
+  its _solarchain sibling) from the historical record; the fatemi artifacts are
+  untouched.
+start_datetime: '2020-04-01T00:00:00'
+
+# --- sweep matrix (any list is a swept dimension) ---
+battery_capacities: [300.0, 400.0]
+threshold_values: [0.25]
+wind_thresholds: [8.0, 12.0]
+horizons: [150]
+failure_penalties: [5.0]
+episodes: 500
+
+# --- model settings ---
+transition_model: moderate
+# Clear-sky envelope for Beta/chain normalization (default: fatemi = original model).
+clearsky_model: ineichen
+# PVWatts DC panel via pvlib at fixed cell temperature; defaults (pdc0 65 W,
+# area 0.65 m^2, 25 C) reproduce the constant panel exactly — the kwargs below
+# apply a realistic thermal derate.
+solar_panel_model: pvwatts
+solar_panel_kwargs:
+  cell_temperature: 40.0
+whale_series: real
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+
+locations:
+- latitude: 30.0
+  longitude: -90.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min.pkl
+
+solar_chain:
+  enabled: true
+  n_bins: 3
+
+wind_chain:
+  enabled: false

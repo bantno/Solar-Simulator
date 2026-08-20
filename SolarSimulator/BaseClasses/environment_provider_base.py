@@ -92,14 +92,16 @@ class HistoricalEnvironmentProvider(AbstractEnvironmentProvider):
         whale_observation_series: np.ndarray,
         delta_t_min: float,
         solar_panel_model: str = "constant",
-        rng=None
+        rng=None,
+        solar_panel_kwargs: dict = None,
     ):
         self.solar_irradiance_series = solar_irradiance_series
         self.wind_speed_series = wind_speed_series
         self.whale_observation_series = whale_observation_series
         self.DELTA_T_MIN = delta_t_min
         self.DELTA_T_SEC = delta_t_min * 60
-        self.panel = SolarPanelFactory.create_solar_panel(solar_panel_model)
+        self.panel = SolarPanelFactory.create_solar_panel(
+            solar_panel_model, **(solar_panel_kwargs or {}))
         self.rng = rng if rng is not None else np.random.default_rng()
 
     def set_seed(self, seed: int) -> None:
@@ -237,7 +239,8 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
     def __init__(self, solar_distributions: np.ndarray, wind_distributions: np.ndarray,
                  whale_reward_series: np.ndarray, delta_t_min: float, solar_panel_model: str = "constant", rng=None,
                  wind_bin_edges: np.ndarray = None, wind_transition: np.ndarray = None,
-                 solar_transition: np.ndarray = None, solar_valid: np.ndarray = None):
+                 solar_transition: np.ndarray = None, solar_valid: np.ndarray = None,
+                 solar_panel_kwargs: dict = None):
         self.wind_shape = wind_distributions[:, 0]
         self.wind_scale = wind_distributions[:, 1]
         self.solar_alpha = solar_distributions[:, 0]
@@ -246,7 +249,8 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         self.whale_reward_series = whale_reward_series
         self.DELTA_T_MIN = delta_t_min
         self.DELTA_T_SEC = delta_t_min * 60
-        self.panel = SolarPanelFactory.create_solar_panel(solar_panel_model)
+        self.panel = SolarPanelFactory.create_solar_panel(
+            solar_panel_model, **(solar_panel_kwargs or {}))
         # Use a provided generator or default to np.random.default_rng()
         self.rng = rng if rng is not None else np.random.default_rng()
 
@@ -612,10 +616,12 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
         solar_distributions: np.ndarray = None,
         solar_transition: np.ndarray = None,
         solar_valid: np.ndarray = None,
+        solar_panel_kwargs: dict = None,
     ):
         self.DELTA_T_MIN = float(delta_t_min)
         self.DELTA_T_SEC = self.DELTA_T_MIN * 60.0
-        self.panel = SolarPanelFactory.create_solar_panel(solar_panel_model)
+        self.panel = SolarPanelFactory.create_solar_panel(
+            solar_panel_model, **(solar_panel_kwargs or {}))
         self.whale_reward_series = whale_reward_series
         self.rng = rng if rng is not None else np.random.default_rng()
 

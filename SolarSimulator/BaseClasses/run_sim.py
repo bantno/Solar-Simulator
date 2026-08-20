@@ -42,47 +42,62 @@ def _derive_histcube_path(data_path: str) -> str:
     return f"{base}_histcube{ext or '.pkl'}"
 
 
-def _load_wind_chain(config: Dict, location: Dict):
+def _resolve_data_path(data_path: str, clearsky_model: str) -> str:
+    """Expected-data path for the configured clear-sky model.
+
+    Artifacts normalized with different clear-sky envelopes are not
+    interchangeable, so a non-default model gets its own file: '_<model>' is
+    inserted before the extension (and the derived windchain/solarchain/histcube
+    paths inherit the suffix). The default "fatemi" keeps the configured path,
+    preserving the original pipeline byte-for-byte.
+    """
+    if clearsky_model in (None, "fatemi"):
+        return data_path
+    base, ext = os.path.splitext(data_path)
+    return f"{base}_{clearsky_model}{ext or '.pkl'}"
+
+
+def _load_wind_chain(config: Dict, data_path: str):
     """Return the wind-chain artifact dict if config enables it, else None.
 
     Config:
         wind_chain:
             enabled: true|false   (default false)
-            path: <optional>      (default derived from the location's data_path)
+            path: <optional>      (default derived from the resolved data_path)
     """
     wc = config.get("wind_chain") or {}
     if not wc.get("enabled", False):
         return None
-    path = wc.get("path") or _derive_chain_path(location["data_path"])
+    path = wc.get("path") or _derive_chain_path(data_path)
     return pd.read_pickle(path)
 
 
-def _load_solar_chain(config: Dict, location: Dict):
+def _load_solar_chain(config: Dict, data_path: str):
     """Return the solar-chain artifact dict if config enables it, else None.
 
     Config:
         solar_chain:
             enabled: true|false   (default false)
-            path: <optional>      (default derived from the location's data_path)
+            path: <optional>      (default derived from the resolved data_path)
     """
     sc = config.get("solar_chain") or {}
     if not sc.get("enabled", False):
         return None
-    path = sc.get("path") or _derive_solar_chain_path(location["data_path"])
+    path = sc.get("path") or _derive_solar_chain_path(data_path)
     return pd.read_pickle(path)
 
 
-def _load_historical_cube(config: Dict, location: Dict) -> dict:
-    """Load the historical-weather calendar cube artifact for `location`.
+def _load_historical_cube(config: Dict, data_path: str) -> dict:
+    """Load the historical-weather calendar cube artifact.
 
     Config:
         historical_weather:
             enabled: true|false   (default false)
-            path: <optional>      (default derived from the location's data_path)
+            path: <optional>      (default derived from the resolved data_path)
             block_length_days: 7  (default)
     """
     hw = config.get("historical_weather") or {}
-    path = hw.get("path") or _derive_histcube_path(location["data_path"])
+    path = hw.get("path") or _derive_histcube_path(data_path)
     return pd.read_pickle(path)
 
 
@@ -98,12 +113,14 @@ class EnvironmentLoader:
         whale_type: str,
         wind_chain: dict = None,
         solar_chain: dict = None,
+        solar_panel_kwargs: dict = None,
     ):
         self.data_path = data_path
         self.start_dt = start_dt
         self.horizon = horizon
         self.delta_t = delta_t
         self.solar_model = solar_model
+        self.solar_panel_kwargs = solar_panel_kwargs
         self.whale_type = whale_type
         # Optional Markov-chain artifacts (dicts from create_weather_distributions); None -> i.i.d.
         self.wind_chain = wind_chain
@@ -209,6 +226,7 @@ class EnvironmentLoader:
             wind_transition=wind_transition,
             solar_transition=solar_transition,
             solar_valid=solar_valid,
+            solar_panel_kwargs=self.solar_panel_kwargs,
         )
 
     def load(self) -> StochasticWindSolarEnvironmentProvider:
@@ -246,16 +264,21 @@ class SimulationFactory:
         self.start_dt = pd.to_datetime(config["start_datetime"])
         self.transition_model = config.get("transition_model", "moderate")
         self.solar_model = config.get("solar_panel_model", "constant")
+        self.solar_panel_kwargs = config.get("solar_panel_kwargs") or None
         self.whale_type = config.get("whale_series", "real")
+        # Clear-sky envelope for the expected-data / chain artifacts ("fatemi"
+        # default = original pipeline; non-default models resolve to suffixed files).
+        self.clearsky_model = config.get("clearsky_model", "fatemi")
+        data_path = _resolve_data_path(location["data_path"], self.clearsky_model)
         # self.soc_increment = config.get("soc_increment", 1.0)
         self.energy_increment_wh = config.get("energy_increment_wh", None)
 
         # Optional wind / solar Markov-chains (persistence). Default off -> i.i.d. weather.
-        wind_chain = _load_wind_chain(config, location)
-        solar_chain = _load_solar_chain(config, location)
+        wind_chain = _load_wind_chain(config, data_path)
+        solar_chain = _load_solar_chain(config, data_path)
 
         loader = EnvironmentLoader(
-            data_path=location["data_path"],
+            data_path=data_path,
             start_dt=self.start_dt,
             horizon=self.horizon,
             delta_t=self.delta_t,
@@ -263,6 +286,7 @@ class SimulationFactory:
             whale_type=self.whale_type,
             wind_chain=wind_chain,
             solar_chain=solar_chain,
+            solar_panel_kwargs=self.solar_panel_kwargs,
         )
         self.env_provider = loader.load()
 
@@ -271,7 +295,7 @@ class SimulationFactory:
         self.sim_env_provider = None
         hw_cfg = config.get("historical_weather") or {}
         if hw_cfg.get("enabled", False):
-            cube = _load_historical_cube(config, location)
+            cube = _load_historical_cube(config, data_path)
             whale_series = WhaleRewardSeriesFactory.create_series(self.whale_type, self.horizon)
             block_days = float(hw_cfg.get("block_length_days", 7))
             block_steps = int(block_days * 24 * 60 / self.delta_t)
@@ -300,6 +324,7 @@ class SimulationFactory:
                 solar_distributions=hist_solar_dist,
                 solar_transition=hist_solar_transition,
                 solar_valid=hist_solar_valid,
+                solar_panel_kwargs=self.solar_panel_kwargs,
             )
 
     def _compute_power_params(self, capacity_wh: float) -> Dict[str, float]:

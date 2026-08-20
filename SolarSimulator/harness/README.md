@@ -67,7 +67,9 @@ the full cross-product of the matrix below is run (× optimal and/or threshold p
 | `failure_penalties` | List. |
 | `episodes` | Monte-Carlo episodes per simulation. |
 | `transition_model` | e.g. `moderate`. |
-| `solar_panel_model` | e.g. `constant`. |
+| `solar_panel_model` | `constant` (default), `pvwatts` (pvlib PVWatts DC at fixed cell temperature; defaults reproduce `constant` exactly), or `variable`. |
+| `solar_panel_kwargs` | *(optional)* Mapping passed to the panel constructor, e.g. `{pdc0: 65.0, gamma_pdc: -0.003, cell_temperature: 45.0}` for `pvwatts`. |
+| `clearsky_model` | Clear-sky envelope for the Beta/chain normalization: `fatemi` (default, A·cos z — the original pipeline), `haurwitz`, or `ineichen` (pvlib). Non-default models resolve `data_path` and its derived chain/cube artifacts to `_<model>`-suffixed files, built on demand, so fatemi artifacts are never overwritten. |
 | `whale_series` | e.g. `real`. |
 | `energy_increment_wh` | SoC grid step (Wh) for the solver. |
 | `delta_t` | Minutes per step (default 15). |
@@ -118,8 +120,8 @@ One row per simulation, produced by `summarize.summarize_hdf5` from the HDF5 gro
 experiment-level columns: `simulation_type, battery_capacity, horizon, failure_penalty,
 observation_threshold, wind_threshold, location_id, start_time, episodes_count,
 failure_percentage, average_failure_step, average_reward, average_flight_hrs,
-wind_chain_enabled, transition_model, solar_panel_model, whale_series, energy_increment_wh,
-config_basename, solver_backend, rollout_backend`.
+wind_chain_enabled, transition_model, solar_panel_model, clearsky_model, whale_series,
+energy_increment_wh, config_basename, solver_backend, rollout_backend`.
 
 This is the stable seam a future regression mode snapshots/diffs.
 

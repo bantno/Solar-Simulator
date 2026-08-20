@@ -41,6 +41,7 @@ from BaseClasses.run_sim import YAMLSimulationRunner          # noqa: E402
 from BaseClasses.simulation_run_manager import SimulationRunManager  # noqa: E402
 from BaseClasses.run_sim import (  # noqa: E402
     _derive_chain_path, _derive_histcube_path, _derive_solar_chain_path,
+    _resolve_data_path,
 )
 from harness import HARNESS_VERSION                            # noqa: E402
 from harness.summarize import write_summary_csv                # noqa: E402
@@ -116,7 +117,10 @@ def _ensure_location_data(config: dict, location: dict) -> None:
         build_historical_cube_artifact,
     )
 
-    data_path = location["data_path"]
+    cs_model = config.get("clearsky_model", "fatemi")
+    # Non-default clear-sky models live in suffixed artifact files (see
+    # run_sim._resolve_data_path); everything derived below inherits the suffix.
+    data_path = _resolve_data_path(location["data_path"], cs_model)
     lat = location.get("latitude")
     lon = location.get("longitude")
     interval_min = int(config.get("delta_t", 15))
@@ -171,6 +175,10 @@ def _ensure_location_data(config: dict, location: dict) -> None:
                 print(f"[provision] solar_chain n_bins={n_bins} requested - "
                       f"rebuilding {solar_chain_path}")
                 missing_solar_chain = True
+            elif existing.get("clearsky_model", "fatemi") != cs_model:
+                print(f"[provision] solar_chain clearsky_model={cs_model} requested - "
+                      f"rebuilding {solar_chain_path}")
+                missing_solar_chain = True
 
     missing_cube = hw_cfg.get("enabled", False) and not os.path.exists(cube_path)
 
@@ -192,7 +200,8 @@ def _ensure_location_data(config: dict, location: dict) -> None:
         from BaseClasses.weather_processor_cs_normalization import build_expected_data_artifact  # noqa: E402
         os.makedirs(os.path.dirname(data_path), exist_ok=True)
         print(f"[provision] Building expected data -> {data_path}")
-        build_expected_data_artifact(hist_pkl, data_path, lat, lon, interval_min)
+        build_expected_data_artifact(hist_pkl, data_path, lat, lon, interval_min,
+                                     clearsky_model=cs_model)
 
     if missing_chain:
         configured_edges = _configured_bin_edges(wc_cfg)
@@ -214,6 +223,7 @@ def _ensure_location_data(config: dict, location: dict) -> None:
             latitude=lat, longitude=lon,
             interval_minutes=interval_min,
             n_bins=int(sc_cfg.get("n_bins", 3)),
+            clearsky_model=cs_model,
         )
 
     if missing_cube:

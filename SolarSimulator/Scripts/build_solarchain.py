@@ -54,6 +54,12 @@ def main():
         help="G_cs gate [W/m^2] defining where the index/chain exists (default 200; "
              "see build_solar_chain_artifact docstring).",
     )
+    ap.add_argument(
+        "--clearsky-model", default="fatemi",
+        choices=["fatemi", "haurwitz", "ineichen"],
+        help="Clear-sky envelope used to form the index (default fatemi; must match "
+             "the expected-data artifact the simulation consumes).",
+    )
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
@@ -65,6 +71,7 @@ def main():
         interval_minutes=args.dt,
         n_bins=args.n_bins,
         valid_threshold_wm2=args.valid_threshold,
+        clearsky_model=args.clearsky_model,
     )
 
 

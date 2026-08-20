@@ -514,16 +514,16 @@ def _fatemi_clearsky_series(index: pd.DatetimeIndex, latitude: float, longitude:
                             A: float = 1150.0) -> np.ndarray:
     """Vectorized Fatemi clear-sky GHI, A * max(cos(apparent zenith), 0), over a full index.
 
-    Series counterpart of the scalar
-    `weather_processor_cs_normalization.WeatherDataProcessor.clearsky_ghi_fatemi`;
+    Series counterpart of the scalar normalization in
+    `weather_processor_cs_normalization.WeatherDataProcessor._fit_beta`;
     used to normalize the historical GHI record into the clear-sky index the solar
-    chain is fitted on.
+    chain is fitted on. Kept as a thin wrapper for backward compatibility; the
+    general entry point is `BaseClasses.clearsky_models.clearsky_ghi_series`.
     """
     if pvlib is None:
         raise ImportError("pvlib is required for solar-chain fitting. `pip install pvlib`.")
-    sp = pvlib.solarposition.get_solarposition(index, latitude, longitude)
-    cosz = np.cos(np.deg2rad(sp["apparent_zenith"].to_numpy()))
-    return A * np.clip(cosz, 0.0, None)
+    from BaseClasses.clearsky_models import clearsky_ghi_series
+    return clearsky_ghi_series(index, latitude, longitude, model="fatemi", A=A)
 
 
 def fit_solar_transition_chain(
@@ -645,6 +645,7 @@ def build_solar_chain_artifact(
     n_bins: int = 3,
     solar_col: str = "shortwave_radiation",
     valid_threshold_wm2: float = 200.0,
+    clearsky_model: str = "fatemi",
 ):
     """Resample an hourly HISTORICAL_DATA pickle, normalize GHI to the clear-sky index,
     and fit the solar chain. Saves the artifact dict (pickle) to out_path and returns it.
@@ -662,13 +663,20 @@ def build_solar_chain_artifact(
     on stages below the gate, exactly as at night.
 
     Unlike the wind chain, latitude/longitude are required (pvlib solar geometry).
+
+    `clearsky_model` selects the normalization envelope ("fatemi" default,
+    "haurwitz"/"ineichen" via pvlib -- see BaseClasses.clearsky_models) and is
+    recorded in the artifact; it must match the expected-data artifact the
+    simulation consumes.
     """
     hist = pd.read_pickle(historical_pkl)
     hist = hist[~((hist.index.month == 2) & (hist.index.day == 29))]  # 365-day alignment
     ghi = hist[solar_col].resample(f"{interval_minutes}min").interpolate(method="linear")
     ghi = ghi[~((ghi.index.month == 2) & (ghi.index.day == 29))]
 
-    g_cs = _fatemi_clearsky_series(pd.DatetimeIndex(ghi.index), latitude, longitude)
+    from BaseClasses.clearsky_models import clearsky_ghi_series
+    g_cs = clearsky_ghi_series(pd.DatetimeIndex(ghi.index), latitude, longitude,
+                               model=clearsky_model)
     valid = g_cs > valid_threshold_wm2
     with np.errstate(divide="ignore", invalid="ignore"):
         k = np.where(valid, np.clip(ghi.values / g_cs, 0.0, 0.999999), np.nan)
@@ -676,6 +684,7 @@ def build_solar_chain_artifact(
 
     artifact = fit_solar_transition_chain(
         k_series, n_bins=n_bins, valid_threshold_wm2=valid_threshold_wm2)
+    artifact["clearsky_model"] = clearsky_model
     pd.to_pickle(artifact, out_path)
     dawn_diag = np.nanmean(
         [np.diag(artifact["dawn_transition_by_month"][m]) for m in range(1, 13)], axis=0

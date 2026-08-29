@@ -1,7 +1,14 @@
 # Whale-Observation Model — Extension Ideas & Design Notes
 
 *Status: design discussion, nothing implemented. Captures a conversation about extending
-the whale-observation reward model and whether to move to a POMDP/MOMDP formulation.*
+the whale-observation reward model and whether to move to a POMDP/MOMDP formulation.
+Decision (2026-08-29): the first acoustic (hydrophone-while-moored) channel will be
+**reward-only** — no hidden presence state — so option B below is deferred until that
+channel is shown to change decisions.*
+
+*See also: `whale_observation_literature.md` — the sensor-physics / survey-ecology side
+(aerial visual detection, single-hydrophone passive acoustics, landed-UAV hydrophone
+precedents) with the factorised `p = ψ·a·g` model and the tiered integration design.*
 
 ---
 

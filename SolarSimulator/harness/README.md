@@ -70,7 +70,9 @@ the full cross-product of the matrix below is run (× optimal and/or threshold p
 | `solar_panel_model` | `constant` (default), `pvwatts` (pvlib PVWatts DC at fixed cell temperature; defaults reproduce `constant` exactly), or `variable`. |
 | `solar_panel_kwargs` | *(optional)* Mapping passed to the panel constructor, e.g. `{pdc0: 65.0, gamma_pdc: -0.003, cell_temperature: 45.0}` for `pvwatts`. |
 | `clearsky_model` | Clear-sky envelope for the Beta/chain normalization: `fatemi` (default, A·cos z — the original pipeline), `haurwitz`, or `ineichen` (pvlib). Non-default models resolve `data_path` and its derived chain/cube artifacts to `_<model>`-suffixed files, built on demand, so fatemi artifacts are never overwritten. |
-| `whale_series` | e.g. `real`. |
+| `whale_series` | `real` (default; the original 12 x 2-hour diurnal profile), `custom`, `constant`, or `sinusoidal`. Block-based series are expanded with `delta_t` and rolled so stage 0 holds the value for `start_datetime`'s time of day. |
+| `whale_block_values`, `whale_block_hours` | For `whale_series: custom`: per-block-of-day observation values starting at 00:00 (each in [0, 1]) and the block length in hours (default 2); `len(values) * hours` must be 24. Experiment-wide, not a swept dimension. |
+| `takeoff_cruise_fraction`, `landing_cruise_fraction` | Fraction of the takeoff (moored, fly) and landing (flying, land) stages spent surveying at cruise; multiplies the observation reward on those stages. Defaults `1.0` / `0.0` reproduce the original model (climb short relative to the stage). `auto` derives `1 - t_maneuver / delta_t` from the seaplane climb / descent model. |
 | `energy_increment_wh` | SoC grid step (Wh) for the solver. |
 | `delta_t` | Minutes per step (default 15). |
 | `include_optimal` | Whether to also run the optimal-policy sims (default true). |
@@ -121,6 +123,7 @@ experiment-level columns: `simulation_type, battery_capacity, horizon, failure_p
 observation_threshold, wind_threshold, location_id, start_time, episodes_count,
 failure_percentage, average_failure_step, average_reward, average_flight_hrs,
 wind_chain_enabled, transition_model, solar_panel_model, clearsky_model, whale_series,
+whale_block_hours, whale_block_values, takeoff_cruise_fraction, landing_cruise_fraction,
 energy_increment_wh, config_basename, solver_backend, rollout_backend`.
 
 This is the stable seam a future regression mode snapshots/diffs.

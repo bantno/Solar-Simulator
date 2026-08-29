@@ -15,8 +15,17 @@ class AbstractMDP(ABC):
                  gamma,
                  transition_model_name: str,
                  soc_increment: float,
-                 env_provider: AbstractEnvironmentProvider):
-        """Initialize the MDP with time series inputs."""
+                 env_provider: AbstractEnvironmentProvider,
+                 takeoff_cruise_fraction: float = 1.0,
+                 landing_cruise_fraction: float = 0.0):
+        """Initialize the MDP with time series inputs.
+
+        takeoff_cruise_fraction / landing_cruise_fraction: fraction of the takeoff
+        (moored, a=1) and landing (flying, a=0) stages spent surveying at cruise, i.e.
+        the observation gain on those stages. The defaults (1.0, 0.0) encode the
+        original simplification that the climb is short relative to the stage, so a
+        takeoff stage earns the full observation reward and a landing stage none.
+        """
         self.battery_capacity_wh = battery_capacity_wh
         self.battery_capacity_joules = battery_capacity_wh * 3600
         self.idle_power = idle_power
@@ -30,6 +39,24 @@ class AbstractMDP(ABC):
         self.env_provider = env_provider
         self.transition_model = ProbabilityModelFactory.select_probability_model(transition_model_name)
         self.actions = [0, 1]
+        for name, f in (("takeoff_cruise_fraction", takeoff_cruise_fraction),
+                        ("landing_cruise_fraction", landing_cruise_fraction)):
+            if not 0.0 <= float(f) <= 1.0:
+                raise ValueError(f"{name} must lie in [0, 1], got {f}")
+        self.takeoff_cruise_fraction = float(takeoff_cruise_fraction)
+        self.landing_cruise_fraction = float(landing_cruise_fraction)
+        # observation_gain[mode, action]: multiplier on the stage observation reward.
+        # Rows: 0 = moored (stay / take off), 1 = flying (land / continue), 2 = broken.
+        self.observation_gain = np.array([
+            [0.0, self.takeoff_cruise_fraction],
+            [self.landing_cruise_fraction, 1.0],
+            [0.0, 0.0],
+        ])
+
+    def obs_gain(self, states, actions):
+        """Observation-reward multiplier for each (state, action) pair, shape (n,)."""
+        modes = np.asarray(states)[:, 1].astype(int)
+        return self.observation_gain[modes, np.asarray(actions, dtype=int)]
 
     def _get_states(self):
         soc = np.arange(0, 100 + self.soc_increment, float(self.soc_increment))
@@ -96,9 +123,12 @@ class AbstractMDP(ABC):
 class stochasticMDP(AbstractMDP):
     def __init__(self, battery_capacity_wh, idle_power, cruise_power, takeoff_power, landing_power,
                  failure_penalty, delta_t, gamma, transition_model_name: str, soc_increment: float,
-                 env_provider: AbstractEnvironmentProvider):
+                 env_provider: AbstractEnvironmentProvider,
+                 takeoff_cruise_fraction: float = 1.0, landing_cruise_fraction: float = 0.0):
         super().__init__(battery_capacity_wh, idle_power, cruise_power, takeoff_power,landing_power,
-                         failure_penalty, delta_t, gamma, transition_model_name, soc_increment, env_provider)
+                         failure_penalty, delta_t, gamma, transition_model_name, soc_increment, env_provider,
+                         takeoff_cruise_fraction=takeoff_cruise_fraction,
+                         landing_cruise_fraction=landing_cruise_fraction)
         self.transition_logic = StochasticTransitionLogic(
             battery_capacity_joules=self.battery_capacity_joules,
             soc_increment=self.soc_increment,
@@ -123,7 +153,9 @@ class stochasticMDP(AbstractMDP):
         else:
             length = len(actions)
         samples = self.env_provider.sample_whale_observation(t, length)
-        rewards = actions * samples
+        # Stage observation reward scaled by the (mode, action) gain: 1 while cruising,
+        # the configured cruise fraction on takeoff / landing stages, 0 while moored.
+        rewards = self.obs_gain(states, actions) * samples
         fail_mask = next_states[:, 1] == 2
         rewards[fail_mask] -= self.failure_penalty
         return rewards

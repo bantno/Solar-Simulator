@@ -306,7 +306,8 @@ class mdpAnalyticalBackwardSolver:
     ):
         p_f_total = self._compute_failure_probability(state, a, t)
         observation_k = self.mdp.get_obs(t)
-        expected_one_stage_reward = self.expected_reward(a, observation_k, self.mdp.failure_penalty, p_f_total)
+        expected_one_stage_reward = self.expected_reward(
+            self.mdp.obs_gain(state, a), observation_k, self.mdp.failure_penalty, p_f_total)
         if last_stage:
             return expected_one_stage_reward
         expected_future_value = self.expected_future_value(state, a, t, p_f_total)
@@ -370,7 +371,7 @@ class mdpAnalyticalBackwardSolver:
         p_f_total = self._compute_failure_probability(states, actions, t)
         observation_k = self.mdp.get_obs(t)
         expected_one_stage_reward = self.expected_reward(
-            actions, observation_k, self.mdp.failure_penalty, p_f_total
+            self.mdp.obs_gain(states, actions), observation_k, self.mdp.failure_penalty, p_f_total
         )
         if last_stage:
             return expected_one_stage_reward
@@ -520,7 +521,8 @@ class mdpAnalyticalBackwardSolver:
         actions = np.full(n, a_scalar, dtype=int)
         b, g = divmod(int(z), self.n_solar_bins)
         p_fail = self._compute_failure_probability_bin(states, actions, t, b, g)
-        reward = self.expected_reward(actions, self.mdp.get_obs(t), self.mdp.failure_penalty, p_fail)
+        reward = self.expected_reward(
+            self.mdp.obs_gain(states, actions), self.mdp.get_obs(t), self.mdp.failure_penalty, p_fail)
         if last_stage:
             return reward
         Ck = self.mdp.transition_logic.soc_to_energy(states[:, 0])
@@ -593,6 +595,9 @@ class mdpAnalyticalBackwardSolver:
 
     @staticmethod
     def expected_reward(a_k, O_k, penalty, p_failure):
+        """a_k is the observation gain (``mdp.obs_gain``): 1 while cruising, 0 while
+        moored, and the configured cruise fraction on takeoff / landing stages (1 / 0
+        by default, which makes it identical to the raw action)."""
         return a_k * O_k - penalty * p_failure
 
     def expected_future_value(self, state, action, stage, p_fail):

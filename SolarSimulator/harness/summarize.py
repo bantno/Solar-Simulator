@@ -32,6 +32,13 @@ _SIM_ATTR_COLUMNS = [
 ]
 
 
+def _fmt_list(values):
+    """Compact ';'-joined string for list-valued config entries (None passes through)."""
+    if values is None:
+        return None
+    return ";".join(str(v) for v in values)
+
+
 def _experiment_columns(config: Dict) -> Dict:
     """Experiment-level (config-wide) columns added to every row so each row is self-describing."""
     wind_chain = config.get("wind_chain") or {}
@@ -50,6 +57,10 @@ def _experiment_columns(config: Dict) -> Dict:
         "solar_panel_model": config.get("solar_panel_model", "constant"),
         "clearsky_model": config.get("clearsky_model", "fatemi"),
         "whale_series": config.get("whale_series", "real"),
+        "whale_block_hours": config.get("whale_block_hours"),
+        "whale_block_values": _fmt_list(config.get("whale_block_values")),
+        "takeoff_cruise_fraction": config.get("takeoff_cruise_fraction", 1.0),
+        "landing_cruise_fraction": config.get("landing_cruise_fraction", 0.0),
         "energy_increment_wh": config.get("energy_increment_wh"),
         # Backend selectors: only vectorized/batched are implemented today. Reserved so a future
         # scalar (old-solver) run is distinguishable in the CSV without a schema change.

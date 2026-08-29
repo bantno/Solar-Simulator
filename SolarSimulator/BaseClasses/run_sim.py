@@ -101,6 +101,21 @@ def _load_historical_cube(config: Dict, data_path: str) -> dict:
     return pd.read_pickle(path)
 
 
+def _start_offset_min(start_dt: pd.Timestamp) -> int:
+    """Minutes after midnight at which stage 0 begins (aligns block-based whale series)."""
+    return int(start_dt.hour) * 60 + int(start_dt.minute)
+
+
+def _whale_kwargs_from_config(config: Dict) -> Dict:
+    """Series-specific whale options from the config (used by ``whale_series: custom``)."""
+    kw: Dict = {}
+    if config.get("whale_block_values") is not None:
+        kw["block_values"] = [float(v) for v in config["whale_block_values"]]
+    if config.get("whale_block_hours") is not None:
+        kw["block_hours"] = float(config["whale_block_hours"])
+    return kw
+
+
 class EnvironmentLoader:
     """Helper to load and prepare environmental data for a given location."""
     def __init__(
@@ -114,6 +129,7 @@ class EnvironmentLoader:
         wind_chain: dict = None,
         solar_chain: dict = None,
         solar_panel_kwargs: dict = None,
+        whale_kwargs: dict = None,
     ):
         self.data_path = data_path
         self.start_dt = start_dt
@@ -122,6 +138,7 @@ class EnvironmentLoader:
         self.solar_model = solar_model
         self.solar_panel_kwargs = solar_panel_kwargs
         self.whale_type = whale_type
+        self.whale_kwargs = dict(whale_kwargs or {})
         # Optional Markov-chain artifacts (dicts from create_weather_distributions); None -> i.i.d.
         self.wind_chain = wind_chain
         self.solar_chain = solar_chain
@@ -153,7 +170,10 @@ class EnvironmentLoader:
         wind_dist = np.column_stack(tup=(wind_k, wind_scale))
         solar_dist = np.column_stack(tup=(solar_a, solar_b, cs))
         whale_series = WhaleRewardSeriesFactory.create_series(
-            self.whale_type, self.horizon
+            self.whale_type, self.horizon,
+            delta_t=self.delta_t,
+            start_offset_min=_start_offset_min(self.start_dt),
+            **self.whale_kwargs,
         )
         return wind_dist, solar_dist, whale_series
 
@@ -266,6 +286,13 @@ class SimulationFactory:
         self.solar_model = config.get("solar_panel_model", "constant")
         self.solar_panel_kwargs = config.get("solar_panel_kwargs") or None
         self.whale_type = config.get("whale_series", "real")
+        self.whale_kwargs = _whale_kwargs_from_config(config)
+        # Fraction of the takeoff / landing stage spent surveying at cruise (observation
+        # gain on those stages). Defaults reproduce the original "climb is short relative
+        # to the stage" model: takeoff earns the full stage, landing earns nothing.
+        # "auto" derives 1 - t_maneuver / delta_t from the seaplane climb/descent model.
+        self.takeoff_cruise_fraction = config.get("takeoff_cruise_fraction", 1.0)
+        self.landing_cruise_fraction = config.get("landing_cruise_fraction", 0.0)
         # Clear-sky envelope for the expected-data / chain artifacts ("fatemi"
         # default = original pipeline; non-default models resolve to suffixed files).
         self.clearsky_model = config.get("clearsky_model", "fatemi")
@@ -287,6 +314,7 @@ class SimulationFactory:
             wind_chain=wind_chain,
             solar_chain=solar_chain,
             solar_panel_kwargs=self.solar_panel_kwargs,
+            whale_kwargs=self.whale_kwargs,
         )
         self.env_provider = loader.load()
 
@@ -296,7 +324,12 @@ class SimulationFactory:
         hw_cfg = config.get("historical_weather") or {}
         if hw_cfg.get("enabled", False):
             cube = _load_historical_cube(config, data_path)
-            whale_series = WhaleRewardSeriesFactory.create_series(self.whale_type, self.horizon)
+            whale_series = WhaleRewardSeriesFactory.create_series(
+                self.whale_type, self.horizon,
+                delta_t=self.delta_t,
+                start_offset_min=_start_offset_min(self.start_dt),
+                **self.whale_kwargs,
+            )
             block_days = float(hw_cfg.get("block_length_days", 7))
             block_steps = int(block_days * 24 * 60 / self.delta_t)
             # For chain-solved evaluation: share the distributional provider's bin edges /
@@ -336,8 +369,28 @@ class SimulationFactory:
         )
         return plane.get_mdp_power_params()
 
+    def _resolve_cruise_fractions(self, capacity_wh: float) -> Tuple[float, float]:
+        """Resolve takeoff/landing cruise fractions; "auto" uses the seaplane maneuver times."""
+        f_to = self.takeoff_cruise_fraction
+        f_ld = self.landing_cruise_fraction
+        if f_to == "auto" or f_ld == "auto":
+            plane = Seaplane(
+                lat=self.location.get("latitude", 0.0),
+                lon=self.location.get("longitude", 0.0),
+                tz=self.location.get("timezone", "UTC"),
+                capacity=capacity_wh / 22.2,
+            )
+            times = plane.get_maneuver_times_s()
+            stage_s = float(self.delta_t) * 60.0
+            if f_to == "auto":
+                f_to = max(0.0, 1.0 - times["climb_time_s"] / stage_s)
+            if f_ld == "auto":
+                f_ld = max(0.0, 1.0 - times["descent_time_s"] / stage_s)
+        return float(f_to), float(f_ld)
+
     def build_mdp(self, capacity_wh: float) -> stochasticMDP:
         params = self._compute_power_params(capacity_wh)
+        takeoff_fraction, landing_fraction = self._resolve_cruise_fractions(capacity_wh)
         
         # Convert absolute Wh‐step to percent, if requested
         if self.energy_increment_wh is not None:
@@ -357,6 +410,8 @@ class SimulationFactory:
             transition_model_name=self.transition_model,
             soc_increment=soc_inc,
             env_provider=self.env_provider,
+            takeoff_cruise_fraction=takeoff_fraction,
+            landing_cruise_fraction=landing_fraction,
         )
 
     def create_simulation(

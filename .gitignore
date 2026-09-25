@@ -11,3 +11,6 @@ Figures/archive/
 .claude
 *.ulg
 .gitignore
+# MkDocs build output
+site/
+results/

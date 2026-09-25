@@ -1,0 +1,193 @@
+# Solar-Simulator reference wiki. Local only, never hosted.
+#   conda run -n pvlib mkdocs build      -> site/ (browse site/index.html from disk)
+#   conda run -n pvlib mkdocs serve      -> live preview on http://127.0.0.1:8000
+site_name: Solar-Simulator Wiki
+site_description: Reference wiki for the AHABS solar seaplane MDP simulator
+docs_dir: docs
+site_dir: site
+strict: true
+use_directory_urls: false
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+  not_found: warn
+
+theme:
+  name: material
+  font: false            # no Google Fonts fetch; keeps site/ fully offline
+  icon:
+    logo: material/solar-power-variant
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - search.highlight
+    - search.suggest
+    - toc.follow
+
+plugins:
+  - search
+  - offline
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          # Modules import each other as BaseClasses.*, harness.*, Scripts.*, so
+          # SolarSimulator/ is the import root. Figures/Scripts uses bare sibling imports.
+          paths: [SolarSimulator, Figures/Scripts]
+          options:
+            docstring_style: google
+            docstring_options:
+              warn_unknown_params: false
+              warn_missing_types: false
+              warnings: false
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: true
+            show_if_no_docstring: true
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+            heading_level: 2
+            filters: ["!^_"]
+            merge_init_into_class: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - def_list
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra:
+  # Vendored so the offline plugin does not inject the unpkg copy; search on file:// needs it.
+  polyfills:
+    - assets/javascripts/iframe-worker-shim.js
+
+extra_javascript:
+  - assets/javascripts/mermaid.min.js
+  - assets/javascripts/mathjax-config.js
+  - assets/javascripts/tex-svg.js
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - getting-started/index.md
+      - First run: getting-started/first-run.md
+      - Agent orientation: getting-started/agent-orientation.md
+  - Architecture:
+      - architecture/index.md
+      - The MDP: architecture/mdp.md
+      - Solver: architecture/solver.md
+      - Episode simulation: architecture/simulation.md
+      - Result storage: architecture/storage.md
+  - Models:
+      - models/index.md
+      - Aircraft:
+          - Power model: models/aircraft-power.md
+          - Takeoff simulation: models/takeoff.md
+          - Transition models: models/transition-models.md
+      - Solar:
+          - Solar panel: models/solar-panel.md
+          - Clear-sky models: models/clearsky.md
+      - Weather:
+          - Weather data pipeline: models/weather-data.md
+          - Weather modes: models/weather-modes.md
+          - Wind persistence chain: models/wind-chain.md
+          - Solar persistence chain: models/solar-chain.md
+      - Mission:
+          - Whale observation: models/whale-observation.md
+          - Policies: models/policies.md
+  - Experiments:
+      - experiments/index.md
+      - Config reference: experiments/config-reference.md
+      - Example configs: experiments/examples.md
+      - Sweeps: experiments/sweeps.md
+      - Outputs: experiments/outputs.md
+      - Journal figures: experiments/figures.md
+      - GUI and tools: experiments/gui-and-tools.md
+  - Verification:
+      - verification/index.md
+      - Test catalogue: verification/tests.md
+  - Design records:
+      - design/index.md
+      - Wind persistence:
+          - Briefing: design/wind-persistence-briefing.md
+          - Mathematics: design/wind-persistence-math.md
+          - Theory: design/wind-persistence-theory.md
+          - Validity and implementation: design/wind-persistence-validity.md
+          - Threshold benchmark: design/wind-threshold-benchmark.md
+      - Solar persistence:
+          - Mathematics and design record: design/solar-persistence-math.md
+      - Whale observation:
+          - Literature survey: design/whale-observation-literature.md
+          - Model extensions: design/whale-observation-extensions.md
+      - Findings: findings.md
+  - Reference:
+      - Glossary: reference/glossary.md
+      - Project context: reference/project-context.md
+      - API:
+          - api/index.md
+          - BaseClasses:
+              - api/baseclasses/index.md
+              - mdp_base: api/baseclasses/mdp_base.md
+              - backward_induction_base: api/baseclasses/backward_induction_base.md
+              - transition_model_base: api/baseclasses/transition_model_base.md
+              - environment_provider_base: api/baseclasses/environment_provider_base.md
+              - simulation_base: api/baseclasses/simulation_base.md
+              - simulation_run_manager: api/baseclasses/simulation_run_manager.md
+              - simulation_storage: api/baseclasses/simulation_storage.md
+              - run_sim: api/baseclasses/run_sim.md
+              - seaplane_base: api/baseclasses/seaplane_base.md
+              - solar_panel_base: api/baseclasses/solar_panel_base.md
+              - whale_base: api/baseclasses/whale_base.md
+              - clearsky_models: api/baseclasses/clearsky_models.md
+              - weather_processor: api/baseclasses/weather_processor.md
+              - weather_processor_cs_normalization: api/baseclasses/weather_processor_cs_normalization.md
+              - plot_base: api/baseclasses/plot_base.md
+              - plotting_utils_base: api/baseclasses/plotting_utils_base.md
+          - harness: api/harness.md
+          - Scripts: api/scripts.md
+          - Verification scripts: api/verify.md
+          - Figure scripts: api/figures.md

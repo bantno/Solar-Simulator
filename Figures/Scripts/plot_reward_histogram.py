@@ -14,7 +14,7 @@ Assumptions / notes:
     'total_reward' (preferred), 'reward', or 'episode_reward'.
 
 What it does:
-- Builds a dictionary: rewards[sim_type][penalty] = list of episode rewards.
+- Builds a dictionary: `rewards[sim_type][penalty]` = list of episode rewards.
 - For a user-provided list of penalties, plots stacked subplots of histograms.
 - Creates ONE figure per sim type (no mixing). Saves PNG/PDF/SVG.
 

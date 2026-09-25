@@ -415,7 +415,7 @@ def _cmd_experiment(args):
 
 def _cmd_not_implemented(args):
     sys.exit(f"[info] '{args._mode}' mode is not implemented yet (reserved seam). "
-             f"Use 'experiment'. See harness/README.md.")
+             f"Use 'experiment'. See docs/experiments/index.md.")
 
 
 def build_parser():

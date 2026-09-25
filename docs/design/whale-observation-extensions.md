@@ -6,7 +6,7 @@ Decision (2026-08-29): the first acoustic (hydrophone-while-moored) channel will
 **reward-only** — no hidden presence state — so option B below is deferred until that
 channel is shown to change decisions.*
 
-*See also: `whale_observation_literature.md` — the sensor-physics / survey-ecology side
+*See also: [`whale-observation-literature.md`](whale-observation-literature.md) — the sensor-physics / survey-ecology side
 (aerial visual detection, single-hydrophone passive acoustics, landed-UAV hydrophone
 precedents) with the factorised `p = ψ·a·g` model and the tiered integration design.*
 
@@ -34,7 +34,7 @@ MOMDP's observation model *is* the detection probability that step 1 estimates.
 Relevant code:
 
 - `BaseClasses/whale_base.py` — `WhaleRewardSeriesFactory` builds the series
-  (`sinusoidal`, `constant`, `real`). The `real` series is 12 two-hour block values tiled
+  (`sinusoidal`, `constant`, `JoA2026`, `custom`, `encounter`). The `JoA2026` series is 12 two-hour block values tiled
   across the horizon. The plotting label already calls this "Whale Observation Probability".
 - `BaseClasses/mdp_base.py` — `stochasticMDP.reward()` computes
   `rewards = actions * samples`, where `samples = env_provider.sample_whale_observation(t, n)`.

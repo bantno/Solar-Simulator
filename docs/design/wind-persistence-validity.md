@@ -5,8 +5,8 @@
 MDP — the theory and the math that make it valid — and then catalogues exactly **what
 changed in the implementation** relative to the pre-persistence code.*
 
-*Companion documents: [`wind_persistence_math.md`](wind_persistence_math.md) gives the full
-formula reference and symbol table; [`wind_persistence_briefing.md`](wind_persistence_briefing.md)
+*Companion documents: [`wind-persistence-math.md`](wind-persistence-math.md) gives the full
+formula reference and symbol table; [`wind-persistence-briefing.md`](wind-persistence-briefing.md)
 gives the empirical results and the advisor briefing. This document is the correctness
 argument that sits between them, and is self-contained on the validity question. Bracketed
 tags like `[backward_induction_base.py: _solve_chain]` point at the implementing code.*
@@ -531,5 +531,5 @@ auto-loads a pre-solved `.npy` (memory `runtime-optimization-prefs`).
 simulation_base, transition_model_base}.py`, `Scripts/create_weather_distributions.py`.
 Verification: `Tests/verify_wind_chain.py`. Diagnostic:
 `Scripts/wind_persistence_precheck.py`. Companion math reference:
-[`wind_persistence_math.md`](wind_persistence_math.md); empirical briefing:
-[`wind_persistence_briefing.md`](wind_persistence_briefing.md).*
+[`wind-persistence-math.md`](wind-persistence-math.md); empirical briefing:
+[`wind-persistence-briefing.md`](wind-persistence-briefing.md).*

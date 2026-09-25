@@ -1,7 +1,8 @@
 # Whale-Observation Model — Literature Survey & Sensor-Model Design
 
-*Status (2026-08-29): design/literature document, nothing implemented. Companion to
-`whale_observation_extensions.md`, which covers the decision-theoretic side (occupancy vs.
+*Status (2026-08-29): literature + design document. Tier 0 (commit f281dca) and Tier 1 (the
+`encounter` visual series, §3b) are implemented; Tier 2 (acoustic channel) is design only. Companion to
+[`whale-observation-extensions.md`](whale-observation-extensions.md), which covers the decision-theoretic side (occupancy vs.
 detection, MOMDP belief, Bayes-adaptive). This document covers the **sensor-physics and
 survey-ecology** side: what the literature says about (a) aerial visual detection from a UAV
 and (b) passive acoustic detection from a single hydrophone on a surface platform, and how
@@ -39,12 +40,13 @@ and both reducing bit-for-bit to the current behaviour at default settings.
 Relevant code (line numbers as of commit 76812fa on `pvlib-solar`):
 
 - `BaseClasses/whale_base.py` — `WhaleRewardSeriesFactory` (`_series_mapping`: `sinusoidal`,
-  `constant`, `real`). `RealWhaleRewardSeries` does `np.repeat(block_values, 8)` (hard-codes
-  `delta_t = 15` min) and `np.tile` to the horizon; **index 0 is assumed to be 00:00**, which
-  only holds because every committed config starts at midnight.
+  `constant`, `JoA2026` (formerly `real`), `custom`, `encounter`). The original
+  `create_series` did `np.repeat(block_values, 8)` (hard-coded `delta_t = 15` min) and
+  `np.tile` to the horizon with **index 0 assumed to be 00:00**; `block_series()` now derives
+  the geometry from `delta_t` and `start_datetime` (commit f281dca).
 - `BaseClasses/mdp_base.py:118-129` — `stochasticMDP.reward`: `rewards = actions * samples`,
   minus the failure penalty. **No mode gate**: `action = 1` from mode 0 (takeoff) and from
-  mode 1 (continue flying) earn the same `p(t)`. `docs/wind_persistence_theory.md` describes
+  mode 1 (continue flying) earn the same `p(t)`. [`wind-persistence-theory.md`](wind-persistence-theory.md) describes
   the reward as earned "only when flying"; the code does not enforce that. Treat as a known
   discrepancy to resolve in Tier 0 (§4).
 - `BaseClasses/backward_induction_base.py:595` — `expected_reward(a_k, O_k, penalty, p_failure)
@@ -60,7 +62,7 @@ Relevant code (line numbers as of commit 76812fa on `pvlib-solar`):
   reads the whale value.
 - `BaseClasses/run_sim.py:268` (`whale_series` key), `:155-158` and `:299` (two separate places
   that build the series — the historical-bootstrap branch must be updated in parallel);
-  `harness/summarize.py:52`; `harness/README.md:73`.
+  `harness/summarize.py:52`; the [harness guide](../experiments/index.md).
 
 Nothing acoustic exists anywhere in the repo (grep for `hydrophone|acoustic|sonar|PAM` → 0).
 
@@ -76,6 +78,12 @@ abstract or from secondary sources and should be re-checked against the full pap
 
 | Paper | What it gives the model |
 |---|---|
+| **Scott, M.D., Hohn, A.A., Westgate, A.J., Nicolas, J.R., Whitaker, B.R. & Campbell, W.B. (2001).** A note on the release and tracking of a rehabilitated pygmy sperm whale (*Kogia breviceps*). *J. Cetacean Res. Manage.* 3(1):87–94. doi:10.47536/jcrm.v3i1.905 (open PDF) | **The source of the simulator's block values.** Table 2: proportion of time at the surface by two-hour block for one rehabilitated 220 cm female VHF-tracked 31 May–4 June 1994 off Cape Canaveral (n = 4 days, CVs 0.4–1.3): 0.073, 0.093, 0.065, 0.082, 0.098, 0.095, 0.217, 0.215, 0.183, 0.278, 0.204, 0.090. Dives 2–5 min on clear days, > 8 min at night (night = 20:30–06:00); 77 % of surfacings < 4 s. The authors call the proportions instantaneous-survey correction factors and warn that non-instantaneous surveys need dive/surfacing parameters (→ Laake 1997). |
+| **Laake, J.L., Calambokidis, J., Osmek, S.D. & Rugh, D.J. (1997).** Probability of detecting harbor porpoise from aerial surveys: estimating g(0). *J. Wildl. Manage.* 61(1):63–75. doi:10.2307/3802415 | The window-availability formula `ā = (s̄ + t/2)/(s̄ + d̄ + t/2)` used to convert instantaneous surface proportions into the probability of being available at least once during a stage. |
+| **Buckland, S.T., Anderson, D.R., Burnham, K.P., Laake, J.L., Borchers, D.L. & Thomas, L. (2001).** *Introduction to Distance Sampling.* Oxford University Press. | The encounter-rate framework the implemented model uses: expected detections = density × area surveyed × detection probability, with detection split into availability and perception. |
+| **Roberts, J.J., Best, B.D., Mannocci, L., Fujioka, E., Halpin, P.N., Palka, D.L., Garrison, L.P., Mullin, K.D., Cole, T.V.N., Khan, C.B., McLellan, W.A., Pabst, D.A. & Lockhart, G.G. (2016).** Habitat-based cetacean density models for the U.S. Atlantic and Gulf of Mexico. *Scientific Reports* 6:22615. doi:10.1038/srep22615 (open; surfaces on OBIS-SEAMAP) | Monthly / year-round density surfaces (animals/km², 10 km grid) for 26 taxa incl. a *Kogia* guild and humpback, covering the Gulf (lat 30/−90) and SE-US shelf (lat 30/−75) config sites. The source for `locations[].density_per_km2`. |
+| **Hildebrand, J.A., Frasier, K.E., Baumann-Pickering, S., Wiggins, S.M., Merkens, K.P., Garrison, L.P., Soldevilla, M.S. & McDonald, M.A. (2019).** Assessing seasonality and density from passive acoustic monitoring of signals presumed to be from pygmy and dwarf sperm whales in the Gulf of Mexico. *Frontiers in Marine Science* 6:66. doi:10.3389/fmars.2019.00066 | Gulf *Kogia* densities: 0.46 / 1000 km² from visual line transects (186 animals, CV 1.04, ~4×10⁵ km², uncorrected for g(0); Waring et al. 2013) vs. 4–16 / 1000 km² acoustically at slope sites — the visual/acoustic gap is itself the g(0) story. |
+| **Barlow, J. & Forney, K.A. (2007).** Abundance and population density of cetaceans in the California Current ecosystem. *Fishery Bulletin* 105(4):509–526. | Species-level g(0) values used in line-transect abundance (calm-sea *Kogia* value on the species card); NOAA Atlantic/Gulf Stock Assessment Reports (2023: WNA *Kogia* spp. 7,750, CV 0.38; N. Gulf 336, CV 0.35, uncorrected) for regional abundances. |
 | **Hodgson, A., Peel, D. & Kelly, N. (2017).** Unmanned aerial vehicles for surveying marine fauna: assessing detection probability. *Ecological Applications* 27(4):1253–1267. doi:10.1002/eap.1519 | Fixed-wing UAV (ScanEagle, 732 m altitude, 490 m strip) over humpbacks. **Availability formula** `ā = (s̄ + t/2)/(s̄ + d̄ + t/2)` (after Laake et al. 1997), `s̄` = mean surfacing bout, `d̄` = mean dive, `t` = observation window. Numbers: `ā = 0.63` (0.86 mother/calf, 0.59 adults), overall detection **0.33**, ~35 % of pods missed through movement bias. Beaufort 1–5, cloud and glare had **no significant effect** on image-based detection. |
 | **Aniceto, A.S., Biuw, M., Lindström, U., Solbø, S.A., Broms, F. & Carroll, J. (2018).** Monitoring marine mammals using unmanned aerial vehicles: quantifying detection certainty. *Ecosphere* 9(3):e02122. doi:10.1002/ecs2.2122 | UAV surveys of humpback and killer whales in Norwegian fjords: **sea state ↓, luminance ↑** detection certainty. Maps directly onto the simulator's wind bin and clear-sky/time-of-day state. |
 | **Barlow, J. (2015).** Inferring trackline detection probabilities, g(0), for cetaceans from apparent densities in different survey conditions. *Marine Mammal Science* 31(3):923–943. doi:10.1111/mms.12205 **[paywalled]** | Species-specific **g(0) vs. Beaufort** curves — the cleanest published "perception vs. wind" function. Candidate for the `g_vis(wind)` multiplier. |
@@ -114,7 +122,7 @@ abstract or from secondary sources and should be re-checked against the full pap
 
 ### 2d. Decision-theoretic references
 
-Already collected in `whale_observation_extensions.md` §3/§6: MacKenzie et al. 2002 and Royle
+Already collected in [`whale-observation-extensions.md`](whale-observation-extensions.md) §3/§6: MacKenzie et al. 2002 and Royle
 2004 (occupancy / N-mixture), Chadès et al. 2008 & 2012 (POMDP surveying, MOMDP), Ong et al.
 2010, Kaelbling et al. 1998, Hollinger & Sukhatme 2014. Not repeated here.
 
@@ -159,6 +167,35 @@ presence — the same structural form as the visual channel.
 
 ---
 
+### 3b. Provenance of the implemented visual model (`whale_series: encounter`)
+
+Conventional distance-sampling encounter theory (Buckland et al. 2001), per stage:
+
+```
+λ(t) = D · A · a(t) · g0 · light(t)        expected sightings
+p(t) = 1 − exp(−λ(t))                      P(≥ 1 sighting)   (≈ λ when small)
+A    = strip_width_km · ground_speed_ms · Δt   km² surveyed per stage
+```
+
+With no density the *focal* form `p = a(t)·g0·light(t)` applies (a whale under the aircraft);
+`JoA2026` is that form with the *Kogia* card's availability, `g0 = 1` and a fixed 06–20 gate.
+Sea state is deliberately left out (§6).
+
+| Term | Varies by | Implementation | Source | Status |
+|---|---|---|---|---|
+| encounter form `D·A·a·g0` | — | `EncounterWhaleSeries` | Buckland et al. (2001); Marsh & Sinclair (1989) for the availability / perception split | literature |
+| `D` density | **location** (+ month) | `locations[].density_per_km2` (scalar, 12 monthly, or `{month: value}`) | Roberts et al. (2016) surfaces; Hildebrand et al. (2019) and NOAA SARs for Gulf / WNA *Kogia* | literature; example value in `whale_encounter_small.yaml` |
+| `A` swept area | platform | `whale_platform: {strip_width_km, ground_speed_ms}` | seaplane cruise speed 17–20 m/s (`seaplane_base`); strip width from the camera footprint (Hodgson 2017: 490 m at 732 m) | platform assumption |
+| `a(t)` availability | **species** | species card `availability_profile`: `scott2001` (12 blocks) or scalar | Scott et al. (2001) Table 2 (*Kogia*, one animal, 4 days — low fidelity); Hodgson et al. (2017) 0.63 (humpback) | literature |
+| `g0` perception | **species** (+ sensor) | species card `g0` | *Kogia* 0.35 calm-sea ship-observer value (Barlow & Forney 2007); Barlow (2015): < 10 % of that by Beaufort 2, ~3 % of groups detected overall. Humpback 0.91 from Hodgson 2017's 1.10 perception correction | literature, but ship-observer values applied to a UAV camera — treat as an upper bound / sensitivity |
+| `light(t)` | sensor | `whale_light`: `fixed_hours 06–20` or `clearsky_gate` | none — a camera property | operational assumption |
+| `JoA2026` | — | hard-coded | Scott 2001 daytime values × hand gate | journal baseline; `encounter` with `{name: kogia_spp, g0: 1.0}`, no density, reproduces it bit-for-bit |
+
+Known simplifications: `D` is constant within a location cell (the vehicle has no position);
+`A` assumes transect-style motion, so a loitering vehicle re-surveying the same water is
+credited as if it were fresh; per-stage sightings are independent (no persistence of a found
+whale — memo §4 if ever needed).
+
 ## 4. Integration design — three tiers, each independently useful
 
 Guiding invariant (from `clearsky_model` / `pvwatts`, commit 76812fa): **every new config key
@@ -178,27 +215,27 @@ keeps the old code path in-source and diffs new vs. old in-process.
   block from `delta_t` instead of the hard-coded 8; roll the daily series by the start hour from
   `start_datetime`. Register the key in `run_sim.py:268` and thread it into **both** series
   construction sites (`:155-158` and the historical-bootstrap branch `:299`), add a column in
-  `harness/summarize.py:52`, and a row in `harness/README.md:73`.
+  `harness/summarize.py:52`, and a row in the [harness guide](../experiments/index.md).
 - **Verify**: `Tests/verify_whale_model.py` asserts `custom` with the default block values equals
-  `real` exactly, and that the value table from `harness/examples/iid_small.yaml` is unchanged.
+  `JoA2026` exactly, and that the value table from `harness/examples/iid_small.yaml` is unchanged.
 
-### Tier 1 — Factorised visual model `p_vis(t, wind) = ψ(t) · a_vis · g_vis(wind) · light(t)`
+### Tier 1 — Encounter model `λ = D·A·a(t)·g0·light(t)` (implemented)
 
-- New class `FactoredWhaleObservationModel` in `whale_base.py` returning a **(T, n_wind_bins)**
-  array (or (T,) when there is no chain, by taking the Weibull-weighted expectation over bins).
-  Inputs: `ψ(t)` = the block series; `a_vis` from `surface_s`, `dive_d`, `delta_t` via the
-  availability formula; `g_vis` = a Beaufort ramp evaluated at each wind bin's representative
-  speed (`environment_provider_base` already exposes bin edges); `light(t)` from the solar
-  pipeline's sunrise/sunset or a clear-sky-index scaling.
-- Solver: `_value_batch_bin` (`backward_induction_base.py:513-534`) currently calls
-  `self.mdp.get_obs(t)` for a scalar; make `get_obs(t)` return a per-bin vector and index it with
-  the wind bin `b` computed on line 521. `_value` / `_value_batch` (i.i.d. solver) use the
-  bin-averaged scalar, so the value-table shape is unchanged.
-- Simulation: `sample_whale_observation(t, n)` must return the value for each lane's *current*
-  wind bin (`last_wind_bins` is already tracked in the chain provider at
-  `environment_provider_base.py:271`).
-- **Result**: wind now affects the reward, not just the transition risk. Calm windows become
-  doubly valuable (safe *and* good visibility) — a trade-off the wind-chain policy can exploit.
+- `whale_series: encounter` in `whale_base.py` (`EncounterWhaleSeries`), parameterised by a
+  **species card** (`SPECIES_CARDS`: `kogia_spp`, `humpback`, each number with its citation),
+  a **platform** block (strip width, ground speed) and a per-**location** density; provenance
+  in §3b, config keys in the [config reference](../experiments/config-reference.md).
+- Still a per-stage scalar, so **no solver, provider or rollout changes**; the series is
+  composed once in `run_sim.py` (both construction sites receive the clear-sky series and the
+  start month).
+- `encounter` with `{name: kogia_spp, g0: 1.0}` and no density reproduces `JoA2026` exactly
+  (`Tests/verify_whale_model.py`). With a density the per-stage probabilities drop by one to two
+  orders of magnitude (Gulf *Kogia*: `D·A ≈ 0.01–0.1` for a 5 km² stage), which is the honest
+  search-scenario number — the JoA2026 profile is the focal-follow scenario.
+- Sea state (`g(Beaufort)`) deliberately left out: Barlow 2015's ship-observer curves vs.
+  Hodgson 2017's null UAV result. If added, it belongs on the species card as a bracketed
+  sensitivity and needs per-wind-bin reward plumbing (solver `_value_batch_bin` indexing,
+  realised wind passed to `reward()`).
 
 ### Tier 2 — Acoustic channel while moored: `p_ac(t, wind)` earned in mode 0 (the target)
 
@@ -236,7 +273,7 @@ keeps the old code path in-source and diffs new vs. old in-process.
 ### Tier 3 (if later) — acoustic detection as information (MOMDP)
 
 Not designed here. If Tier 2 shows the acoustic channel changes decisions, the natural next
-step is `whale_observation_extensions.md` §4: hidden presence `z_t` with a belief coordinate,
+step is [`whale-observation-extensions.md`](whale-observation-extensions.md) §4: hidden presence `z_t` with a belief coordinate,
 where `P(o_ac | z, moored)` comes from Tier 2's `p_ac` and Baumgartner 2020's FP/miss rates,
 and `P(o_vis | z, flying)` from Tier 1. The policy becomes "listen while moored → belief rises →
 take off when `b` clears a threshold" (Peel 2014; Sigourney 2023).

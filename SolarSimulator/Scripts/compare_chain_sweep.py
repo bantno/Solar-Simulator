@@ -21,7 +21,7 @@ Outputs (default results/chain_vs_iid_sweep/_analysis/):
     comparison_report.md   human-readable summary tables
 
 Usage (pvlib conda env, from SolarSimulator/):
-    conda run -n pvlib python Scripts/compare_chain_sweep.py [--smoke] [--verify]
+    `conda run -n pvlib python Scripts/compare_chain_sweep.py [--smoke] [--verify]`
 """
 import argparse
 import glob

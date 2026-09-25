@@ -1,7 +1,7 @@
 # Solar-Persistence Extension — Mathematical Formulation & Design Record
 
-*Companion to the wind-persistence docs (`wind_persistence_math.md`,
-`wind_persistence_validity.md`). This document specifies the Markov-modulated
+*Companion to the wind-persistence docs ([`wind-persistence-math.md`](wind-persistence-math.md),
+[`wind-persistence-validity.md`](wind-persistence-validity.md)). This document specifies the Markov-modulated
 clear-sky-index model, the two places its design intentionally departs from the wind
 template, and the empirical prechecks that drove those decisions. Bracketed tags point
 at the implementing code. Status: experimental, default **off**; with the chain off the

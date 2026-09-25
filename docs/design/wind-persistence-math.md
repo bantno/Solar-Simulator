@@ -1,6 +1,6 @@
 # Wind-Persistence Extension — Mathematical Formulation
 
-*Companion to `wind_persistence_briefing.md`. This document specifies the math of the
+*Companion to [`wind-persistence-briefing.md`](wind-persistence-briefing.md). This document specifies the math of the
 Markov-modulated wind model and how it augments the published i.i.d. MDP. Section numbers in
 brackets point to the implementing code, e.g. `[backward_induction_base.py]`.*
 

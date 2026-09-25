@@ -5,7 +5,7 @@ stack. One self-describing YAML fully describes an experiment; the CLI executes 
 collects the config copy, HDF5 data, a tidy summary CSV, and figures into a single
 per-config, timestamped run directory.
 
-See harness/README.md for the config schema and usage.
+See docs/experiments/ (repo root) for the config schema and usage.
 """
 
 HARNESS_VERSION = "0.1.0"

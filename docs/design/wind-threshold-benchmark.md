@@ -1,7 +1,7 @@
 # Threshold-Policy Benchmark — IID-Optimal vs Chain-Optimal vs Tuned Threshold
 
 *Branch: `wind-persistence`. Run date: 2026-07-02/03. Companion to
-[`wind_persistence_briefing.md`](wind_persistence_briefing.md) (single-site result) — this
+[`wind-persistence-briefing.md`](wind-persistence-briefing.md) (single-site result) — this
 document extends the three-way comparison to the full multi-location / multi-scenario sweep.*
 
 > **Note on artifacts:** the original 3-bin run's outputs under
@@ -100,7 +100,7 @@ decision-relevant level, invisible to the bin structure) are heavy-tailed: mean 
 p90 42 h vs 34 h for a geometric fit of the same mean, max 345 h.
 
 This is precisely the conclusion of the earlier pre-check
-([`wind_persistence_briefing.md`](wind_persistence_briefing.md) §4, point 4): **the
+([`wind-persistence-briefing.md`](wind-persistence-briefing.md) §4, point 4): **the
 remaining memory lives in bin *resolution*, not in deeper bin *history*.** The predicted
 fix is finer, site-appropriate `bin_edges` (e.g. [4, 6, 8, 10] m/s at Hawaii — the config
 already supports per-config edges); a single-cell rerun would confirm.
@@ -139,7 +139,7 @@ conda run -n pvlib python Scripts/plot_chain_sweep.py                # figs 1..8
 
 Outputs land in `results/chain_vs_iid_sweep/` (per-config run dirs with `summary.csv` +
 `_episode_scalars.csv`) and `results/chain_vs_iid_sweep/_analysis/` (`comparison_cells.csv`,
-`comparison_report.md`, `figures/`). See `harness/README.md` for the underlying experiment
+`comparison_report.md`, `figures/`). See the [harness guide](../experiments/index.md) for the underlying experiment
 harness and the smoke-test variant (`--smoke` end-to-end in ~10–15 min).
 
 ## 8. Takeaways (3-bin run)

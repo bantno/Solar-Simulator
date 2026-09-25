@@ -65,7 +65,7 @@ and `chain_small.yaml`.
 ### 2. How it works (one screen)
 
 *Full formalism — augmented MDP, Bellman recursion, within-bin truncated Weibull, chain
-fitting, and the i.i.d. reduction — is in [`wind_persistence_math.md`](wind_persistence_math.md).*
+fitting, and the i.i.d. reduction — is in [`wind-persistence-math.md`](wind-persistence-math.md).*
 
 
 - **Bins govern persistence; within-bin stays continuous.** Wind speed is binned (default

@@ -47,7 +47,6 @@ flowchart LR
 |---|---|
 | Install the environment and build this wiki | [Installation](getting-started/index.md) |
 | Run your first experiment | [First run](getting-started/first-run.md) |
-| Work in this repo as an AI agent | [Agent orientation](getting-started/agent-orientation.md) |
 | Understand how the code fits together | [Architecture](architecture/index.md) |
 | Look up a model feature and its config switch | [Models overview](models/index.md) |
 | Write or modify an experiment config | [Config reference](experiments/config-reference.md) |

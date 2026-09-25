@@ -115,7 +115,6 @@ nav:
   - Getting started:
       - getting-started/index.md
       - First run: getting-started/first-run.md
-      - Agent orientation: getting-started/agent-orientation.md
   - Architecture:
       - architecture/index.md
       - The MDP: architecture/mdp.md

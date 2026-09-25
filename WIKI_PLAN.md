@@ -25,7 +25,7 @@
 - **Environment gotchas** exist only in memory notes and a git-ignored handoff file: use the `pvlib` env, the numpy/h5py ABI issue in base, cp1252 stdout, and `conda run -c` breaking multiprocessing spawn.
 
 **Decisions from the interview:**
-- **Audience:** team plus agents. Include an agent orientation page.
+- **Audience:** team plus agents. (An agent orientation page was planned and later removed at the owner's request.)
 - **Existing docs:** `git mv` them into `docs/`, leaving pointer stubs behind.
 - **Branch state:** document the current working tree. The uncommitted encounter whale model gets an "in progress" admonition. The overview is sourced from `main`'s README.
 - **mkdocs packages:** go into `environment.yml`, which is re-saved as UTF-8.
@@ -86,7 +86,6 @@ docs/
   getting-started/
     index.md                       [H] Install: conda env `pvlib`, environment.yml, package root, building the wiki
     first-run.md                   [H] Run iid_small.yaml end to end; what lands in results/; reading summary.csv
-    agent-orientation.md           [H] For AI agents: import root = SolarSimulator/, env gotchas, ASCII stdout, conventions (Google docstrings, verify_* pattern, perf-work-on-branch, no auto-reuse of value tables, disk budget, commit style)
   architecture/
     index.md                       [H] Component map + mermaid data-flow diagram (config → solve → rollout → HDF5 → summary/figures)
     mdp.md                         [H] State (SoC × mode × exo bins), actions, reward, failure, stage indexing; AbstractMDP/stochasticMDP

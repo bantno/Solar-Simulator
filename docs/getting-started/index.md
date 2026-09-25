@@ -41,7 +41,6 @@ pip install -e .
 
 This isn't needed to run anything. The code is run from inside `SolarSimulator/`, which
 is the import root: modules import each other as `BaseClasses.*`, `harness.*`, `Scripts.*`.
-See [Agent orientation](agent-orientation.md) for the details.
 
 ## Repository layout
 

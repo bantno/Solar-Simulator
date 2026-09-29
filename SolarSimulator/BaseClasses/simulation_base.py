@@ -281,10 +281,14 @@ class AbstractContinuousEnergySimulation(ABC):
         """
         raise NotImplementedError("Subclasses must implement choose_action_batch.")
 
-    def step_batch(self, energy, states, actions, solar, wind, t):
+    # Seed of the per-batch crash-draw generator. Fixed so that crash outcomes are
+    # reproducible and common across policies (episode i, step t -> same uniform).
+    CRASH_SEED = 1
+
+    def step_batch(self, energy, states, actions, solar, wind, t, crash_uniforms=None):
         """Batched single-step transition + reward for n episodes at once."""
         next_states, next_energy = self.mdp.transition_logic.transition_continuous_energy_with_wind_and_energy(
-            energy, states, actions, wind, solar
+            energy, states, actions, wind, solar, crash_uniforms=crash_uniforms
         )
         rewards = self.mdp.reward(states, actions, next_states, t)
         return next_states, rewards, next_energy
@@ -328,10 +332,15 @@ class AbstractContinuousEnergySimulation(ABC):
             traj_hist[0]   = state[:K]
             energy_hist[0] = energy[:K]
 
+        # Crash draws come from their own seeded generator, drawn for the full population
+        # every step (like the weather), so they are paired across policies.
+        crash_rng = np.random.default_rng(self.CRASH_SEED)
+
         for t in range(max_steps):
             active_idx = np.nonzero(~done)[0]
             if active_idx.size == 0:
                 break
+            crash_u = crash_rng.random(n)[active_idx]
 
             # Sample the full population so episode i always sees draw i at step t,
             # independent of which other lanes have already failed; then operate only
@@ -349,7 +358,8 @@ class AbstractContinuousEnergySimulation(ABC):
             e = energy[active_idx]
             a = self.choose_action_batch(s, solar, wind, whale, t, cur_bins=cur_bins).astype(int)
 
-            next_state, reward, next_energy = self.step_batch(e, s, a, solar, wind, t)
+            next_state, reward, next_energy = self.step_batch(e, s, a, solar, wind, t,
+                                                              crash_uniforms=crash_u)
 
             total_reward[active_idx] += reward
             action_sum[active_idx]   += a

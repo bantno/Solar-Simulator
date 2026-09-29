@@ -298,12 +298,12 @@ class mdpAnalyticalBackwardSolver:
         t: int,
         last_stage: bool = False
     ):
-        p_f_total = self._compute_failure_probability(state, a, t)
+        p_f_total, p_crash = self._compute_failure_probability(state, a, t, return_parts=True)
         observation_k = self.mdp.get_obs(t)
         expected_one_stage_reward = self.expected_reward(a, observation_k, self.mdp.failure_penalty, p_f_total)
         if last_stage:
             return expected_one_stage_reward
-        expected_future_value = self.expected_future_value(state, a, t, p_f_total)
+        expected_future_value = self.expected_future_value(state, a, t, p_crash)
         return expected_one_stage_reward + self._GAMMA * expected_future_value
 
     def _mechanical_failure_probability(
@@ -329,8 +329,14 @@ class mdpAnalyticalBackwardSolver:
         self,
         states: np.ndarray,    # shape (n,2): [SoC (in %), mode]
         actions: np.ndarray,   # shape (n,), each 0 or 1
-        t: int
+        t: int,
+        return_parts: bool = False,
     ) -> np.ndarray:
+        """Total one-stage failure probability p_B + (1 - p_B) p_M.
+
+        With ``return_parts`` also returns the crash probability p_M, which the
+        survival term needs on its own (see ``_compute_survival_contribution_batch``).
+        """
         tl = self.mdp.transition_logic
         env = self.mdp.env_provider
 
@@ -346,7 +352,8 @@ class mdpAnalyticalBackwardSolver:
         p_B = betainc(α, β, u)
 
         p_M = self._mechanical_failure_probability(states, actions, t)
-        return p_B + (1.0 - p_B) * p_M
+        p_fail = p_B + (1.0 - p_B) * p_M
+        return (p_fail, p_M) if return_parts else p_fail
 
     def _value_batch(
         self,
@@ -361,7 +368,7 @@ class mdpAnalyticalBackwardSolver:
         """
         n = states.shape[0]
         actions = np.full(n, a_scalar, dtype=int)
-        p_f_total = self._compute_failure_probability(states, actions, t)
+        p_f_total, p_crash = self._compute_failure_probability(states, actions, t, return_parts=True)
         observation_k = self.mdp.get_obs(t)
         expected_one_stage_reward = self.expected_reward(
             actions, observation_k, self.mdp.failure_penalty, p_f_total
@@ -369,7 +376,7 @@ class mdpAnalyticalBackwardSolver:
         if last_stage:
             return expected_one_stage_reward
         expected_future_value = self._expected_future_value_batch(
-            states, a_scalar, t, p_f_total
+            states, a_scalar, t, p_crash
         )
         return expected_one_stage_reward + self._GAMMA * expected_future_value
 
@@ -378,7 +385,7 @@ class mdpAnalyticalBackwardSolver:
         states: np.ndarray,   # shape (n, 2)
         a_scalar: int,
         stage: int,
-        p_fail: np.ndarray,   # shape (n,)
+        p_crash: np.ndarray,  # shape (n,): crash (mechanical) failure probability only
     ) -> np.ndarray:
         """Vectorized expected future value across all states for one action."""
         stored_energy = self.mdp.transition_logic.soc_to_energy(states[:, 0])   # (n,)
@@ -390,16 +397,22 @@ class mdpAnalyticalBackwardSolver:
         max_collected_energy_J = self.mdp.env_provider.get_solar_cs_joules(stage)
         return self._compute_survival_contribution_batch(
             stored_energy, required_energy, max_collected_energy_J,
-            alpha_k, beta_k, p_fail, V_next,
+            alpha_k, beta_k, p_crash, V_next,
         )
 
     def _compute_survival_contribution_batch(
-        self, Ck, Ek, G_max, alpha, beta, p_fail, V_next,
+        self, Ck, Ek, G_max, alpha, beta, p_crash, V_next,
     ) -> np.ndarray:
         """Batched survival contribution.
 
-        ``Ck``, ``Ek``, ``p_fail`` are (n,); ``V_next`` is (n_soc,). Returns
+        ``Ck``, ``Ek``, ``p_crash`` are (n,); ``V_next`` is (n_soc,). Returns
         (n,) = survival_mass @ V_next per state.
+
+        ``deltaP`` is the solar (Beta) mass landing in each successor energy bin. Its
+        lowest edge sits at the energy deficit, so it already excludes the outcomes that
+        deplete the battery and sums to 1 - p_B. The surviving mass is therefore
+        ``(1 - p_crash) * deltaP``; multiplying by ``1 - p_fail`` instead would count
+        battery depletion twice.
 
         Mirrors the scalar ``compute_survival_contribution`` but broadcasts the energy-bin
         edges (cached in ``__init__`` as ``self._e_lower``/``self._e_upper``) across states.
@@ -409,7 +422,7 @@ class mdpAnalyticalBackwardSolver:
         u_lower = np.clip((self._e_lower[None, :] + shift) / G_max, 0.0, 1.0)  # (n, n_soc)
         u_upper = np.clip((self._e_upper[None, :] + shift) / G_max, 0.0, 1.0)  # (n, n_soc)
         deltaP = betainc(alpha, beta, u_upper) - betainc(alpha, beta, u_lower)
-        survival_mass = (1.0 - p_fail)[:, None] * deltaP  # (n, n_soc)
+        survival_mass = (1.0 - p_crash)[:, None] * deltaP  # (n, n_soc)
         return survival_mass @ V_next                     # (n,)
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -446,8 +459,11 @@ class mdpAnalyticalBackwardSolver:
         succ = tl.transition_model.compute_probability(w_mat, action_mat, state_mat).reshape(gs, n)
         return np.trapz((1.0 - succ) * pdf[:, None], w, axis=0)
 
-    def _compute_failure_probability_bin(self, states, actions, t, b):
-        """Failure prob with the mechanical (wind) part conditioned on wind bin b."""
+    def _compute_failure_probability_bin(self, states, actions, t, b, return_parts=False):
+        """Failure prob with the mechanical (wind) part conditioned on wind bin b.
+
+        With ``return_parts`` also returns the bin-conditioned crash probability p_M.
+        """
         tl = self.mdp.transition_logic
         env = self.mdp.env_provider
         C_joules = tl.soc_to_energy(states[:, 0])
@@ -457,7 +473,8 @@ class mdpAnalyticalBackwardSolver:
         u = np.clip(deficits / G_MAX, 0.0, 1.0)
         p_B = betainc(env.get_solar_alpha(t), env.get_solar_beta(t), u)
         p_M = self._mechanical_failure_probability_bin(states, actions, t, b)
-        return p_B + (1.0 - p_B) * p_M
+        p_fail = p_B + (1.0 - p_B) * p_M
+        return (p_fail, p_M) if return_parts else p_fail
 
     def _vnext_eff(self, stage: int, a_scalar: int, P_row: np.ndarray) -> np.ndarray:
         """Effective next-stage value over SoC for action a from current bin: Σ_b' P[b,b'] V[b',·]."""
@@ -469,7 +486,7 @@ class mdpAnalyticalBackwardSolver:
         """Vectorized state-action values for all states, action a, current wind bin b."""
         n = states.shape[0]
         actions = np.full(n, a_scalar, dtype=int)
-        p_fail = self._compute_failure_probability_bin(states, actions, t, b)
+        p_fail, p_crash = self._compute_failure_probability_bin(states, actions, t, b, return_parts=True)
         reward = self.expected_reward(actions, self.mdp.get_obs(t), self.mdp.failure_penalty, p_fail)
         if last_stage:
             return reward
@@ -478,7 +495,7 @@ class mdpAnalyticalBackwardSolver:
         alpha_k, beta_k = self.get_beta_params(t)
         G = self.mdp.env_provider.get_solar_cs_joules(t)
         V_next_eff = self._vnext_eff(t, a_scalar, P_row)
-        future = self._compute_survival_contribution_batch(Ck, Ek, G, alpha_k, beta_k, p_fail, V_next_eff)
+        future = self._compute_survival_contribution_batch(Ck, Ek, G, alpha_k, beta_k, p_crash, V_next_eff)
         return reward + self._GAMMA * future
 
     def solve(self) -> None:
@@ -542,7 +559,7 @@ class mdpAnalyticalBackwardSolver:
     def expected_reward(a_k, O_k, penalty, p_failure):
         return a_k * O_k - penalty * p_failure
 
-    def expected_future_value(self, state, action, stage, p_fail):
+    def expected_future_value(self, state, action, stage, p_crash):
         stored_energy   = self.state_to_energy(state)
         required_energy = self.get_required_energy(state, action)
         alpha_k, beta_k = self.get_beta_params(stage)
@@ -551,9 +568,9 @@ class mdpAnalyticalBackwardSolver:
         max_collected_energy_J = self.mdp.env_provider.get_solar_cs_joules(stage)
         survival_contribution = self.compute_survival_contribution(
             stored_energy, required_energy, max_collected_energy_J,
-            alpha_k, beta_k, p_fail, V_next, Δ
+            alpha_k, beta_k, p_crash, V_next, Δ
         )
-        return (0.0 * p_fail) + survival_contribution
+        return survival_contribution
 
     def state_to_energy(self, state):
         return self.mdp.transition_logic.soc_to_energy(state[0, 0])
@@ -568,8 +585,10 @@ class mdpAnalyticalBackwardSolver:
 
     @staticmethod
     def compute_survival_contribution(
-        Ck, Ek, G_max, α, β, p_fail, V_next, Δ
+        Ck, Ek, G_max, α, β, p_crash, V_next, Δ
     ):
+        """Scalar survival contribution; ``p_crash`` is the crash probability only (see
+        ``_compute_survival_contribution_batch`` for why depletion is not re-applied)."""
         δ = Ck
         N = len(V_next)
         edges = np.concatenate((np.arange(N) * Δ, [np.inf]))
@@ -584,7 +603,7 @@ class mdpAnalyticalBackwardSolver:
         F_lower = betainc(α, β, u_lower)
         F_upper = betainc(α, β, u_upper)
         deltaP = F_upper - F_lower
-        survival_mass = (1.0 - p_fail) * deltaP
+        survival_mass = (1.0 - p_crash) * deltaP
         return np.dot(survival_mass, V_next)
 
     def value_function(self, stage: int, rewards: np.ndarray, next_states: np.ndarray) -> float:

@@ -928,11 +928,16 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
         return next_state, next_energy
 
     def _apply_transition_probability(self, states: np.ndarray, next_state: np.ndarray, 
-                                    actions: np.ndarray, wind_speeds: np.ndarray) -> np.ndarray:
+                                    actions: np.ndarray, wind_speeds: np.ndarray,
+                                    crash_uniforms: np.ndarray = None) -> np.ndarray:
         # Compute success probabilities based on wind speeds and current state
         success_probabilities = self.transition_model.compute_probability(wind_speeds, actions, states)
         false_states = np.tile(np.array([-1.0, 2]), (states.shape[0], 1))
-        random_vals = np.random.rand(states.shape[0])[:, np.newaxis]
+        # Crash draw: caller-supplied uniforms (seeded, common across policies) when given.
+        if crash_uniforms is None:
+            random_vals = np.random.rand(states.shape[0])[:, np.newaxis]
+        else:
+            random_vals = np.asarray(crash_uniforms, dtype=float)[:, np.newaxis]
         next_states = np.where(random_vals < success_probabilities[:, np.newaxis],
                                 next_state,
                                 false_states)
@@ -942,7 +947,8 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
     
     def transition_continuous_energy_with_wind_and_energy(self, current_energy: np.ndarray, states: np.ndarray,
                                                         actions: np.ndarray, wind_speeds: np.ndarray,
-                                                        energy_gain: np.ndarray):
+                                                        energy_gain: np.ndarray,
+                                                        crash_uniforms: np.ndarray = None):
         """Transition using both externally provided wind speeds and energy gain.
 
         Returns:
@@ -952,7 +958,8 @@ class StochasticTransitionLogic(AbstractTransitionLogic):
         energy_consumption = self._calculate_energy_consumption(states, actions)
         next_state, next_energy = self._update_energy_and_state_continuous(current_energy, energy_gain,
                                                                         energy_consumption, actions)
-        next_states = self._apply_transition_probability(states, next_state, actions, wind_speeds)
+        next_states = self._apply_transition_probability(states, next_state, actions, wind_speeds,
+                                                         crash_uniforms=crash_uniforms)
         return next_states, next_energy
 
     def get_required_energy(self, states, actions):

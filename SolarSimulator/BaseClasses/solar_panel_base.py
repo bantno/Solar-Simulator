@@ -118,6 +118,41 @@ class ConstantSolarPanel(SolarPanel):
     def efficiency(self) -> float:
         return self._efficiency
 
+class PVWattsSolarPanel(SolarPanel):
+    """Solar panel whose efficiency comes from pvlib's PVWatts DC model.
+
+    Power is pdc0 * (G / 1000) * (1 + gamma_pdc * (T_cell - 25)), evaluated via
+    `pvlib.pvsystem.pvwatts_dc` at a fixed cell temperature and folded into the
+    provider's linear GHI -> energy conversion as an effective efficiency:
+
+        efficiency = pvwatts_dc(1000, T_cell) / (1000 * area)
+
+    Defaults (area 0.65 m^2, pdc0 65 W, T_cell 25 C) reproduce the "constant"
+    panel (area 0.65, efficiency 0.1) exactly; a cell temperature above 25 C
+    applies the PVWatts thermal derate. Irradiance is treated as plane-of-array
+    (horizontal panel), consistent with the rest of the pipeline.
+    """
+    model_name: str = "pvwatts"
+
+    def __init__(self, area: float = 0.65, pdc0: float = 65.0,
+                 gamma_pdc: float = -0.003, cell_temperature: float = 25.0):
+        from pvlib.pvsystem import pvwatts_dc
+        self._area = area
+        self._pdc0 = pdc0
+        self._gamma_pdc = gamma_pdc
+        self._cell_temperature = cell_temperature
+        p_ref = float(pvwatts_dc(1000.0, cell_temperature, pdc0, gamma_pdc))
+        self._efficiency = p_ref / (1000.0 * area)
+
+    @property
+    def area(self) -> float:
+        return self._area
+
+    @property
+    def efficiency(self) -> float:
+        return self._efficiency
+
+
 class VariableEfficiencySolarPanel(SolarPanel):
     """A solar panel model with efficiency that degrades over time.
 

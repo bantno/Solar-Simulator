@@ -30,39 +30,107 @@ def _derive_chain_path(data_path: str) -> str:
     return f"{base}_windchain{ext or '.pkl'}"
 
 
+def _derive_solar_chain_path(data_path: str) -> str:
+    """Default solar-chain artifact path: insert '_solarchain' before the extension."""
+    base, ext = os.path.splitext(data_path)
+    return f"{base}_solarchain{ext or '.pkl'}"
+
+
 def _derive_histcube_path(data_path: str) -> str:
     """Default historical-cube artifact path: insert '_histcube' before the extension."""
     base, ext = os.path.splitext(data_path)
     return f"{base}_histcube{ext or '.pkl'}"
 
 
-def _load_wind_chain(config: Dict, location: Dict):
+def _resolve_data_path(data_path: str, clearsky_model: str) -> str:
+    """Expected-data path for the configured clear-sky model.
+
+    Artifacts normalized with different clear-sky envelopes are not
+    interchangeable, so a non-default model gets its own file: '_<model>' is
+    inserted before the extension (and the derived windchain/solarchain/histcube
+    paths inherit the suffix). The default "fatemi" keeps the configured path,
+    preserving the original pipeline byte-for-byte.
+    """
+    if clearsky_model in (None, "fatemi"):
+        return data_path
+    base, ext = os.path.splitext(data_path)
+    return f"{base}_{clearsky_model}{ext or '.pkl'}"
+
+
+def _load_wind_chain(config: Dict, data_path: str):
     """Return the wind-chain artifact dict if config enables it, else None.
 
     Config:
         wind_chain:
             enabled: true|false   (default false)
-            path: <optional>      (default derived from the location's data_path)
+            path: <optional>      (default derived from the resolved data_path)
     """
     wc = config.get("wind_chain") or {}
     if not wc.get("enabled", False):
         return None
-    path = wc.get("path") or _derive_chain_path(location["data_path"])
+    path = wc.get("path") or _derive_chain_path(data_path)
     return pd.read_pickle(path)
 
 
-def _load_historical_cube(config: Dict, location: Dict) -> dict:
-    """Load the historical-weather calendar cube artifact for `location`.
+def _load_solar_chain(config: Dict, data_path: str):
+    """Return the solar-chain artifact dict if config enables it, else None.
+
+    Config:
+        solar_chain:
+            enabled: true|false   (default false)
+            path: <optional>      (default derived from the resolved data_path)
+    """
+    sc = config.get("solar_chain") or {}
+    if not sc.get("enabled", False):
+        return None
+    path = sc.get("path") or _derive_solar_chain_path(data_path)
+    return pd.read_pickle(path)
+
+
+def _load_historical_cube(config: Dict, data_path: str) -> dict:
+    """Load the historical-weather calendar cube artifact.
 
     Config:
         historical_weather:
             enabled: true|false   (default false)
-            path: <optional>      (default derived from the location's data_path)
+            path: <optional>      (default derived from the resolved data_path)
             block_length_days: 7  (default)
     """
     hw = config.get("historical_weather") or {}
-    path = hw.get("path") or _derive_histcube_path(location["data_path"])
+    path = hw.get("path") or _derive_histcube_path(data_path)
     return pd.read_pickle(path)
+
+
+def _start_offset_min(start_dt: pd.Timestamp) -> int:
+    """Minutes after midnight at which stage 0 begins (aligns block-based whale series)."""
+    return int(start_dt.hour) * 60 + int(start_dt.minute)
+
+
+# Config key -> create_series kwarg for the series-specific whale options
+# (``custom``: block values; ``encounter``: species card / platform / light).
+_WHALE_OPTION_KEYS = {
+    "whale_block_values": "block_values",
+    "whale_block_hours": "block_hours",
+    "whale_species": "species",
+    "whale_platform": "platform",
+    "whale_light": "light",
+}
+
+
+def _whale_kwargs_from_config(config: Dict, location: Dict = None) -> Dict:
+    """Series-specific whale options from the config (and the location's density),
+    passed through to the factory."""
+    kw: Dict = {}
+    for key, name in _WHALE_OPTION_KEYS.items():
+        if config.get(key) is not None:
+            kw[name] = config[key]
+    if "block_values" in kw:
+        kw["block_values"] = [float(v) for v in kw["block_values"]]
+    if "block_hours" in kw:
+        kw["block_hours"] = float(kw["block_hours"])
+    if location is not None and location.get("density_per_km2") is not None:
+        kw["density_per_km2"] = location["density_per_km2"]
+    return kw
 
 
 class EnvironmentLoader:
@@ -76,15 +144,21 @@ class EnvironmentLoader:
         solar_model: str,
         whale_type: str,
         wind_chain: dict = None,
+        solar_chain: dict = None,
+        solar_panel_kwargs: dict = None,
+        whale_kwargs: dict = None,
     ):
         self.data_path = data_path
         self.start_dt = start_dt
         self.horizon = horizon
         self.delta_t = delta_t
         self.solar_model = solar_model
+        self.solar_panel_kwargs = solar_panel_kwargs
         self.whale_type = whale_type
-        # Optional wind Markov-chain artifact (dict from create_weather_distributions); None -> i.i.d.
+        self.whale_kwargs = dict(whale_kwargs or {})
+        # Optional Markov-chain artifacts (dicts from create_weather_distributions); None -> i.i.d.
         self.wind_chain = wind_chain
+        self.solar_chain = solar_chain
 
     def _find_start_index(self, df: pd.DataFrame) -> int:
         mask = (
@@ -113,7 +187,12 @@ class EnvironmentLoader:
         wind_dist = np.column_stack(tup=(wind_k, wind_scale))
         solar_dist = np.column_stack(tup=(solar_a, solar_b, cs))
         whale_series = WhaleRewardSeriesFactory.create_series(
-            self.whale_type, self.horizon
+            self.whale_type, self.horizon,
+            delta_t=self.delta_t,
+            start_offset_min=_start_offset_min(self.start_dt),
+            start_month=int(self.start_dt.month),
+            solar_cs=cs,
+            **self.whale_kwargs,
         )
         return wind_dist, solar_dist, whale_series
 
@@ -128,6 +207,44 @@ class EnvironmentLoader:
         wind_transition = Tmat[months, hours]               # (horizon, n_bins, n_bins)
         return bin_edges, wind_transition
 
+    def _build_per_stage_solar_transition(self, window: pd.DataFrame):
+        """Per-stage solar transition stack + validity mask; (None, None) if i.i.d.
+
+        transition[t] governs the move OUT of stage t (the provider advances with it,
+        the solver contracts V_{t+1} with it), so:
+          - both stages valid          -> the fitted (month, hour) matrix,
+          - last invalid stage before a dawn WITH an in-window dusk
+                                       -> the fitted dusk->dawn matrix (day-to-day
+                                          persistence channel; the product of the
+                                          night's identities and this one matrix
+                                          equals the fitted day transition),
+          - anything else (night hold, dawn with no preceding in-window dusk,
+            end of window)             -> identity (bin held).
+        Validity = the window's clearsky_irradiance above the artifact's fit gate,
+        so solver, provider, and fit all agree on where the index exists.
+        """
+        if self.solar_chain is None:
+            return None, None
+        n_g = int(self.solar_chain["n_bins"])
+        Tmat = self.solar_chain["transition_by_month_hour"]   # (13, 24, n_g, n_g)
+        Dmat = self.solar_chain["dawn_transition_by_month"]   # (13, n_g, n_g)
+        thr = float(self.solar_chain.get("valid_threshold_wm2", 200.0))
+        cs = np.nan_to_num(window["clearsky_irradiance"].values.astype(float))
+        valid = cs > thr
+        months = window["month"].values.astype(int)
+        hours = window["hour"].values.astype(int)
+
+        H = len(window)
+        stack = np.tile(np.eye(n_g), (H, 1, 1))
+        seen_valid = False
+        for t in range(H - 1):
+            seen_valid = seen_valid or valid[t]
+            if valid[t] and valid[t + 1]:
+                stack[t] = Tmat[months[t], hours[t]]
+            elif (not valid[t]) and valid[t + 1] and seen_valid:
+                stack[t] = Dmat[months[t + 1]]
+        return stack, valid
+
     def _build_env_provider(
         self,
         wind_dist: np.ndarray,
@@ -135,6 +252,8 @@ class EnvironmentLoader:
         whale_series: np.ndarray,
         wind_bin_edges: np.ndarray = None,
         wind_transition: np.ndarray = None,
+        solar_transition: np.ndarray = None,
+        solar_valid: np.ndarray = None,
     ) -> StochasticWindSolarEnvironmentProvider:
         return StochasticWindSolarEnvironmentProvider(
             solar_distributions=solar_dist,
@@ -144,6 +263,9 @@ class EnvironmentLoader:
             solar_panel_model=self.solar_model,
             wind_bin_edges=wind_bin_edges,
             wind_transition=wind_transition,
+            solar_transition=solar_transition,
+            solar_valid=solar_valid,
+            solar_panel_kwargs=self.solar_panel_kwargs,
         )
 
     def load(self) -> StochasticWindSolarEnvironmentProvider:
@@ -152,9 +274,11 @@ class EnvironmentLoader:
         window = self._slice_window(df, start_idx)
         wind_dist, solar_dist, whale_series = self._extract_distributions(window)
         bin_edges, wind_transition = self._build_per_stage_transition(window)
+        solar_transition, solar_valid = self._build_per_stage_solar_transition(window)
         return self._build_env_provider(
             wind_dist, solar_dist, whale_series,
             wind_bin_edges=bin_edges, wind_transition=wind_transition,
+            solar_transition=solar_transition, solar_valid=solar_valid,
         )
 
 
@@ -179,21 +303,37 @@ class SimulationFactory:
         self.start_dt = pd.to_datetime(config["start_datetime"])
         self.transition_model = config.get("transition_model", "moderate")
         self.solar_model = config.get("solar_panel_model", "constant")
-        self.whale_type = config.get("whale_series", "real")
+        self.solar_panel_kwargs = config.get("solar_panel_kwargs") or None
+        self.whale_type = config.get("whale_series", "JoA2026")
+        self.whale_kwargs = _whale_kwargs_from_config(config, location)
+        # Fraction of the takeoff / landing stage spent surveying at cruise (observation
+        # gain on those stages). Defaults reproduce the original "climb is short relative
+        # to the stage" model: takeoff earns the full stage, landing earns nothing.
+        # "auto" derives 1 - t_maneuver / delta_t from the seaplane climb/descent model.
+        self.takeoff_cruise_fraction = config.get("takeoff_cruise_fraction", 1.0)
+        self.landing_cruise_fraction = config.get("landing_cruise_fraction", 0.0)
+        # Clear-sky envelope for the expected-data / chain artifacts ("fatemi"
+        # default = original pipeline; non-default models resolve to suffixed files).
+        self.clearsky_model = config.get("clearsky_model", "fatemi")
+        data_path = _resolve_data_path(location["data_path"], self.clearsky_model)
         # self.soc_increment = config.get("soc_increment", 1.0)
         self.energy_increment_wh = config.get("energy_increment_wh", None)
 
-        # Optional wind Markov-chain (persistence). Default off -> i.i.d. weather.
-        wind_chain = _load_wind_chain(config, location)
+        # Optional wind / solar Markov-chains (persistence). Default off -> i.i.d. weather.
+        wind_chain = _load_wind_chain(config, data_path)
+        solar_chain = _load_solar_chain(config, data_path)
 
         loader = EnvironmentLoader(
-            data_path=location["data_path"],
+            data_path=data_path,
             start_dt=self.start_dt,
             horizon=self.horizon,
             delta_t=self.delta_t,
             solar_model=self.solar_model,
             whale_type=self.whale_type,
             wind_chain=wind_chain,
+            solar_chain=solar_chain,
+            solar_panel_kwargs=self.solar_panel_kwargs,
+            whale_kwargs=self.whale_kwargs,
         )
         self.env_provider = loader.load()
 
@@ -202,18 +342,29 @@ class SimulationFactory:
         self.sim_env_provider = None
         hw_cfg = config.get("historical_weather") or {}
         if hw_cfg.get("enabled", False):
-            cube = _load_historical_cube(config, location)
-            whale_series = WhaleRewardSeriesFactory.create_series(self.whale_type, self.horizon)
+            cube = _load_historical_cube(config, data_path)
+            whale_series = WhaleRewardSeriesFactory.create_series(
+                self.whale_type, self.horizon,
+                delta_t=self.delta_t,
+                start_offset_min=_start_offset_min(self.start_dt),
+                start_month=int(self.start_dt.month),
+                solar_cs=self.env_provider.solar_cs,
+                **self.whale_kwargs,
+            )
             block_days = float(hw_cfg.get("block_length_days", 7))
             block_steps = int(block_days * 24 * 60 / self.delta_t)
-            # For chain-solved evaluation: share the distributional provider's bin edges and
-            # per-stage transition matrices so the 3D value table can be indexed on real weather.
-            hist_bin_edges = (
-                self.env_provider.wind_bin_edges if self.env_provider.use_wind_chain else None
+            # For chain-solved evaluation: share the distributional provider's bin edges /
+            # per-stage transitions / stage Betas so the value table is indexed
+            # consistently on real weather.
+            ep = self.env_provider
+            hist_bin_edges = ep.wind_bin_edges if ep.use_wind_chain else None
+            hist_wind_transition = ep.wind_transition if ep.use_wind_chain else None
+            hist_solar_dist = (
+                np.column_stack((ep.solar_alpha, ep.solar_beta, ep.solar_cs))
+                if ep.use_solar_chain else None
             )
-            hist_wind_transition = (
-                self.env_provider.wind_transition if self.env_provider.use_wind_chain else None
-            )
+            hist_solar_transition = ep.solar_transition if ep.use_solar_chain else None
+            hist_solar_valid = ep.solar_valid if ep.use_solar_chain else None
             self.sim_env_provider = HistoricalBootstrapEnvironmentProvider(
                 cube=cube,
                 start_dt=self.start_dt,
@@ -224,6 +375,10 @@ class SimulationFactory:
                 whale_reward_series=whale_series,
                 wind_bin_edges=hist_bin_edges,
                 wind_transition=hist_wind_transition,
+                solar_distributions=hist_solar_dist,
+                solar_transition=hist_solar_transition,
+                solar_valid=hist_solar_valid,
+                solar_panel_kwargs=self.solar_panel_kwargs,
             )
 
     def _compute_power_params(self, capacity_wh: float) -> Dict[str, float]:
@@ -235,8 +390,28 @@ class SimulationFactory:
         )
         return plane.get_mdp_power_params()
 
+    def _resolve_cruise_fractions(self, capacity_wh: float) -> Tuple[float, float]:
+        """Resolve takeoff/landing cruise fractions; "auto" uses the seaplane maneuver times."""
+        f_to = self.takeoff_cruise_fraction
+        f_ld = self.landing_cruise_fraction
+        if f_to == "auto" or f_ld == "auto":
+            plane = Seaplane(
+                lat=self.location.get("latitude", 0.0),
+                lon=self.location.get("longitude", 0.0),
+                tz=self.location.get("timezone", "UTC"),
+                capacity=capacity_wh / 22.2,
+            )
+            times = plane.get_maneuver_times_s()
+            stage_s = float(self.delta_t) * 60.0
+            if f_to == "auto":
+                f_to = max(0.0, 1.0 - times["climb_time_s"] / stage_s)
+            if f_ld == "auto":
+                f_ld = max(0.0, 1.0 - times["descent_time_s"] / stage_s)
+        return float(f_to), float(f_ld)
+
     def build_mdp(self, capacity_wh: float) -> stochasticMDP:
         params = self._compute_power_params(capacity_wh)
+        takeoff_fraction, landing_fraction = self._resolve_cruise_fractions(capacity_wh)
         
         # Convert absolute Wh‐step to percent, if requested
         if self.energy_increment_wh is not None:
@@ -256,6 +431,8 @@ class SimulationFactory:
             transition_model_name=self.transition_model,
             soc_increment=soc_inc,
             env_provider=self.env_provider,
+            takeoff_cruise_fraction=takeoff_fraction,
+            landing_cruise_fraction=landing_fraction,
         )
 
     def create_simulation(

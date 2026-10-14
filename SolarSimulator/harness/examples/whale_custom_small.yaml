@@ -1,0 +1,43 @@
+experiment_name: whale_custom_small
+description: >
+  Copy of iid_small with the whale observation profile supplied from config.
+  With these block values (the built-in "JoA2026" profile) and the default cruise
+  fractions the value tables and episode results are identical to iid_small;
+  edit whale_block_values or the cruise fractions to depart from it.
+start_datetime: '2020-04-01T00:00:00'
+
+# --- sweep matrix (any list is a swept dimension) ---
+battery_capacities: [300.0, 400.0]
+threshold_values: [0.25]
+wind_thresholds: [8.0, 12.0]
+horizons: [150]
+failure_penalties: [5.0]
+episodes: 500
+
+# --- model settings ---
+transition_model: moderate
+solar_panel_model: constant
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+
+# Whale observation profile: one value per block of the day starting at 00:00.
+# Experiment-wide (not a swept dimension). 12 x 2 h must span 24 h.
+whale_series: custom
+whale_block_hours: 2
+whale_block_values: [0.0, 0.0, 0.0, 0.082, 0.098, 0.095, 0.217, 0.215, 0.183, 0.278, 0.0, 0.0]
+
+# Observation gain on the takeoff / landing stages (fraction of the stage at cruise).
+# 1.0 / 0.0 = original model; "auto" = 1 - t_maneuver/delta_t from the seaplane model.
+takeoff_cruise_fraction: 1.0
+landing_cruise_fraction: 0.0
+
+locations:
+- latitude: 30.0
+  longitude: -90.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min.pkl
+
+wind_chain:
+  enabled: false

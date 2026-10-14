@@ -8,4 +8,9 @@ Figures/archive/
 *.npz
 *.h5
 *.html
-./claude
+.claude
+*.ulg
+.gitignore
+# MkDocs build output
+site/
+results/

@@ -1,0 +1,59 @@
+experiment_name: whale_encounter_small
+description: >
+  Copy of iid_small using the distance-sampling encounter model
+  lambda(t) = D * A * a(t) * g0 * light(t), p(t) = 1 - exp(-lambda). Species numbers
+  come from the named species card (see BaseClasses/whale_base.py SPECIES_CARDS for
+  the citations), the density from the location, the swept area from the platform.
+  Setting density_per_km2 to null and g0 to 1.0 gives the focal form that equals
+  whale_series: JoA2026 exactly.
+start_datetime: '2020-04-01T00:00:00'
+
+# --- sweep matrix (any list is a swept dimension) ---
+battery_capacities: [300.0, 400.0]
+threshold_values: [0.25]
+wind_thresholds: [8.0, 12.0]
+horizons: [150]
+failure_penalties: [5.0]
+episodes: 500
+
+# --- model settings ---
+transition_model: moderate
+solar_panel_model: constant
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+
+# --- encounter observation model (docs/design/whale-observation-literature.md 3b) ---
+whale_series: encounter
+# Species card: name a built-in card (kogia_spp, humpback) and override any field.
+#   availability_profile: scott2001 (Scott et al. 2001 Table 2) | scalar | 12-block list
+#   g0: P(seen | surfaced in strip). kogia_spp card: 0.35 calm-sea ship-observer value.
+whale_species:
+  name: kogia_spp
+# Platform: swept area per stage = strip_width_km * ground_speed_ms * delta_t.
+#   Seaplane cruise speed is 17-20 m/s over 200-400 Wh (seaplane_base.get_max_endurance_speed);
+#   strip width follows the camera footprint at cruise altitude (Hodgson et al. 2017: 490 m at 732 m).
+whale_platform:
+  strip_width_km: 0.4
+  ground_speed_ms: 18.8
+# Camera daylight gate: fixed_hours reproduces the JoA2026 night zeros; clearsky_gate uses
+# sun-above-horizon from the location's clear-sky series.
+whale_light: {mode: fixed_hours, day_start: 6, day_end: 20}
+
+takeoff_cruise_fraction: 1.0
+landing_cruise_fraction: 0.0
+
+# Location density D (animals / km^2). Omit (or null) for the focal form.
+# Northern Gulf of Mexico Kogia spp.: 0.00046 visual, uncorrected for g(0) (Waring et al. 2013
+# via Hildebrand et al. 2019); 0.004-0.016 acoustic at slope sites (Hildebrand et al. 2019).
+# Map values: Roberts et al. (2016) Sci. Rep. 6:22615 Kogia guild surfaces (OBIS-SEAMAP).
+locations:
+- latitude: 30.0
+  longitude: -90.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min.pkl
+  density_per_km2: 0.01
+
+wind_chain:
+  enabled: false

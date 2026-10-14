@@ -44,6 +44,24 @@ def _parse_location(grp: h5py.Group) -> Tuple[Optional[float], Optional[float]]:
 
 
 def _aggregate_from_episodes(grp: h5py.Group) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    # Columnar layout: one (episodes,) dataset per scalar field.
+    sc = grp.get("episode_scalars")
+    if sc is not None and "total_reward" in sc:
+        rewards_col = np.asarray(sc["total_reward"][()], dtype=float)
+        mean_reward = float(rewards_col.mean()) if rewards_col.size else None
+        failure_percentage = None
+        mean_failure_step = None
+        if "failure" in sc:
+            fail_col = np.asarray(sc["failure"][()]).astype(bool)
+            if fail_col.size:
+                failure_percentage = float(100.0 * fail_col.mean())
+        if "failure_step" in sc:
+            steps = np.asarray(sc["failure_step"][()], dtype=float)
+            if steps.size:
+                mean_failure_step = float(steps.mean())
+        return mean_reward, failure_percentage, mean_failure_step
+
+    # Legacy layout: one group of scalar datasets per episode.
     episodes = grp.get("episodes")
     if episodes is None:
         return None, None, None

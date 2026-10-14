@@ -1255,7 +1255,7 @@ def fig_duration_value_soc_slices_short() -> None:
 
 def fig_whale_observation_probability() -> None:
     horizon = 96  # one day at 15-min resolution
-    series = WhaleRewardSeriesFactory.create_series("real", horizon)
+    series = WhaleRewardSeriesFactory.create_series("JoA2026", horizon)
     hours = np.arange(horizon) * (DT_MINUTES / 60.0)
 
     fig, ax = plt.subplots(figsize=(SINGLE_COL_IN, 2.4))

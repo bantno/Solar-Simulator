@@ -92,13 +92,14 @@ def _scalars_only(cfg_path):
 
 
 def compact_run_dir(run_dir):
-    """Extract per-episode scalars to the analysis cache CSV and delete the HDF5.
+    """Extract per-episode scalars to the analysis cache CSV; delete bloated HDF5s.
 
-    Only safe for scalars-only runs (no full histories): per-episode scalar datasets
-    carry ~0.5 KB of HDF5 metadata each, so a 210-sim x 3000-episode threshold config
-    produces a ~1.6 GB file whose entire useful content fits in a ~40 MB CSV. The
-    comparison/plot scripts read the CSV cache (read_all_episode_scalars) and
-    summary.csv, never the raw HDF5, for these runs.
+    Only runs for scalars-only configs (no full histories). With the columnar
+    episode_scalars layout the HDF5 is already small (a 210-sim x 3000-episode
+    threshold config is tens of MB), so the file is kept and only the analysis
+    cache is written. Legacy group-per-episode files (~0.5 KB of HDF5 metadata
+    per scalar dataset, ~1.6 GB for the same config) are still deleted once
+    their content is cached.
     """
     from Scripts.compare_chain_sweep import read_all_episode_scalars
     df = read_all_episode_scalars(run_dir)  # writes <run_dir>/_episode_scalars.csv
@@ -110,11 +111,15 @@ def compact_run_dir(run_dir):
         print(f"[compact] SKIPPED {run_dir}: scalar cache covers {n_groups} groups "
               f"but summary.csv has {n_sims} sims -- keeping HDF5")
         return
-    freed = sum(os.path.getsize(p) for p in h5s)
+    size = sum(os.path.getsize(p) for p in h5s)
+    if size < 100e6:  # columnar layout: nothing worth deleting
+        print(f"[compact] {run_dir}: cached scalars for {n_groups} sims "
+              f"(HDF5 is {size / 1e6:.0f} MB, keeping it)")
+        return
     for p in h5s:
         os.remove(p)
     print(f"[compact] {run_dir}: cached scalars for {n_groups} sims, "
-          f"freed {freed / 1e9:.2f} GB")
+          f"freed {size / 1e9:.2f} GB")
 
 
 def main():

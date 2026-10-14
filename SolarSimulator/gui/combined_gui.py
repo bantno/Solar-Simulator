@@ -765,15 +765,25 @@ class HDF5RewardPlotter:
                 fail_count = 0
                 failure_steps = []
 
-                episodes = grp.get('episodes', {})
-                for ep in episodes.values():
-                    if 'total_reward' in ep:
-                        rewards.append(ep['total_reward'][()])
-                    if 'failure' in ep and 'failure_step' in ep:
-                        total_eps += 1
-                        if bool(ep['failure'][()]):
-                            fail_count += 1
-                            failure_steps.append(ep['failure_step'][()])
+                sc = grp.get('episode_scalars')
+                if sc is not None and 'total_reward' in sc:
+                    rewards = list(np.asarray(sc['total_reward'][()], dtype=float))
+                    if 'failure' in sc and 'failure_step' in sc:
+                        fail = np.asarray(sc['failure'][()]).astype(bool)
+                        steps = np.asarray(sc['failure_step'][()], dtype=float)
+                        total_eps = len(fail)
+                        fail_count = int(fail.sum())
+                        failure_steps = list(steps[fail])
+                else:
+                    episodes = grp.get('episodes', {})
+                    for ep in episodes.values():
+                        if 'total_reward' in ep:
+                            rewards.append(ep['total_reward'][()])
+                        if 'failure' in ep and 'failure_step' in ep:
+                            total_eps += 1
+                            if bool(ep['failure'][()]):
+                                fail_count += 1
+                                failure_steps.append(ep['failure_step'][()])
 
                 if not rewards and total_eps == 0 and 'optimal' not in sim_type.lower():
                     continue
@@ -1757,10 +1767,15 @@ class HDF5RewardPlotter:
                 continue
             if penalties is not None and fp not in penalties:
                 continue
-            episodes = grp.get('episodes', {})
-            for ep in episodes.values():
-                if 'total_reward' in ep:
-                    rewards_by_fp.setdefault(fp, []).append(ep['total_reward'][()])
+            sc = grp.get('episode_scalars')
+            if sc is not None and 'total_reward' in sc:
+                rewards_by_fp.setdefault(fp, []).extend(
+                    np.asarray(sc['total_reward'][()], dtype=float))
+            else:
+                episodes = grp.get('episodes', {})
+                for ep in episodes.values():
+                    if 'total_reward' in ep:
+                        rewards_by_fp.setdefault(fp, []).append(ep['total_reward'][()])
 
         fps = sorted(rewards_by_fp.keys())
         fps = (fps if penalties else fps[:max_series])[:max_series]

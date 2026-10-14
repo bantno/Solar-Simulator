@@ -21,7 +21,7 @@ Figures 1, 3, and 8 include the best-threshold benchmark (green) when the thresh
 configs have been run (generate with --thresholds).
 
 Usage (pvlib conda env, from SolarSimulator/):
-    conda run -n pvlib python Scripts/plot_chain_sweep.py [--smoke] [--figs 1,2,3]
+    `conda run -n pvlib python Scripts/plot_chain_sweep.py [--smoke] [--figs 1,2,3]`
 """
 import argparse
 import glob

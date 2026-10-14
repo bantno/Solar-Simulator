@@ -390,6 +390,16 @@ class Seaplane:
             "landing_power": self.landing_power,
         }
 
+    def get_maneuver_times_s(self) -> dict:
+        """Durations (s) of the climb 0 -> cruise_altitude at +2 deg and the descent
+        cruise_altitude -> 0 at -2 deg, from the same climb/descent models the takeoff
+        and landing power heuristics use."""
+        _, climb_time_s = self.climb_energy(
+            self.cruise_speed, np.radians(2), 0, self.cruise_altitude, 1)
+        _, descent_time_s = self.descent_energy(
+            self.cruise_speed, np.radians(-2), self.cruise_altitude, 0, 1)
+        return {"climb_time_s": float(climb_time_s), "descent_time_s": float(descent_time_s)}
+
 if __name__ == "__main__":
     # Example usage
     import matplotlib.pyplot as plt

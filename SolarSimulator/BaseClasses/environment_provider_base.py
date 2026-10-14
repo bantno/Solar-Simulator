@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
+from scipy.special import betainc
+from scipy.stats import beta as beta_dist
 from BaseClasses.solar_panel_base import SolarPanelFactory
 
 class AbstractEnvironmentProvider(ABC):
@@ -90,14 +92,16 @@ class HistoricalEnvironmentProvider(AbstractEnvironmentProvider):
         whale_observation_series: np.ndarray,
         delta_t_min: float,
         solar_panel_model: str = "constant",
-        rng=None
+        rng=None,
+        solar_panel_kwargs: dict = None,
     ):
         self.solar_irradiance_series = solar_irradiance_series
         self.wind_speed_series = wind_speed_series
         self.whale_observation_series = whale_observation_series
         self.DELTA_T_MIN = delta_t_min
         self.DELTA_T_SEC = delta_t_min * 60
-        self.panel = SolarPanelFactory.create_solar_panel(solar_panel_model)
+        self.panel = SolarPanelFactory.create_solar_panel(
+            solar_panel_model, **(solar_panel_kwargs or {}))
         self.rng = rng if rng is not None else np.random.default_rng()
 
     def set_seed(self, seed: int) -> None:
@@ -234,7 +238,9 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
     """
     def __init__(self, solar_distributions: np.ndarray, wind_distributions: np.ndarray,
                  whale_reward_series: np.ndarray, delta_t_min: float, solar_panel_model: str = "constant", rng=None,
-                 wind_bin_edges: np.ndarray = None, wind_transition: np.ndarray = None):
+                 wind_bin_edges: np.ndarray = None, wind_transition: np.ndarray = None,
+                 solar_transition: np.ndarray = None, solar_valid: np.ndarray = None,
+                 solar_panel_kwargs: dict = None):
         self.wind_shape = wind_distributions[:, 0]
         self.wind_scale = wind_distributions[:, 1]
         self.solar_alpha = solar_distributions[:, 0]
@@ -243,7 +249,8 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         self.whale_reward_series = whale_reward_series
         self.DELTA_T_MIN = delta_t_min
         self.DELTA_T_SEC = delta_t_min * 60
-        self.panel = SolarPanelFactory.create_solar_panel(solar_panel_model)
+        self.panel = SolarPanelFactory.create_solar_panel(
+            solar_panel_model, **(solar_panel_kwargs or {}))
         # Use a provided generator or default to np.random.default_rng()
         self.rng = rng if rng is not None else np.random.default_rng()
 
@@ -262,6 +269,30 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
             self.n_wind_bins = 1
         self._wind_bins = None       # per-lane current bin (set lazily on first sample)
         self.last_wind_bins = None   # bins used in the most recent sample_wind_speed call
+
+        # --- Solar Markov-chain (persistence) state ---
+        # Bins are the stage Beta's quantile bands (bin g = [g/n, (g+1)/n) in CDF space,
+        # masses exactly 1/n), so no bin edges exist: sampling and digitization go
+        # through the stage Beta CDF/PPF. solar_transition is the per-stage stack the
+        # loader builds: (month,hour) matrices at solar-valid stages, identity at
+        # night/twilight (bin held), and the fitted dusk->dawn matrix at the last
+        # invalid stage before each dawn. solar_valid marks the stages where the index
+        # is defined (clear-sky above the artifact's gate); elsewhere sampling is the
+        # unconditional i.i.d. Beta draw, exactly the published behavior.
+        self.use_solar_chain = solar_transition is not None
+        if self.use_solar_chain:
+            self.solar_transition = np.asarray(solar_transition, dtype=float)  # (T, n_g, n_g)
+            self.n_solar_bins = self.solar_transition.shape[-1]
+            self.solar_valid = (np.ones(self.solar_transition.shape[0], dtype=bool)
+                                if solar_valid is None
+                                else np.asarray(solar_valid, dtype=bool))
+        else:
+            self.solar_transition = None
+            self.n_solar_bins = 1
+            self.solar_valid = None
+        self._solar_bins = None       # per-lane current bin (set lazily on first sample)
+        self.last_solar_bins = None   # bins used in the most recent sample_sunlight call
+        self._exo_transition_cache = {}
 
     def get_wind_shape(self, stage):
         return self.wind_shape[stage]
@@ -290,12 +321,59 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         self.set_seed(seed)
         self._wind_bins = None
         self.last_wind_bins = None
+        self._solar_bins = None
+        self.last_solar_bins = None
 
     def get_wind_transition(self, t: int) -> np.ndarray:
         """Per-stage wind-bin transition matrix (n_bins x n_bins). Identity-like [[1]] when i.i.d."""
         if self.use_wind_chain:
             return self.wind_transition[t]
         return np.array([[1.0]])
+
+    def get_solar_transition(self, t: int) -> np.ndarray:
+        """Per-stage solar-bin transition matrix (n_g x n_g). Identity-like [[1]] when i.i.d."""
+        if self.use_solar_chain:
+            return self.solar_transition[t]
+        return np.array([[1.0]])
+
+    # ── Joint exogenous-regime index z = wind_bin * n_solar_bins + solar_bin ──
+    # The solver and the optimal policy see ONE exogenous chain over n_exo_bins
+    # states; wind-only, solar-only, and joint are all special cases. A future
+    # *fitted* joint wind-solar chain only needs to change get_exo_transition
+    # (serve a fitted tensor instead of the Kronecker product) - same z layout.
+    @property
+    def use_exo_chain(self) -> bool:
+        return self.use_wind_chain or self.use_solar_chain
+
+    @property
+    def n_exo_bins(self) -> int:
+        return self.n_wind_bins * self.n_solar_bins
+
+    @property
+    def last_exo_bins(self):
+        """Joint current-bin index per lane; an inactive chain contributes bin 0."""
+        if not self.use_exo_chain:
+            return None
+        if self.use_wind_chain and self.use_solar_chain:
+            return self.last_wind_bins * self.n_solar_bins + self.last_solar_bins
+        if self.use_wind_chain:
+            return self.last_wind_bins
+        return self.last_solar_bins
+
+    def get_exo_transition(self, t: int) -> np.ndarray:
+        """Joint per-stage transition (n_exo x n_exo): kron(P_wind, P_solar).
+
+        Independence of the two chains is assumed (the composition decision);
+        with either chain off its factor is [[1.0]] and the kron is a no-op.
+        """
+        if not (self.use_wind_chain and self.use_solar_chain):
+            return self.get_wind_transition(t) if self.use_wind_chain \
+                else self.get_solar_transition(t)
+        P = self._exo_transition_cache.get(t)
+        if P is None:
+            P = np.kron(self.wind_transition[t], self.solar_transition[t])
+            self._exo_transition_cache[t] = P
+        return P
 
     def _weibull_cdf(self, w, k, scale):
         # F(w) = 1 - exp(-(w/scale)^k); F(inf)=1, F(0)=0
@@ -330,10 +408,38 @@ class StochasticWindSolarEnvironmentProvider(AbstractEnvironmentProvider):
         return (cum > r[:, None]).argmax(axis=1)
 
     def sample_sunlight(self, t: int, n: int) -> np.ndarray:
-        w_p_m2 = self.beta_solar_energy_dist(t, n) # W/m^2
-        j_p_m2 = w_p_m2 * self.DELTA_T_SEC  # J/m^2
-        a_m2 = self.panel.area
-        return j_p_m2 * a_m2 * self.panel.efficiency
+        if not self.use_solar_chain:
+            w_p_m2 = self.beta_solar_energy_dist(t, n) # W/m^2
+            j_p_m2 = w_p_m2 * self.DELTA_T_SEC  # J/m^2
+            a_m2 = self.panel.area
+            return j_p_m2 * a_m2 * self.panel.efficiency
+        # Markov-chain path: sample within the current bin, expose it, then advance
+        # (mirrors sample_wind_speed; the rollout draws sunlight before the policy acts).
+        if self._solar_bins is None or self._solar_bins.shape[0] != n:
+            # Quantile bins have mass exactly 1/n_g at every valid stage -> uniform init.
+            self._solar_bins = self.rng.integers(0, self.n_solar_bins, size=n)
+        bins = self._solar_bins
+        self.last_solar_bins = bins.copy()
+        k = self._sample_solar_index_within_bin(t, bins)
+        self._solar_bins = self._advance_bins(bins, self.solar_transition[t])
+        return self._energy_gain_from_solar(k * self.solar_cs[t])
+
+    def _sample_solar_index_within_bin(self, t: int, bins: np.ndarray) -> np.ndarray:
+        """Clear-sky index from the stage-t Beta restricted to each lane's quantile bin.
+
+        Bin g is the [g/n, (g+1)/n) quantile band of the stage Beta, so the draw is the
+        exact inverse-CDF sample u ~ U(g/n, (g+1)/n), K = F^{-1}(u). At stages where the
+        index is undefined (night/twilight below the artifact's gate) the bin carries no
+        information about the within-step draw; fall back to the unconditional Beta,
+        which is the published i.i.d. behavior (and energy there is ~0 anyway).
+        """
+        a = self.solar_alpha[t]
+        b = self.solar_beta[t]
+        if self.solar_valid is not None and not self.solar_valid[t]:
+            return self.rng.beta(a, b, size=bins.shape[0])
+        u = (bins + self.rng.random(size=bins.shape[0])) / self.n_solar_bins
+        u = np.clip(u, 1e-12, 1.0 - 1e-12)
+        return beta_dist.ppf(u, a, b)
     
     def _energy_gain_from_solar(self, solar_vals: np.ndarray) -> np.ndarray:
         """Calculate energy gain from solar values."""
@@ -484,6 +590,12 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
         wind_bin_edges (np.ndarray, optional): Full edge array (length n_bins+1) from the wind chain artifact.  When provided,
             enables chain-solved evaluation via bin digitization.
         wind_transition (np.ndarray, optional): Per-stage transition matrices shaped (horizon, n_bins, n_bins).
+        solar_distributions (np.ndarray, optional): (horizon, 3) [alpha, beta, clearsky] rows copied from the solve-side
+            provider; needed to digitize realized GHI into the stage Beta's quantile band.
+        solar_transition (np.ndarray, optional): Per-stage solar transition stack (horizon, n_g, n_g) (identity at
+            night, dawn matrix before each dawn), copied from the solve-side provider.
+        solar_valid (np.ndarray, optional): (horizon,) bool; stages where the clear-sky index is defined. The bin
+            is held (not re-digitized) at invalid stages.
     """
 
     # Cumulative days before each month in a non-leap year (0-indexed, Jan=0).
@@ -501,10 +613,15 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
         rng=None,
         wind_bin_edges: np.ndarray = None,
         wind_transition: np.ndarray = None,
+        solar_distributions: np.ndarray = None,
+        solar_transition: np.ndarray = None,
+        solar_valid: np.ndarray = None,
+        solar_panel_kwargs: dict = None,
     ):
         self.DELTA_T_MIN = float(delta_t_min)
         self.DELTA_T_SEC = self.DELTA_T_MIN * 60.0
-        self.panel = SolarPanelFactory.create_solar_panel(solar_panel_model)
+        self.panel = SolarPanelFactory.create_solar_panel(
+            solar_panel_model, **(solar_panel_kwargs or {}))
         self.whale_reward_series = whale_reward_series
         self.rng = rng if rng is not None else np.random.default_rng()
 
@@ -543,6 +660,29 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
             self.n_wind_bins = 1
         self.last_wind_bins = None
 
+        # Solar-chain support: realized GHI is digitized into the stage Beta's quantile
+        # band via its CDF (bin = floor(n_g * F(K))), using the SAME per-stage (alpha,
+        # beta, clearsky) the solve-side provider used, so the solved table is indexed
+        # consistently on real weather. At stages below the validity gate the previous
+        # bin is held (mirroring the identity transitions the solver assumed there).
+        self.use_solar_chain = (solar_distributions is not None) and (solar_transition is not None)
+        if self.use_solar_chain:
+            solar_distributions = np.asarray(solar_distributions, dtype=float)
+            self.solar_alpha = solar_distributions[:, 0]
+            self.solar_beta = solar_distributions[:, 1]
+            self.solar_cs = solar_distributions[:, 2]
+            self.solar_transition = np.asarray(solar_transition, dtype=float)
+            self.n_solar_bins = self.solar_transition.shape[-1]
+            self.solar_valid = (np.ones(self.solar_transition.shape[0], dtype=bool)
+                                if solar_valid is None
+                                else np.asarray(solar_valid, dtype=bool))
+        else:
+            self.solar_transition = None
+            self.n_solar_bins = 1
+            self.solar_valid = None
+        self.last_solar_bins = None
+        self._exo_transition_cache = {}
+
         # Lazy per-n year-assignment matrix (built on first sample call or after reset).
         # Shape (n, n_blocks): year_choice[lane, block] = year index in [0, n_years-1].
         # Storing only this tiny matrix (not the full (H, n) weather arrays) keeps memory
@@ -574,6 +714,7 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
             self.rng = np.random.default_rng(seed)
         self._year_choice = None
         self.last_wind_bins = None
+        self.last_solar_bins = None
 
     def set_seed(self, seed: int) -> None:
         self.rng = np.random.default_rng(seed)
@@ -584,6 +725,43 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
         if self.use_wind_chain:
             return self.wind_transition[t]
         return np.array([[1.0]])
+
+    def get_solar_transition(self, t: int) -> np.ndarray:
+        """Per-stage solar-bin transition matrix (n_g x n_g). Identity-like [[1]] when i.i.d."""
+        if self.use_solar_chain:
+            return self.solar_transition[t]
+        return np.array([[1.0]])
+
+    # ── Joint exogenous-regime index z = wind_bin * n_solar_bins + solar_bin ──
+    # (Same seam as StochasticWindSolarEnvironmentProvider, so simulate_episode_batch
+    # and choose_action_batch work identically on distributional and historical runs.)
+    @property
+    def use_exo_chain(self) -> bool:
+        return self.use_wind_chain or self.use_solar_chain
+
+    @property
+    def n_exo_bins(self) -> int:
+        return self.n_wind_bins * self.n_solar_bins
+
+    @property
+    def last_exo_bins(self):
+        if not self.use_exo_chain:
+            return None
+        if self.use_wind_chain and self.use_solar_chain:
+            return self.last_wind_bins * self.n_solar_bins + self.last_solar_bins
+        if self.use_wind_chain:
+            return self.last_wind_bins
+        return self.last_solar_bins
+
+    def get_exo_transition(self, t: int) -> np.ndarray:
+        if not (self.use_wind_chain and self.use_solar_chain):
+            return self.get_wind_transition(t) if self.use_wind_chain \
+                else self.get_solar_transition(t)
+        P = self._exo_transition_cache.get(t)
+        if P is None:
+            P = np.kron(self.wind_transition[t], self.solar_transition[t])
+            self._exo_transition_cache[t] = P
+        return P
 
     def sample_wind_speed(self, t: int, n: int) -> np.ndarray:
         self._ensure_year_choice(n)
@@ -597,6 +775,19 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
         self._ensure_year_choice(n)
         yr = self._year_choice[:, t // self.block_length_steps]    # (n,)
         ghi_t = self._solar_cube[self._window_slots[t], yr]        # (n,)
+        if self.use_solar_chain:
+            if self.solar_valid[t]:
+                # Digitize realized K into the stage Beta's quantile band via its CDF.
+                cs = max(float(self.solar_cs[t]), 1e-9)
+                k = np.clip(ghi_t / cs, 0.0, 1.0 - 1e-6)
+                F = betainc(self.solar_alpha[t], self.solar_beta[t], k)
+                self.last_solar_bins = np.minimum(
+                    (F * self.n_solar_bins).astype(int), self.n_solar_bins - 1)
+            elif self.last_solar_bins is None or self.last_solar_bins.shape[0] != n:
+                # Mission starts at night: no realized info yet; quantile bins are
+                # uniform at every valid stage, so a uniform prior is exact.
+                self.last_solar_bins = self.rng.integers(0, self.n_solar_bins, size=n)
+            # else: hold the previous bin (identity transitions through the night).
         return self._energy_gain_from_solar(ghi_t)
 
     def sample_whale_observation(self, t: int, n: int = 1) -> np.ndarray:

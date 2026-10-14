@@ -106,13 +106,30 @@ def _start_offset_min(start_dt: pd.Timestamp) -> int:
     return int(start_dt.hour) * 60 + int(start_dt.minute)
 
 
-def _whale_kwargs_from_config(config: Dict) -> Dict:
-    """Series-specific whale options from the config (used by ``whale_series: custom``)."""
+# Config key -> create_series kwarg for the series-specific whale options
+# (``custom``: block values; ``encounter``: species card / platform / light).
+_WHALE_OPTION_KEYS = {
+    "whale_block_values": "block_values",
+    "whale_block_hours": "block_hours",
+    "whale_species": "species",
+    "whale_platform": "platform",
+    "whale_light": "light",
+}
+
+
+def _whale_kwargs_from_config(config: Dict, location: Dict = None) -> Dict:
+    """Series-specific whale options from the config (and the location's density),
+    passed through to the factory."""
     kw: Dict = {}
-    if config.get("whale_block_values") is not None:
-        kw["block_values"] = [float(v) for v in config["whale_block_values"]]
-    if config.get("whale_block_hours") is not None:
-        kw["block_hours"] = float(config["whale_block_hours"])
+    for key, name in _WHALE_OPTION_KEYS.items():
+        if config.get(key) is not None:
+            kw[name] = config[key]
+    if "block_values" in kw:
+        kw["block_values"] = [float(v) for v in kw["block_values"]]
+    if "block_hours" in kw:
+        kw["block_hours"] = float(kw["block_hours"])
+    if location is not None and location.get("density_per_km2") is not None:
+        kw["density_per_km2"] = location["density_per_km2"]
     return kw
 
 
@@ -173,6 +190,8 @@ class EnvironmentLoader:
             self.whale_type, self.horizon,
             delta_t=self.delta_t,
             start_offset_min=_start_offset_min(self.start_dt),
+            start_month=int(self.start_dt.month),
+            solar_cs=cs,
             **self.whale_kwargs,
         )
         return wind_dist, solar_dist, whale_series
@@ -285,8 +304,8 @@ class SimulationFactory:
         self.transition_model = config.get("transition_model", "moderate")
         self.solar_model = config.get("solar_panel_model", "constant")
         self.solar_panel_kwargs = config.get("solar_panel_kwargs") or None
-        self.whale_type = config.get("whale_series", "real")
-        self.whale_kwargs = _whale_kwargs_from_config(config)
+        self.whale_type = config.get("whale_series", "JoA2026")
+        self.whale_kwargs = _whale_kwargs_from_config(config, location)
         # Fraction of the takeoff / landing stage spent surveying at cruise (observation
         # gain on those stages). Defaults reproduce the original "climb is short relative
         # to the stage" model: takeoff earns the full stage, landing earns nothing.
@@ -328,6 +347,8 @@ class SimulationFactory:
                 self.whale_type, self.horizon,
                 delta_t=self.delta_t,
                 start_offset_min=_start_offset_min(self.start_dt),
+                start_month=int(self.start_dt.month),
+                solar_cs=self.env_provider.solar_cs,
                 **self.whale_kwargs,
             )
             block_days = float(hw_cfg.get("block_length_days", 7))

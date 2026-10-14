@@ -1,7 +1,7 @@
 experiment_name: whale_custom_small
 description: >
   Copy of iid_small with the whale observation profile supplied from config.
-  With these block values (the built-in "real" profile) and the default cruise
+  With these block values (the built-in "JoA2026" profile) and the default cruise
   fractions the value tables and episode results are identical to iid_small;
   edit whale_block_values or the cruise fractions to depart from it.
 start_datetime: '2020-04-01T00:00:00'

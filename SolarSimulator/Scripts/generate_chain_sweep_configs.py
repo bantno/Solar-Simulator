@@ -98,7 +98,7 @@ def base_config(loc, arm, world, episodes, full_history_episodes):
         "episodes": episodes,
         "transition_model": "moderate",
         "solar_panel_model": "constant",
-        "whale_series": "real",
+        "whale_series": "JoA2026",
         "energy_increment_wh": 5,
         "delta_t": 15,
         "include_optimal": True,

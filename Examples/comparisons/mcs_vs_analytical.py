@@ -29,7 +29,7 @@ def main():
     # Create distribution arrays.
     wind_distributions = np.column_stack((wind_shape, wind_scale))
     solar_distributions = np.column_stack((solar_alpha, solar_beta))
-    whale_reward_series = WhaleRewardSeriesFactory.create_series("real", horizon)
+    whale_reward_series = WhaleRewardSeriesFactory.create_series("JoA2026", horizon)
 
     # -------------------------------
     # Create the environment provider

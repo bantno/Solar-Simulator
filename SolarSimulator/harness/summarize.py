@@ -32,10 +32,29 @@ _SIM_ATTR_COLUMNS = [
 ]
 
 
-def _fmt_list(values):
-    """Compact ';'-joined string for list-valued config entries (None passes through)."""
-    if values is None:
+def _species_label(species):
+    """Species card name (string card, or the ``name`` of a mapping card)."""
+    if isinstance(species, dict):
+        return species.get("name", "custom")
+    return species
+
+
+def _species_field(species, field):
+    """A field of the resolved species card (config override, else the built-in card value)."""
+    if isinstance(species, dict) and species.get(field) is not None:
+        return species.get(field)
+    name = species.get("name") if isinstance(species, dict) else species
+    try:
+        from BaseClasses.whale_base import SPECIES_CARDS
+        return SPECIES_CARDS.get(name or "kogia_spp", {}).get(field)
+    except ImportError:
         return None
+
+
+def _fmt_list(values):
+    """Compact ';'-joined string for list-valued config entries; scalars/strings pass through."""
+    if values is None or isinstance(values, (str, int, float)):
+        return values
     return ";".join(str(v) for v in values)
 
 
@@ -56,9 +75,18 @@ def _experiment_columns(config: Dict) -> Dict:
         "transition_model": config.get("transition_model", "moderate"),
         "solar_panel_model": config.get("solar_panel_model", "constant"),
         "clearsky_model": config.get("clearsky_model", "fatemi"),
-        "whale_series": config.get("whale_series", "real"),
+        "whale_series": config.get("whale_series", "JoA2026"),
         "whale_block_hours": config.get("whale_block_hours"),
         "whale_block_values": _fmt_list(config.get("whale_block_values")),
+        "whale_species": _species_label(config.get("whale_species")),
+        "whale_g0": _species_field(config.get("whale_species"), "g0"),
+        "whale_strip_width_km": (config.get("whale_platform") or {}).get("strip_width_km"),
+        "whale_ground_speed_ms": (config.get("whale_platform") or {}).get("ground_speed_ms"),
+        "whale_density_per_km2": _fmt_list(
+            [loc.get("density_per_km2") for loc in (config.get("locations") or [])]
+            if isinstance(config.get("locations"), list) else None),
+        "whale_light_mode": (config.get("whale_light") or {}).get("mode")
+        if isinstance(config.get("whale_light"), dict) else config.get("whale_light"),
         "takeoff_cruise_fraction": config.get("takeoff_cruise_fraction", 1.0),
         "landing_cruise_fraction": config.get("landing_cruise_fraction", 0.0),
         "energy_increment_wh": config.get("energy_increment_wh"),

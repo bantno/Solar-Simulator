@@ -43,8 +43,8 @@ chain-vs-iid sweep?
     envelope in the capacity–reliability figure).
 - **Winner's-curse control.** Selecting the best of 35 combos on the same episodes it is
   evaluated on inflates its score. A split-half check (select on even episode indices,
-  evaluate on odd) showed the selection is **stable in 25/34 cells** and the holdout reward
-  is within ~0.5 of the full-sample value everywhere — negligible next to the effect sizes.
+  evaluate on odd) showed the selection is **stable in 24/34 cells**; the holdout reward is
+  within 0.5 of the full-sample value in 29/34 cells and differs by up to 1.58 (May start cell), still below the chain-minus-threshold margins (*corrected 2026-10-20 against `comparison_cells.csv`; the earlier text said 25/34 and "within ~0.5 everywhere"*).
 
 ## 3. Headline results (34 historical cells)
 
@@ -180,8 +180,8 @@ bracketing the ~6 m/s decision band that the old 5–10 bin pooled into one stat
 - **iid-optimal still loses to the tuned heuristic in 19/34 cells** (wins 11) — as
   expected, the iid arm is untouched by bin choice; the entire improvement is the chain
   arm's representation.
-- Split-half best-threshold selection stable in 24/34 cells; holdout rewards within ~0.5
-  of full-sample everywhere (winner's-curse bias again negligible).
+- Split-half best-threshold selection stable in 24/34 cells; holdout rewards within 0.5
+  of full-sample in 29/34 cells, largest gap 1.58 (May start) (*corrected 2026-10-20 against `comparison_cells.csv`*).
 - CRN verification passed (8/8 full-history episodes byte-identical weather across arms).
 - `Tests/verify_wind_chain.py` passes on the 4-bin artifacts (rank-1 collapse to i.i.d.,
   value monotone in wind bin).

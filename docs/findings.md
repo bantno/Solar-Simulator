@@ -52,8 +52,10 @@ Deltas are episode-paired with 95% bootstrap CIs.
   (4.1 / 5.7 / 7.3 m/s) bracket that band, and both Hawaii cells flip to wins
   (§5, §9).
 - **Choosing the best threshold combo on the same episodes it is scored on
-  (winner's-curse bias) is negligible.** Split-half holdout rewards are within about 0.5
-  of the full-sample values (§2, §9).
+  (winner's-curse bias) is small.** Split-half holdout rewards are within 0.5 of the
+  full-sample values in 29 of 34 cells and differ by up to 1.58 (May start cell), below every
+  chain-minus-threshold margin (*corrected 2026-10-20 against `comparison_cells.csv`; the
+  benchmark text said "within ~0.5 everywhere"*).
 
 The generated per-cell report for the 4-quantile-bin sweep,
 `results/chain_vs_iid_sweep/_analysis/comparison_report.md`, is git-ignored and exists
@@ -116,3 +118,17 @@ These are quoted from the records rather than added for this page.
   ([Solar persistence](design/solar-persistence-math.md) §7)
 - **Whale observation:** the open questions are in the
   [literature survey](design/whale-observation-literature.md) §6.
+
+<!-- additions-2026-10-20 -->
+## Additions and corrections, 2026-10-20
+
+Recorded from runs made for the APL interview backups. Scripts and numbers:
+`APL Interview/analysis/` and `APL Interview/out/wind_backups/slide_numbers.json`.
+
+- **Held-out check (Gulf site, July 1, 30 days, 150/300/500 Wh, corrected solver after `779dc44`).** Weibull/Beta table and 4-quantile-bin chain fitted on 1950 to 2004, bootstrap cube from 2005 to 2022 (`results/apl_holdout_2026-10-20`). Chain minus i.i.d. reward +7.06 [+6.17, +7.90] at 150 Wh, +2.22 [+1.53, +2.88] at 300 Wh, +2.38 [+1.81, +2.96] at 500 Wh. The in-sample twin on the full record with the same solver (`results/apl_insample_2026-10-20`) gives +6.82, +3.16, +1.70, so the July in-sample sweep was not inflated by shared years.
+- **The single-site claim that i.i.d.-optimal "barely ties" the tuned threshold is not reproduced at the Gulf 30-day cells on disk at penalty 5.** Held-out: i.i.d. minus threshold +1.9, +3.2, +4.5. July sweep Gulf capacity grid: +2.5 to +7.1. In the July sweep the i.i.d. policy loses to the threshold at Hawaii, lat 45 (most capacities) and Bering, and in the 60-day Gulf cell, not in the 30-day Gulf cells. The section 1 single-site numbers come from CSVs that are not in the repo.
+- **Penalty sensitivity, held out.** At penalty 50 the i.i.d. policy loses to the threshold rule at all three capacities (-10.4, -4.4, -3.2) while the chain beats it (+4.4, +3.5, +3.3), and the chain's failure at 300 Wh falls from 31.4 % to 23.5 % (i.i.d. 34.0 to 31.2, threshold 21.5 unchanged). So the "persistence is what makes optimal win" claim holds at the Gulf at penalty 20 or more, not at 5.
+- **Triplicate baseline cell in the July sweep** (+2.914 / +2.821 / +4.185): crash draws were unseeded before `779dc44`, so the three runs differ only by crash randomness. `V0` was identical.
+- **Chain fitting detail.** Transitions are counted for every consecutive pair one model step apart, including across midnight. The Weibull table has one fit per (month, day, hour, minute) slot. Earlier wording in the math record and the briefing said otherwise and was corrected in place.
+- Caveat: `compare_chain_sweep.py` derives the V0 and calibration columns from the full-record expected-data path, so those columns in the held-out `comparison_cells.csv` files are not valid.
+<!-- end additions-2026-10-20 -->

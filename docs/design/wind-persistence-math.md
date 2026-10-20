@@ -22,8 +22,8 @@ step).
   transition; **discount** $\gamma$.
 
 In the published model the weather is **independent across stages**: $W_t \sim
-\text{Weibull}(k_t, \lambda_t)$ with stage-dependent (month/hour) shape $k_t$ and scale
-$\lambda_t$, and $G_t$ from its fitted distribution, each drawn i.i.d. The value function
+\text{Weibull}(k_t, \lambda_t)$ with stage-dependent shape $k_t$ and scale
+$\lambda_t$ (one fit per (month, day, hour, minute) calendar slot, 35,040 slots at 15 min; *corrected 2026-10-20, the earlier text said "(month/hour)", see `weather_processor_cs_normalization.py:fit_distributions`*), and $G_t$ from its fitted distribution, each drawn i.i.d. The value function
 depends only on $(s, t)$:
 
 $$
@@ -104,8 +104,8 @@ matrix per (month, hour), i.e. $12 \times 24 = 288$ matrices
 $[\,\texttt{run\_sim.py: EnvironmentLoader}\,]$.
 
 **Fitting** $[\,\texttt{fit\_wind\_transition\_chain}\,]$. From the historical record
-resampled to the model step, digitize each sample to a bin and count consecutive,
-same-day-contiguous transitions stratified by (month, hour):
+resampled to the model step, digitize each sample to a bin and count consecutive
+transitions, every pair of samples one model step apart including across midnight, stratified by (month, hour) of the source sample (*corrected 2026-10-20: the earlier text said "same-day-contiguous", the code only checks the 15-min spacing, `fit_wind_transition_chain` mask `step_ok`*):
 
 $$
 N^{(m,h)}_{b,b'} \;=\; \sum_{\tau} \mathbb{1}\{\beta_\tau = b,\ \beta_{\tau+1} = b',\ m_\tau = m,\ h_\tau = h\},
@@ -307,7 +307,7 @@ offline fit. It is **off by default** ($n_b = 1$), so the published pipeline is 
 | $\gamma,\ c_f$ | discount; failure penalty |
 | $b,\ \beta_t,\ n_b$ | wind bin index; bin at stage $t$; number of bins |
 | $e_b$ | bin edge ($e_0=0,\ e_{n_b}=\infty$) |
-| $k_t,\ \lambda_t$ | stage-$t$ Weibull shape, scale (by month/hour) |
+| $k_t,\ \lambda_t$ | stage-$t$ Weibull shape, scale (one fit per (month, day, hour, minute) slot) |
 | $f_t(w\mid b),\ \pi_t(b)$ | truncated within-bin density; bin mass |
 | $P^{(m,h)},\ P^{(t)}$ | (month,hour) transition matrix; the one in force at stage $t$ |
 | $p_B,\ p_M,\ p_{\mathrm{fail}}$ | solar/energy, mechanical/wind, total one-step failure prob. |

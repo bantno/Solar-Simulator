@@ -8,7 +8,7 @@ published in the Journal of Aircraft is untouched and exactly reproduced.*
 ## 0. One-paragraph summary
 
 The published model treats wind at each control step as an independent draw from a fitted
-(month/hour) Weibull — i.i.d. in time. Real wind is autocorrelated: calm tends to follow
+per-calendar-slot (month, day, hour, minute) Weibull — i.i.d. in time (*corrected 2026-10-20, previously "(month/hour)"*). Real wind is autocorrelated: calm tends to follow
 calm, gusty follows gusty. As a curiosity, I asked whether giving the optimal policy
 *memory of the current wind regime* would improve decisions. The extension replaces the
 per-step i.i.d. wind draw with a **first-order, time-conditioned Markov chain over

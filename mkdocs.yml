@@ -157,6 +157,7 @@ nav:
           - Theory: design/wind-persistence-theory.md
           - Validity and implementation: design/wind-persistence-validity.md
           - Threshold benchmark: design/wind-threshold-benchmark.md
+          - Held-out validation: design/apl-holdout-validation.md
       - Solar persistence:
           - Mathematics and design record: design/solar-persistence-math.md
       - Whale observation:

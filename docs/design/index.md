@@ -22,6 +22,7 @@ except for link fixes. Each one states its own status and date in its header.
 | [Theory](wind-persistence-theory.md) | Paper-style argument: correlated wind breaks the Markov property of the original state, augmentation with the bin restores it, the marginal is preserved, the model reduces to the baseline, and first order is the right order. A typeset PDF is also available: [wind-persistence-theory.pdf](wind-persistence-theory.pdf). |
 | [Validity and implementation](wind-persistence-validity.md) | Correctness argument plus a file-by-file before/after implementation diff (§9). This is the best code map for the wind chain. |
 | [Threshold benchmark](wind-threshold-benchmark.md) | Three-way comparison (i.i.d.-optimal vs chain-optimal vs best tuned threshold) over the 34-cell historical sweep, the Hawaii within-bin diagnosis, and the 4-quantile-bin rerun. |
+| [Held-out validation](apl-holdout-validation.md) | Gulf-site check with the model fitted on 1950–2004 and evaluated on 2005–2022, against an in-sample twin, at failure penalties 5, 20 and 50. Chain gains survive the year split; i.i.d.-optimal falls behind the tuned threshold only at penalty 20 and above. |
 
 ### Solar persistence
 

@@ -124,6 +124,8 @@ These are quoted from the records rather than added for this page.
 
 Recorded from runs made for the APL interview backups. Scripts and numbers:
 `APL Interview/analysis/` and `APL Interview/out/wind_backups/slide_numbers.json`.
+The held-out and penalty-sensitivity runs are written up in full, with tables for all four
+config sets, in the [held-out validation record](design/apl-holdout-validation.md).
 
 - **Held-out check (Gulf site, July 1, 30 days, 150/300/500 Wh, corrected solver after `779dc44`).** Weibull/Beta table and 4-quantile-bin chain fitted on 1950 to 2004, bootstrap cube from 2005 to 2022 (`results/apl_holdout_2026-10-20`). Chain minus i.i.d. reward +7.06 [+6.17, +7.90] at 150 Wh, +2.22 [+1.53, +2.88] at 300 Wh, +2.38 [+1.81, +2.96] at 500 Wh. The in-sample twin on the full record with the same solver (`results/apl_insample_2026-10-20`) gives +6.82, +3.16, +1.70, so the July in-sample sweep was not inflated by shared years.
 - **The single-site claim that i.i.d.-optimal "barely ties" the tuned threshold is not reproduced at the Gulf 30-day cells on disk at penalty 5.** Held-out: i.i.d. minus threshold +1.9, +3.2, +4.5. July sweep Gulf capacity grid: +2.5 to +7.1. In the July sweep the i.i.d. policy loses to the threshold at Hawaii, lat 45 (most capacities) and Bering, and in the 60-day Gulf cell, not in the 30-day Gulf cells. The section 1 single-site numbers come from CSVs that are not in the repo.

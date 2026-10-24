@@ -50,6 +50,58 @@ The quantile bin edges derived on the fit years are 2.73, 3.91 and 5.29 m/s. The
 edges used by the July sweep were 2.65, 3.85 and 5.23 m/s
 ([benchmark §9](wind-threshold-benchmark.md)), so the fit span barely moves the bins.
 
+### How the hold-out was built
+
+The simulator consumes three per-location artifacts, all derived from one hourly
+historical pickle (`Data/HISTORICAL_DATA/data_30_-90.pkl`, Open-Meteo 1950–2022):
+
+| Artifact | Built by | Used for |
+|---|---|---|
+| Expected-data table (`..._15min.pkl`) | `build_expected_data_artifact` in `weather_processor_cs_normalization.py` | Per-(month, day, hour, minute) Weibull wind fit and Beta clear-sky-index fit. The solver integrates failure probability and expected solar over these. |
+| Wind chain (`..._windchain.pkl`) | `build_wind_chain_artifact` in `Scripts/create_weather_distributions.py` | 288 (month, hour) transition matrices over the wind bins, plus the bin edges. Chain arm only. |
+| Historical cube (`..._histcube.pkl`) | `build_historical_cube_artifact` in the same module | A (calendar slot, year) array of wind and irradiance that the block-bootstrap provider draws 7-day blocks from. All three arms. |
+
+In the normal pipeline the harness builds any missing artifact from the **whole** record,
+so the solver's distributions and the evaluation weather share every year. The hold-out
+breaks that link by building the artifacts from two disjoint slices of the same hourly
+pickle:
+
+1. **Split by calendar year.** Rows with year 1950–2004 form the fit slice; rows with year
+   2005–2022 form the evaluation slice. The row counts in the manifest are exactly whole
+   365-day years at hourly resolution (55 × 8,760 = 481,800 and 18 × 8,760 = 157,680), so
+   Feb 29 was dropped before the split, as the standard builders do.
+2. **Fit artifacts from the fit slice.** The expected-data table and the wind chain were
+   built from the 1950–2004 rows with the standard builders: resample to 15 min, fit the
+   Weibull and Beta per calendar slot, derive 4 equal-occupancy quantile edges from the
+   fit-slice wind, count bin transitions between consecutive 15-min steps, conditioned on
+   (month, hour). The resulting edges are 2.73, 3.91 and 5.29 m/s.
+3. **Evaluation cube from the evaluation slice.** The historical cube was built from the
+   2005–2022 rows only, so it has 18 year-columns. Each bootstrap episode stitches 7-day
+   blocks drawn from those 18 years, matched on calendar position; the solver never sees
+   any of them.
+4. **Name the artifacts explicitly in the configs.** The held-out files carry the suffixes
+   `_fit1950-2004` and `_eval2005-2022_histcube`. The chain and i.i.d. configs point
+   `locations[].data_path` at the fit table, `wind_chain.path` at the fit chain and
+   `historical_weather.path` at the evaluation cube (the threshold config needs only the
+   last two). Because the paths are explicit, the harness's provisioning step
+   (`_ensure_location_data` in `harness/run_experiment.py`) finds them present and does
+   not rebuild from the full record, and its staleness check is skipped for an explicit
+   `wind_chain.path`.
+5. **Record the split in the manifest.** The config generator wrote a `holdout` block into
+   each held-out manifest: source pickle, fit and evaluation years, row counts, artifact
+   paths, chain bin edges, and the list of cube years. The in-sample manifest has the block
+   set to null.
+
+Everything else is identical to the in-sample twin: same three capacities, start date,
+horizon, episode count, block length, solver build and threshold grid. The i.i.d. and chain
+arms of a run share bootstrap weather episode-for-episode, and the threshold arm sees the
+same weather because the bootstrap provider re-seeds per batch. The penalty runs reuse the
+same held-out artifacts and change only `failure_penalties`.
+
+The script that performed the split and called the builders lives in the APL interview
+working folder, outside this repository. The manifest `holdout` block is its complete
+input specification; §6 gives the rerun commands once the artifacts exist.
+
 ### Runs
 
 Four config sets, each with a chain arm, an i.i.d. arm and one arm-agnostic threshold
@@ -195,9 +247,8 @@ the comparison script computes is undefined for these cells.
   `sweep_run_log.json` and the manifest's `note` field.
 - **The held-out artifact builder is not in the repository.** The year-split expected-data
   table, wind chain and bootstrap cube were built by an analysis script kept outside the
-  repo (the APL interview working folder). The manifest's `holdout` block records the
-  inputs: source record, fit and evaluation years, row counts, bin edges and artifact
-  paths. The `Data/` artifacts themselves are gitignored.
+  repo (the APL interview working folder); §2 describes what it did and the manifest's
+  `holdout` block records its inputs. The `Data/` artifacts themselves are gitignored.
 - **Scope.** One site, one start date, one 30-day season window, three capacities. The
   evaluation cube has 18 years, so a 30-day episode built from 7-day blocks draws from a
   smaller pool than the 73-year full record.

@@ -1,0 +1,133 @@
+{
+  "generated": "2026-07-03T02:30:25",
+  "smoke": false,
+  "full_date_grid": false,
+  "thresholds": true,
+  "threshold_values": [
+    0.0,
+    0.05,
+    0.1,
+    0.15,
+    0.2,
+    0.25,
+    0.3
+  ],
+  "wind_thresholds": [
+    0.0,
+    3.0,
+    6.0,
+    9.0,
+    12.0
+  ],
+  "wind_bins": {
+    "mode": "quantile",
+    "n_bins": 4
+  },
+  "block_length_days": 7,
+  "episodes": 3000,
+  "full_history_episodes": 64,
+  "baseline": {
+    "location_id": "lat30.0_lon-90.0",
+    "capacity": 300.0,
+    "start": "2020-07-01T00:00:00",
+    "horizon": 2880
+  },
+  "note": "apl_holdout_2026-10-20: Gulf capgrid trimmed to [150.0, 300.0, 500.0] Wh; held-out years, see holdout_artifacts.json; corrected solver (779dc44+), 8 workers.",
+  "cells": [
+    {
+      "sweep": "capgrid",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "chain",
+      "world": "hist",
+      "config_basename": "cvi_capgrid_lat30.0_lon-90.0_chain_hist",
+      "config_path": "configs/apl_holdout_2026-10-20/cvi_capgrid_lat30.0_lon-90.0_chain_hist.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        150.0,
+        300.0,
+        500.0
+      ],
+      "pair_key": "cvi_capgrid_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "cvi_capgrid_lat30.0_lon-90.0_chain_WORLD"
+    },
+    {
+      "sweep": "capgrid",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "iid",
+      "world": "hist",
+      "config_basename": "cvi_capgrid_lat30.0_lon-90.0_iid_hist",
+      "config_path": "configs/apl_holdout_2026-10-20/cvi_capgrid_lat30.0_lon-90.0_iid_hist.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        150.0,
+        300.0,
+        500.0
+      ],
+      "pair_key": "cvi_capgrid_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "cvi_capgrid_lat30.0_lon-90.0_iid_WORLD"
+    },
+    {
+      "sweep": "capgrid",
+      "location_id": "lat30.0_lon-90.0",
+      "arm": "thresh",
+      "world": "hist",
+      "config_basename": "cvi_capgrid_lat30.0_lon-90.0_thresh_hist",
+      "config_path": "configs/apl_holdout_2026-10-20/cvi_capgrid_lat30.0_lon-90.0_thresh_hist.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        150.0,
+        300.0,
+        500.0
+      ],
+      "pair_key": "cvi_capgrid_lat30.0_lon-90.0_ARM_hist",
+      "world_key": "cvi_capgrid_lat30.0_lon-90.0_thresh_WORLD"
+    }
+  ],
+  "holdout": {
+    "built": "2026-10-20 16:15:43",
+    "historical_source": "C:\\Users\\brian\\Documents\\Solar-Simulator\\Data\\HISTORICAL_DATA\\data_30_-90.pkl",
+    "fit_years": [
+      1950,
+      2004
+    ],
+    "eval_years": [
+      2005,
+      2022
+    ],
+    "fit_rows_hourly": 481800,
+    "eval_rows_hourly": 157680,
+    "expected_data": "C:\\Users\\brian\\Documents\\Solar-Simulator\\Data\\EXPECTED_DATA\\data_expected_lat30.0_lon-90.0_15min_fit1950-2004.pkl",
+    "wind_chain": "C:\\Users\\brian\\Documents\\Solar-Simulator\\Data\\EXPECTED_DATA\\data_expected_lat30.0_lon-90.0_15min_fit1950-2004_windchain.pkl",
+    "histcube": "C:\\Users\\brian\\Documents\\Solar-Simulator\\Data\\EXPECTED_DATA\\data_expected_lat30.0_lon-90.0_15min_eval2005-2022_histcube.pkl",
+    "chain_n_bins": 4,
+    "chain_bin_edges": [
+      0.0,
+      2.729578971862793,
+      3.9111878871917725,
+      5.290313720703125,
+      Infinity
+    ],
+    "chain_quantile_derived": true,
+    "cube_years": [
+      2005,
+      2006,
+      2007,
+      2008,
+      2009,
+      2010,
+      2011,
+      2012,
+      2013,
+      2014,
+      2015,
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022
+    ],
+    "cube_n_years": 18
+  }
+}

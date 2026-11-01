@@ -1,0 +1,28 @@
+experiment_name: wbs2_startdate_lat30.0_lon-75.0_chain8_hist
+description: 'Wind-bin study, case ''startdate'' at lat30.0_lon-75.0: optimal policy
+  solved with a 8-bin quantile wind chain (fit 1950-2002), episodes on held-out historical
+  weather 2003-2022.'
+episodes: 10000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: JoA2026
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+threshold_values: []
+wind_thresholds: []
+locations:
+- {latitude: 30.0, longitude: -75.0, data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-75.0_15min.pkl}
+holdout:
+  fit_years: [1950, 2002]
+  eval_years: [2003, 2022]
+  rollout_years: eval
+wind_chain: {enabled: true, n_bins: 8}
+battery_capacities: [300.0]
+horizons: [8500]
+failure_penalties: [15.0]
+start_datetimes: ['2025-01-01T00:00:00', '2025-03-01T00:00:00', '2025-05-01T00:00:00',
+  '2025-07-01T00:00:00', '2025-09-01T00:00:00']
+historical_weather: {enabled: true, block_length_days: 7}

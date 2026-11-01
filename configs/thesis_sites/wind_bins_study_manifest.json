@@ -1,0 +1,243 @@
+{
+  "generated": "2026-10-27T15:19:28",
+  "purpose": "Chain policy reward by wind-bin count",
+  "bin_counts": [
+    4,
+    8,
+    12,
+    16
+  ],
+  "holdout": {
+    "fit_years": [
+      1950,
+      2002
+    ],
+    "eval_years": [
+      2003,
+      2022
+    ]
+  },
+  "episodes": 10000,
+  "cases": {
+    "lat20": {
+      "journal_sweep": "location",
+      "location_id": "lat20.0_lon-25.0",
+      "swept_field": "battery_capacity",
+      "settings": {
+        "battery_capacities": [
+          100.0,
+          150.0,
+          200.0,
+          250.0,
+          300.0,
+          350.0,
+          400.0,
+          450.0,
+          500.0,
+          550.0,
+          600.0
+        ],
+        "horizons": [
+          3000
+        ],
+        "failure_penalties": [
+          10.0
+        ],
+        "start_datetimes": [
+          "2025-01-01T00:00:00"
+        ]
+      }
+    },
+    "latm20": {
+      "journal_sweep": "location",
+      "location_id": "lat-20.0_lon-25.0",
+      "swept_field": "battery_capacity",
+      "settings": {
+        "battery_capacities": [
+          100.0,
+          150.0,
+          200.0,
+          250.0,
+          300.0,
+          350.0,
+          400.0,
+          450.0,
+          500.0,
+          550.0,
+          600.0
+        ],
+        "horizons": [
+          3000
+        ],
+        "failure_penalties": [
+          10.0
+        ],
+        "start_datetimes": [
+          "2025-01-01T00:00:00"
+        ]
+      }
+    },
+    "startdate": {
+      "journal_sweep": "startdate",
+      "location_id": "lat30.0_lon-75.0",
+      "swept_field": "start_time",
+      "settings": {
+        "battery_capacities": [
+          300.0
+        ],
+        "horizons": [
+          8500
+        ],
+        "failure_penalties": [
+          15.0
+        ],
+        "start_datetimes": [
+          "2025-01-01T00:00:00",
+          "2025-03-01T00:00:00",
+          "2025-05-01T00:00:00",
+          "2025-07-01T00:00:00",
+          "2025-09-01T00:00:00"
+        ]
+      }
+    }
+  },
+  "runs": [
+    {
+      "sweep": "lat20",
+      "location_id": "lat20.0_lon-25.0",
+      "arm": "chain4",
+      "n_bins": 4,
+      "config_basename": "wbs2_lat20_lat20.0_lon-25.0_chain4_hist",
+      "config_path": "configs/thesis_sites/wbs2_lat20_lat20.0_lon-25.0_chain4_hist.yaml"
+    },
+    {
+      "sweep": "lat20",
+      "location_id": "lat20.0_lon-25.0",
+      "arm": "chain8",
+      "n_bins": 8,
+      "config_basename": "wbs2_lat20_lat20.0_lon-25.0_chain8_hist",
+      "config_path": "configs/thesis_sites/wbs2_lat20_lat20.0_lon-25.0_chain8_hist.yaml"
+    },
+    {
+      "sweep": "lat20",
+      "location_id": "lat20.0_lon-25.0",
+      "arm": "chain12",
+      "n_bins": 12,
+      "config_basename": "wbs2_lat20_lat20.0_lon-25.0_chain12_hist",
+      "config_path": "configs/thesis_sites/wbs2_lat20_lat20.0_lon-25.0_chain12_hist.yaml"
+    },
+    {
+      "sweep": "lat20",
+      "location_id": "lat20.0_lon-25.0",
+      "arm": "chain16",
+      "n_bins": 16,
+      "config_basename": "wbs2_lat20_lat20.0_lon-25.0_chain16_hist",
+      "config_path": "configs/thesis_sites/wbs2_lat20_lat20.0_lon-25.0_chain16_hist.yaml"
+    },
+    {
+      "sweep": "lat20",
+      "location_id": "lat20.0_lon-25.0",
+      "arm": "thresh_tune",
+      "n_bins": null,
+      "config_basename": "wbs2_lat20_lat20.0_lon-25.0_thresh_tune_hist",
+      "config_path": "configs/thesis_sites/wbs2_lat20_lat20.0_lon-25.0_thresh_tune_hist.yaml"
+    },
+    {
+      "sweep": "latm20",
+      "location_id": "lat-20.0_lon-25.0",
+      "arm": "chain4",
+      "n_bins": 4,
+      "config_basename": "wbs2_latm20_lat-20.0_lon-25.0_chain4_hist",
+      "config_path": "configs/thesis_sites/wbs2_latm20_lat-20.0_lon-25.0_chain4_hist.yaml"
+    },
+    {
+      "sweep": "latm20",
+      "location_id": "lat-20.0_lon-25.0",
+      "arm": "chain8",
+      "n_bins": 8,
+      "config_basename": "wbs2_latm20_lat-20.0_lon-25.0_chain8_hist",
+      "config_path": "configs/thesis_sites/wbs2_latm20_lat-20.0_lon-25.0_chain8_hist.yaml"
+    },
+    {
+      "sweep": "latm20",
+      "location_id": "lat-20.0_lon-25.0",
+      "arm": "chain12",
+      "n_bins": 12,
+      "config_basename": "wbs2_latm20_lat-20.0_lon-25.0_chain12_hist",
+      "config_path": "configs/thesis_sites/wbs2_latm20_lat-20.0_lon-25.0_chain12_hist.yaml"
+    },
+    {
+      "sweep": "latm20",
+      "location_id": "lat-20.0_lon-25.0",
+      "arm": "chain16",
+      "n_bins": 16,
+      "config_basename": "wbs2_latm20_lat-20.0_lon-25.0_chain16_hist",
+      "config_path": "configs/thesis_sites/wbs2_latm20_lat-20.0_lon-25.0_chain16_hist.yaml"
+    },
+    {
+      "sweep": "latm20",
+      "location_id": "lat-20.0_lon-25.0",
+      "arm": "thresh_tune",
+      "n_bins": null,
+      "config_basename": "wbs2_latm20_lat-20.0_lon-25.0_thresh_tune_hist",
+      "config_path": "configs/thesis_sites/wbs2_latm20_lat-20.0_lon-25.0_thresh_tune_hist.yaml"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain4",
+      "n_bins": 4,
+      "config_basename": "wbs2_startdate_lat30.0_lon-75.0_chain4_hist",
+      "config_path": "configs/thesis_sites/wbs2_startdate_lat30.0_lon-75.0_chain4_hist.yaml"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain8",
+      "n_bins": 8,
+      "config_basename": "wbs2_startdate_lat30.0_lon-75.0_chain8_hist",
+      "config_path": "configs/thesis_sites/wbs2_startdate_lat30.0_lon-75.0_chain8_hist.yaml"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain12",
+      "n_bins": 12,
+      "config_basename": "wbs2_startdate_lat30.0_lon-75.0_chain12_hist",
+      "config_path": "configs/thesis_sites/wbs2_startdate_lat30.0_lon-75.0_chain12_hist.yaml"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain16",
+      "n_bins": 16,
+      "config_basename": "wbs2_startdate_lat30.0_lon-75.0_chain16_hist",
+      "config_path": "configs/thesis_sites/wbs2_startdate_lat30.0_lon-75.0_chain16_hist.yaml"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "thresh_tune",
+      "n_bins": null,
+      "config_basename": "wbs2_startdate_lat30.0_lon-75.0_thresh_tune_hist",
+      "config_path": "configs/thesis_sites/wbs2_startdate_lat30.0_lon-75.0_thresh_tune_hist.yaml"
+    }
+  ],
+  "journal_runs": {
+    "lat20": {
+      "iid": "jcs_location_lat20.0_lon-25.0_iid_hist",
+      "chain": "jcs_location_lat20.0_lon-25.0_chain_hist",
+      "thresh": "jcs_location_lat20.0_lon-25.0_thresh_hist"
+    },
+    "latm20": {
+      "iid": "jcs_location_lat-20.0_lon-25.0_iid_hist",
+      "chain": "jcs_location_lat-20.0_lon-25.0_chain_hist",
+      "thresh": "jcs_location_lat-20.0_lon-25.0_thresh_hist"
+    },
+    "startdate": {
+      "iid": "jcs_startdate_lat30.0_lon-75.0_iid_hist",
+      "chain": "jcs_startdate_lat30.0_lon-75.0_chain_hist",
+      "thresh": "jcs_startdate_lat30.0_lon-75.0_thresh_hist"
+    }
+  }
+}

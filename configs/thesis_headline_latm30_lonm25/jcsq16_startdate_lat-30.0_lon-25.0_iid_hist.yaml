@@ -1,0 +1,29 @@
+experiment_name: jcsq16_startdate_lat-30.0_lon-25.0_iid_hist
+description: 'Journal case ''startdate'' at lat-30.0_lon-25.0: iid-solved optimal
+  policy, episodes on held-out historical bootstrap weather (7-day blocks) (fit 1950-2002,
+  episodes on 2003-2022). Paired with the other optimal arm; configs differ only in
+  wind_chain.enabled.'
+episodes: 10000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: JoA2026
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+threshold_values: []
+wind_thresholds: []
+locations:
+- {latitude: -30.0, longitude: -25.0, data_path: Data/EXPECTED_DATA/data_expected_lat-30.0_lon-25.0_15min.pkl}
+holdout:
+  fit_years: [1950, 2002]
+  eval_years: [2003, 2022]
+  rollout_years: eval
+wind_chain: {enabled: false, n_bins: 16}
+battery_capacities: [300.0]
+horizons: [8500]
+failure_penalties: [15.0]
+start_datetimes: ['2025-01-01T00:00:00', '2025-03-01T00:00:00', '2025-05-01T00:00:00',
+  '2025-07-01T00:00:00', '2025-09-01T00:00:00']
+historical_weather: {enabled: true, block_length_days: 7}

@@ -1,0 +1,27 @@
+experiment_name: wsel_duration_lat30.0_lon-75.0_chain24_hist
+description: 'Wind-bin study, case ''duration'' at lat30.0_lon-75.0: optimal policy
+  solved with a 24-bin quantile wind chain (fit 1950-1985), episodes on held-out historical
+  weather 1986-2002.'
+episodes: 10000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: JoA2026
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 0
+threshold_values: []
+wind_thresholds: []
+locations:
+- {latitude: 30.0, longitude: -75.0, data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-75.0_15min.pkl}
+holdout:
+  fit_years: [1950, 1985]
+  eval_years: [1986, 2002]
+  rollout_years: eval
+wind_chain: {enabled: true, n_bins: 24}
+battery_capacities: [300.0]
+horizons: [1000, 3000, 6000]
+failure_penalties: [20.0]
+start_datetimes: ['2025-01-01T00:00:00']
+historical_weather: {enabled: true, block_length_days: 7}

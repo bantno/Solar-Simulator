@@ -1,0 +1,401 @@
+{
+  "generated": "2026-10-29T18:11:03",
+  "source": "configs/final_journal_configs (Journal of Aircraft paper cases)",
+  "smoke": false,
+  "thresholds": true,
+  "threshold_values": [
+    0.0,
+    0.05,
+    0.1,
+    0.15,
+    0.2,
+    0.25,
+    0.3
+  ],
+  "wind_thresholds": [
+    0.0,
+    3.0,
+    4.0,
+    5.0,
+    6.0,
+    8.0,
+    9.0,
+    12.0
+  ],
+  "threshold_selection": {
+    "capacity": "fit-years tuning run",
+    "duration": "fit-years tuning run",
+    "penalty": "fit-years tuning run",
+    "startdate": "fit-years tuning run"
+  },
+  "wind_bins": {
+    "mode": "quantile",
+    "n_bins": 16
+  },
+  "block_length_days": 7,
+  "model_worlds": false,
+  "holdout": {
+    "fit_years": [
+      1950,
+      2002
+    ],
+    "eval_years": [
+      2003,
+      2022
+    ]
+  },
+  "episodes": 10000,
+  "full_history_episodes": 32,
+  "baseline": {
+    "location_id": "lat-30.0_lon-25.0",
+    "capacity": 300.0,
+    "start": "2025-06-10T00:00:00",
+    "horizon": 3000
+  },
+  "cells": [
+    {
+      "sweep": "capacity",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "iid",
+      "world": "hist",
+      "config_basename": "jcsq16_capacity_lat-30.0_lon-25.0_iid_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_capacity_lat-30.0_lon-25.0_iid_hist.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        100.0,
+        150.0,
+        200.0,
+        250.0,
+        300.0,
+        350.0,
+        400.0,
+        450.0,
+        500.0,
+        550.0,
+        600.0
+      ],
+      "pair_key": "jcsq16_capacity_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_capacity_lat-30.0_lon-25.0_iid_WORLD"
+    },
+    {
+      "sweep": "capacity",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "chain",
+      "world": "hist",
+      "config_basename": "jcsq16_capacity_lat-30.0_lon-25.0_chain_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_capacity_lat-30.0_lon-25.0_chain_hist.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        100.0,
+        150.0,
+        200.0,
+        250.0,
+        300.0,
+        350.0,
+        400.0,
+        450.0,
+        500.0,
+        550.0,
+        600.0
+      ],
+      "pair_key": "jcsq16_capacity_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_capacity_lat-30.0_lon-25.0_chain_WORLD"
+    },
+    {
+      "sweep": "capacity",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "thresh",
+      "world": "hist",
+      "config_basename": "jcsq16_capacity_lat-30.0_lon-25.0_thresh_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_capacity_lat-30.0_lon-25.0_thresh_hist.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        100.0,
+        150.0,
+        200.0,
+        250.0,
+        300.0,
+        350.0,
+        400.0,
+        450.0,
+        500.0,
+        550.0,
+        600.0
+      ],
+      "pair_key": "jcsq16_capacity_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_capacity_lat-30.0_lon-25.0_thresh_WORLD"
+    },
+    {
+      "sweep": "capacity",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "thresh_tune",
+      "world": "hist",
+      "config_basename": "jcsq16_capacity_lat-30.0_lon-25.0_thresh_tune_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_capacity_lat-30.0_lon-25.0_thresh_tune_hist.yaml",
+      "swept_field": "battery_capacities",
+      "swept_values": [
+        100.0,
+        150.0,
+        200.0,
+        250.0,
+        300.0,
+        350.0,
+        400.0,
+        450.0,
+        500.0,
+        550.0,
+        600.0
+      ],
+      "pair_key": "jcsq16_capacity_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_capacity_lat-30.0_lon-25.0_thresh_tune_WORLD"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "iid",
+      "world": "hist",
+      "config_basename": "jcsq16_duration_lat-30.0_lon-25.0_iid_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_duration_lat-30.0_lon-25.0_iid_hist.yaml",
+      "swept_field": "horizons",
+      "swept_values": [
+        1000,
+        3000,
+        6000,
+        9000,
+        12000,
+        15000,
+        18000,
+        27000
+      ],
+      "pair_key": "jcsq16_duration_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_duration_lat-30.0_lon-25.0_iid_WORLD"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "chain",
+      "world": "hist",
+      "config_basename": "jcsq16_duration_lat-30.0_lon-25.0_chain_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_duration_lat-30.0_lon-25.0_chain_hist.yaml",
+      "swept_field": "horizons",
+      "swept_values": [
+        1000,
+        3000,
+        6000,
+        9000,
+        12000,
+        15000,
+        18000,
+        27000
+      ],
+      "pair_key": "jcsq16_duration_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_duration_lat-30.0_lon-25.0_chain_WORLD"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "thresh",
+      "world": "hist",
+      "config_basename": "jcsq16_duration_lat-30.0_lon-25.0_thresh_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_duration_lat-30.0_lon-25.0_thresh_hist.yaml",
+      "swept_field": "horizons",
+      "swept_values": [
+        1000,
+        3000,
+        6000,
+        9000,
+        12000,
+        15000,
+        18000,
+        27000
+      ],
+      "pair_key": "jcsq16_duration_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_duration_lat-30.0_lon-25.0_thresh_WORLD"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "thresh_tune",
+      "world": "hist",
+      "config_basename": "jcsq16_duration_lat-30.0_lon-25.0_thresh_tune_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_duration_lat-30.0_lon-25.0_thresh_tune_hist.yaml",
+      "swept_field": "horizons",
+      "swept_values": [
+        1000,
+        3000,
+        6000,
+        9000,
+        12000,
+        15000,
+        18000,
+        27000
+      ],
+      "pair_key": "jcsq16_duration_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_duration_lat-30.0_lon-25.0_thresh_tune_WORLD"
+    },
+    {
+      "sweep": "penalty",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "iid",
+      "world": "hist",
+      "config_basename": "jcsq16_penalty_lat-30.0_lon-25.0_iid_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_penalty_lat-30.0_lon-25.0_iid_hist.yaml",
+      "swept_field": "failure_penalties",
+      "swept_values": [
+        0.0,
+        3.0,
+        5.0,
+        7.0,
+        10.0,
+        15.0,
+        20.0,
+        30.0,
+        40.0,
+        100.0
+      ],
+      "pair_key": "jcsq16_penalty_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_penalty_lat-30.0_lon-25.0_iid_WORLD"
+    },
+    {
+      "sweep": "penalty",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "chain",
+      "world": "hist",
+      "config_basename": "jcsq16_penalty_lat-30.0_lon-25.0_chain_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_penalty_lat-30.0_lon-25.0_chain_hist.yaml",
+      "swept_field": "failure_penalties",
+      "swept_values": [
+        0.0,
+        3.0,
+        5.0,
+        7.0,
+        10.0,
+        15.0,
+        20.0,
+        30.0,
+        40.0,
+        100.0
+      ],
+      "pair_key": "jcsq16_penalty_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_penalty_lat-30.0_lon-25.0_chain_WORLD"
+    },
+    {
+      "sweep": "penalty",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "thresh",
+      "world": "hist",
+      "config_basename": "jcsq16_penalty_lat-30.0_lon-25.0_thresh_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_penalty_lat-30.0_lon-25.0_thresh_hist.yaml",
+      "swept_field": "failure_penalties",
+      "swept_values": [
+        0.0,
+        3.0,
+        5.0,
+        7.0,
+        10.0,
+        15.0,
+        20.0,
+        30.0,
+        40.0,
+        100.0
+      ],
+      "pair_key": "jcsq16_penalty_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_penalty_lat-30.0_lon-25.0_thresh_WORLD"
+    },
+    {
+      "sweep": "penalty",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "thresh_tune",
+      "world": "hist",
+      "config_basename": "jcsq16_penalty_lat-30.0_lon-25.0_thresh_tune_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_penalty_lat-30.0_lon-25.0_thresh_tune_hist.yaml",
+      "swept_field": "failure_penalties",
+      "swept_values": [
+        0.0,
+        3.0,
+        5.0,
+        7.0,
+        10.0,
+        15.0,
+        20.0,
+        30.0,
+        40.0,
+        100.0
+      ],
+      "pair_key": "jcsq16_penalty_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_penalty_lat-30.0_lon-25.0_thresh_tune_WORLD"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "iid",
+      "world": "hist",
+      "config_basename": "jcsq16_startdate_lat-30.0_lon-25.0_iid_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_startdate_lat-30.0_lon-25.0_iid_hist.yaml",
+      "swept_field": "start_datetimes",
+      "swept_values": [
+        "2025-01-01T00:00:00",
+        "2025-03-01T00:00:00",
+        "2025-05-01T00:00:00",
+        "2025-07-01T00:00:00",
+        "2025-09-01T00:00:00"
+      ],
+      "pair_key": "jcsq16_startdate_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_startdate_lat-30.0_lon-25.0_iid_WORLD"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "chain",
+      "world": "hist",
+      "config_basename": "jcsq16_startdate_lat-30.0_lon-25.0_chain_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_startdate_lat-30.0_lon-25.0_chain_hist.yaml",
+      "swept_field": "start_datetimes",
+      "swept_values": [
+        "2025-01-01T00:00:00",
+        "2025-03-01T00:00:00",
+        "2025-05-01T00:00:00",
+        "2025-07-01T00:00:00",
+        "2025-09-01T00:00:00"
+      ],
+      "pair_key": "jcsq16_startdate_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_startdate_lat-30.0_lon-25.0_chain_WORLD"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "thresh",
+      "world": "hist",
+      "config_basename": "jcsq16_startdate_lat-30.0_lon-25.0_thresh_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_startdate_lat-30.0_lon-25.0_thresh_hist.yaml",
+      "swept_field": "start_datetimes",
+      "swept_values": [
+        "2025-01-01T00:00:00",
+        "2025-03-01T00:00:00",
+        "2025-05-01T00:00:00",
+        "2025-07-01T00:00:00",
+        "2025-09-01T00:00:00"
+      ],
+      "pair_key": "jcsq16_startdate_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_startdate_lat-30.0_lon-25.0_thresh_WORLD"
+    },
+    {
+      "sweep": "startdate",
+      "location_id": "lat-30.0_lon-25.0",
+      "arm": "thresh_tune",
+      "world": "hist",
+      "config_basename": "jcsq16_startdate_lat-30.0_lon-25.0_thresh_tune_hist",
+      "config_path": "configs/thesis_headline_latm30_lonm25/jcsq16_startdate_lat-30.0_lon-25.0_thresh_tune_hist.yaml",
+      "swept_field": "start_datetimes",
+      "swept_values": [
+        "2025-01-01T00:00:00",
+        "2025-03-01T00:00:00",
+        "2025-05-01T00:00:00",
+        "2025-07-01T00:00:00",
+        "2025-09-01T00:00:00"
+      ],
+      "pair_key": "jcsq16_startdate_lat-30.0_lon-25.0_ARM_hist",
+      "world_key": "jcsq16_startdate_lat-30.0_lon-25.0_thresh_tune_WORLD"
+    }
+  ]
+}

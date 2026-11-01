@@ -1,0 +1,166 @@
+{
+  "generated": "2026-10-25T16:07:43",
+  "purpose": "Does a finer wind chain beat the threshold where the 4-bin chain did not?",
+  "bin_counts": [
+    4,
+    6,
+    8,
+    12,
+    16
+  ],
+  "holdout": {
+    "fit_years": [
+      1950,
+      2002
+    ],
+    "eval_years": [
+      2003,
+      2022
+    ]
+  },
+  "episodes": 10000,
+  "cases": {
+    "penalty": {
+      "battery_capacities": [
+        300.0
+      ],
+      "horizons": [
+        3000
+      ],
+      "failure_penalties": [
+        0.0,
+        3.0,
+        5.0,
+        7.0,
+        10.0,
+        15.0,
+        20.0,
+        30.0,
+        40.0,
+        100.0
+      ],
+      "start_datetimes": [
+        "2025-06-10T00:00:00"
+      ]
+    },
+    "duration": {
+      "battery_capacities": [
+        300.0
+      ],
+      "horizons": [
+        1000,
+        3000,
+        6000
+      ],
+      "failure_penalties": [
+        20.0
+      ],
+      "start_datetimes": [
+        "2025-01-01T00:00:00"
+      ]
+    }
+  },
+  "runs": [
+    {
+      "sweep": "penalty",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain4",
+      "n_bins": 4,
+      "config_basename": "wbs_penalty_lat30.0_lon-75.0_chain4_hist",
+      "config_path": "configs/wind_bins_study/wbs_penalty_lat30.0_lon-75.0_chain4_hist.yaml"
+    },
+    {
+      "sweep": "penalty",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain6",
+      "n_bins": 6,
+      "config_basename": "wbs_penalty_lat30.0_lon-75.0_chain6_hist",
+      "config_path": "configs/wind_bins_study/wbs_penalty_lat30.0_lon-75.0_chain6_hist.yaml"
+    },
+    {
+      "sweep": "penalty",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain8",
+      "n_bins": 8,
+      "config_basename": "wbs_penalty_lat30.0_lon-75.0_chain8_hist",
+      "config_path": "configs/wind_bins_study/wbs_penalty_lat30.0_lon-75.0_chain8_hist.yaml"
+    },
+    {
+      "sweep": "penalty",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain12",
+      "n_bins": 12,
+      "config_basename": "wbs_penalty_lat30.0_lon-75.0_chain12_hist",
+      "config_path": "configs/wind_bins_study/wbs_penalty_lat30.0_lon-75.0_chain12_hist.yaml"
+    },
+    {
+      "sweep": "penalty",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain16",
+      "n_bins": 16,
+      "config_basename": "wbs_penalty_lat30.0_lon-75.0_chain16_hist",
+      "config_path": "configs/wind_bins_study/wbs_penalty_lat30.0_lon-75.0_chain16_hist.yaml"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain4",
+      "n_bins": 4,
+      "config_basename": "wbs_duration_lat30.0_lon-75.0_chain4_hist",
+      "config_path": "configs/wind_bins_study/wbs_duration_lat30.0_lon-75.0_chain4_hist.yaml"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain6",
+      "n_bins": 6,
+      "config_basename": "wbs_duration_lat30.0_lon-75.0_chain6_hist",
+      "config_path": "configs/wind_bins_study/wbs_duration_lat30.0_lon-75.0_chain6_hist.yaml"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain8",
+      "n_bins": 8,
+      "config_basename": "wbs_duration_lat30.0_lon-75.0_chain8_hist",
+      "config_path": "configs/wind_bins_study/wbs_duration_lat30.0_lon-75.0_chain8_hist.yaml"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain12",
+      "n_bins": 12,
+      "config_basename": "wbs_duration_lat30.0_lon-75.0_chain12_hist",
+      "config_path": "configs/wind_bins_study/wbs_duration_lat30.0_lon-75.0_chain12_hist.yaml"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "chain16",
+      "n_bins": 16,
+      "config_basename": "wbs_duration_lat30.0_lon-75.0_chain16_hist",
+      "config_path": "configs/wind_bins_study/wbs_duration_lat30.0_lon-75.0_chain16_hist.yaml"
+    },
+    {
+      "sweep": "duration",
+      "location_id": "lat30.0_lon-75.0",
+      "arm": "thresh_tune",
+      "n_bins": null,
+      "config_basename": "wbs_duration_lat30.0_lon-75.0_thresh_tune_hist",
+      "config_path": "configs/wind_bins_study/wbs_duration_lat30.0_lon-75.0_thresh_tune_hist.yaml"
+    }
+  ],
+  "journal_runs": {
+    "penalty": {
+      "iid": "jcs_penalty_lat30.0_lon-75.0_iid_hist",
+      "chain": "jcs_penalty_lat30.0_lon-75.0_chain_hist",
+      "thresh": "jcs_penalty_lat30.0_lon-75.0_thresh_hist",
+      "thresh_tune": "jcs_penalty_lat30.0_lon-75.0_thresh_tune_hist"
+    },
+    "duration": {
+      "iid": "jcs_duration_lat30.0_lon-75.0_iid_hist",
+      "chain": "jcs_duration_lat30.0_lon-75.0_chain_hist",
+      "thresh": "jcs_duration_lat30.0_lon-75.0_thresh_hist"
+    }
+  }
+}

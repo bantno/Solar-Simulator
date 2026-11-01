@@ -1,0 +1,27 @@
+experiment_name: jcsq16_duration_lat30.0_lon-75.0_thresh_tune_hist
+description: 'Journal case ''duration'' at lat30.0_lon-75.0: threshold-policy grid
+  rolled out on the FIT years 1950-2002, used only to select each cell''s threshold
+  combo without seeing evaluation years.'
+episodes: 10000
+transition_model: moderate
+solar_panel_model: constant
+whale_series: JoA2026
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: false
+save_states: false
+full_history_episodes: 0
+threshold_values: [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
+wind_thresholds: [0.0, 3.0, 4.0, 5.0, 6.0, 8.0, 9.0, 12.0]
+locations:
+- {latitude: 30.0, longitude: -75.0, data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-75.0_15min.pkl}
+holdout:
+  fit_years: [1950, 2002]
+  eval_years: [2003, 2022]
+  rollout_years: fit
+wind_chain: {enabled: false, n_bins: 16}
+battery_capacities: [300.0]
+horizons: [1000, 3000, 6000, 9000, 12000, 15000, 18000, 27000]
+failure_penalties: [20.0]
+start_datetimes: ['2025-01-01T00:00:00']
+historical_weather: {enabled: true, block_length_days: 7}

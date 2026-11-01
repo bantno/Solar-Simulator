@@ -41,6 +41,63 @@ Command-line tools under `SolarSimulator/Scripts/`. Each is run as `python Scrip
       heading_level: 3
       members: false
 
+::: Scripts.generate_journal_chain_sweep_configs
+    options:
+      heading_level: 3
+      members: false
+
+::: Scripts.estimate_sweep_runtime
+    options:
+      heading_level: 3
+      members: false
+
+::: Scripts.episodes_needed
+    options:
+      heading_level: 3
+      members: false
+
+## Wind-bin studies and thesis runs
+
+::: Scripts.generate_wind_bins_study_configs
+    options:
+      heading_level: 3
+      members: false
+
+::: Scripts.compare_wind_bins
+    options:
+      heading_level: 3
+      members: false
+
+::: Scripts.select_wind_bins
+    options:
+      heading_level: 3
+      members: false
+
+::: Scripts.benchmark_wind_bins_solve
+    options:
+      heading_level: 3
+      members: false
+
+::: Scripts.compare_model_worlds
+    options:
+      heading_level: 3
+      members: false
+
+::: Scripts.run_thesis_runs
+    options:
+      heading_level: 3
+      members: false
+
+::: Scripts.summarize_thesis_runs
+    options:
+      heading_level: 3
+      members: false
+
+::: Scripts.plot_thesis_figures
+    options:
+      heading_level: 3
+      members: false
+
 ## Persistence prechecks
 
 ::: Scripts.wind_persistence_precheck

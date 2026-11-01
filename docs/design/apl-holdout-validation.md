@@ -276,3 +276,14 @@ conda run -n pvlib python Scripts/compare_chain_sweep.py --results ../results/ap
 The penalty variants are the same configs with `failure_penalties` set to 20 or 50.
 Rebuilding the year-split artifacts needs the external builder; the manifest `holdout`
 block is the specification to reproduce it from.
+
+*Update 2026-10-24:* the year-split hold-out is now built into the harness and is the
+default for every config (see the `holdout` block in the
+[config reference](../experiments/config-reference.md)). The equivalent of this study is a
+config with no explicit artifact paths and
+`holdout: {fit_years: [1950, 2004], eval_years: [2005, 2022]}`; provisioning then builds
+the `_fit1950-2004` table and chain and the `_eval2005-2022` cube itself. The committed
+configs above keep their explicit paths and therefore stay as they were run.
+`compare_chain_sweep.py` now resolves each run's artifacts from its copied `config.yaml`,
+so a rerun of these configs on a machine that has the files produces valid V0 and
+calibration columns.

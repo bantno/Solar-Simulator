@@ -218,6 +218,10 @@ class SimulationGUI(QWidget):
             runner = YAMLSimulationRunner(config_path)
             config = runner.config
 
+            # Build missing artifacts (year-split hold-out files included) as the harness does.
+            from harness.run_experiment import provision_config
+            provision_config(config, label=os.path.basename(config_path))
+
             # build parameter list including all locations and horizons
             param_list = runner._build_param_list()
             

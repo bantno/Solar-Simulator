@@ -118,7 +118,7 @@ These three optional blocks select the weather mode (see [Weather modes](../mode
 | Field | Type | Default | Meaning | Read in |
 |---|---|---|---|---|
 | `enabled` | bool | `false` | Solve with the Markov-modulated wind chain. | `run_sim.py::_load_wind_chain` |
-| `path` | path | derived (`_windchain`) | Explicit artifact path. With an explicit path the artifact is never rebuilt automatically. | `_load_wind_chain`, `_ensure_location_data` |
+| `path` | path | derived (`_windchain`, or `_windchain_q<n_bins>` for a quantile chain under the hold-out) | Explicit artifact path. With an explicit path the artifact is never rebuilt automatically. | `_load_wind_chain`, `_ensure_location_data` |
 | `bin_edges` | list of float (m/s) | unset | Interior cut points. The artifact stores `[0, *bin_edges, ∞]`. Leave it out to use equal-occupancy (quantile) bins. | `run_experiment.py::_configured_bin_edges` |
 | `n_bins` | int | `3` | Number of quantile bins when `bin_edges` is absent. | `_ensure_location_data` |
 
@@ -142,9 +142,47 @@ Enabling both chains solves over the joint exogenous index (`n_wind × n_solar` 
 | `path` | path | derived (`_histcube`) | Explicit historical-cube artifact path. | `_load_historical_cube`, `_ensure_location_data` |
 | `block_length_days` | float | `7` | Bootstrap block length. It is converted to `block_days · 24 · 60 / delta_t` steps. | `SimulationFactory.__init__` |
 
+### `synthetic_world`
+
+| Value | Meaning | Read in |
+|---|---|---|
+| unset | Episodes in synthetic weather are drawn from the solver's own model (the native world). | `SimulationFactory.__init__` |
+| `iid` | Roll out in the i.i.d. model's weather, whatever the policy was solved with. | `SimulationFactory.__init__` |
+| `chain` | Roll out in the wind chain's weather (`wind_chain.n_bins` bins; the chain artifact is provisioned even when `wind_chain.enabled` is false). | `SimulationFactory.__init__`, `run_sim.py::wind_chain_needed` |
+
+Ignored when `historical_weather.enabled`. A policy scored in another model's weather goes through `CrossModelEnvironmentProvider`: the weather is exactly what that model's own runs draw for the same seed, and a chain-solved policy reads its bins from the realized wind, as on historical weather. So every policy in one world sees identical weather and deltas there are episode-paired. Wind chains only. Used for the no-modelling-error condition (`generate_journal_chain_sweep_configs.py --model-worlds`); checked by `Tests/verify_model_worlds.py`.
+
+### `holdout`
+
+**Standard practice since 2026-10-24.** The solver's distributions and chains are fitted on one span of years, and historical-weather episodes are bootstrapped from a disjoint, later span. The policy is never scored on weather it was fitted to. A config with **no** `holdout` key gets the defaults below.
+
+| Field | Type | Default | Meaning | Read in |
+|---|---|---|---|---|
+| `enabled` | bool | `true` | `false` runs in-sample on the full record, the pre-standard behaviour. `holdout: false` or `holdout: null` does the same. | `run_sim.py::holdout_spec` |
+| `fit_years` | `[first, last]` | `[1950, 2002]` | Years the expected-data table and the wind and solar chains are fitted on. | `resolve_artifact_paths` |
+| `eval_years` | `[first, last]` | `[2003, 2022]` | Years the historical bootstrap cube is built from. Must not overlap `fit_years`. A reverse split, such as fitting on late years and evaluating on early ones, is allowed. | `resolve_artifact_paths` |
+| `rollout_years` | `eval` or `fit` | `eval` | Which span the episodes roll out on. Use `fit` to tune something, such as threshold-policy parameters, without touching the evaluation years, then score the chosen setting in an `eval` run. | `resolve_artifact_paths` |
+
+Rules:
+
+- **Native-world runs** with `historical_weather` off also use the fit-years table. Their episodes are drawn from the fitted model, so a native-vs-historical calibration compares the fitted model with held-out weather.
+- **Explicit artifact paths.** A config that sets `wind_chain.path`, `solar_chain.path` or `historical_weather.path` and has no `holdout` key is treated as in-sample. That covers hand-built files such as the 2026-10-20 APL hold-out. Combining explicit paths with an enabled hold-out is an error.
+- **Every year in a range must exist** in the location's historical record (Open-Meteo, 1950–2022). Provisioning stops with an error otherwise.
+- **Run folders record the decision.** The harness pins the resolved spec into the copied `config.yaml` as a mapping, or `false` for in-sample. `run_metadata.json` also lists the artifact files each location used. `compare_chain_sweep.py` reads them back, so V0 and the stage-0 bin masses come from the table that was solved. Run folders written before the standard have no `holdout` key and are read as in-sample.
+- **Tests opt out.** The `verify_*` mechanics checks set `holdout: false`, because they test the model against the full-record artifacts, not an evaluation.
+
+Example, with the defaults spelled out (see `harness/examples/holdout_chain_small.yaml`):
+
+```yaml
+holdout:
+  fit_years: [1950, 2002]
+  eval_years: [2003, 2022]
+  rollout_years: eval
+```
+
 ## Artifact paths
 
-Every path is derived from the location's `data_path`:
+Every path is derived from the location's `data_path`. `run_sim.py::resolve_artifact_paths` applies the rules below; the simulation factory, the harness provisioning and the sweep comparison all call it, so they always agree:
 
 1. **Clear-sky suffix** (`run_sim.py::_resolve_data_path`). For any `clearsky_model` other than `fatemi`, `_<model>` is inserted before the extension. For example, `data_expected_lat30.0_lon-90.0_15min.pkl` becomes `…_15min_ineichen.pkl`. Artifacts normalized with different envelopes are not interchangeable, so they never overwrite each other. `fatemi` keeps the configured path unchanged.
 2. **Derived artifacts** take the (possibly suffixed) data path and insert a tag before the extension:
@@ -157,7 +195,18 @@ Every path is derived from the location's `data_path`:
 
     For example, `data_expected_lat30.0_lon-90.0_15min_ineichen_solarchain.pkl`.
 
-**Provisioning.** Before any simulation is built, `run_experiment.py::_ensure_location_data` checks each location. It (re)builds an artifact when:
+3. **Hold-out year tags** (`holdout`, on by default). The expected-data path gets `_fit<first>-<last>`, so the chains derived from it carry the tag too. The historical cube is derived from a separate `_eval<first>-<last>` path:
+
+    | Artifact | In-sample | Hold-out (defaults) |
+    |---|---|---|
+    | Expected data | `…_15min.pkl` | `…_15min_fit1950-2002.pkl` |
+    | Wind chain | `…_15min_windchain.pkl` | `…_15min_fit1950-2002_windchain_q4.pkl` (4 quantile bins) |
+    | Solar chain | `…_15min_solarchain.pkl` | `…_15min_fit1950-2002_solarchain.pkl` |
+    | Historical cube | `…_15min_histcube.pkl` | `…_15min_eval2003-2022_histcube.pkl` |
+
+    Under the hold-out a quantile wind chain's name carries its bin count (`_q<n_bins>`, since 2026-10-27), so configs with different `n_bins` never share, and rebuild, one file. A chain with explicit `bin_edges` keeps the plain `_windchain` name. With `rollout_years: fit` the cube is `…_15min_fit1950-2002_histcube.pkl`. The tags follow the clear-sky suffix, for example `…_15min_ineichen_fit1950-2002.pkl`.
+
+**Provisioning.** Before any simulation is built, `run_experiment.py::provision_config` pins the hold-out decision into the config and calls `_ensure_location_data` for each location. The harness, `gui/run_batch.py`, the GUI and `Scripts/run_chain_sweep.py --provision-only` all go through it. An artifact is (re)built when:
 
 | Artifact | Rebuilt when |
 |---|---|
@@ -166,7 +215,7 @@ Every path is derived from the location's `data_path`:
 | Solar chain | Missing, or `n_bins` or `clearsky_model` differs from the artifact. |
 | Historical cube | Missing (only when `historical_weather.enabled`). |
 
-Builds read the location's historical record from the `HISTORICAL_DATA` directory next to `EXPECTED_DATA`. If that record is absent, it is fetched from Open-Meteo (1950–2022) first. See [Weather data pipeline](../models/weather-data.md).
+Builds read the location's historical record from the `HISTORICAL_DATA` directory next to `EXPECTED_DATA`. If that record is absent, it is fetched from Open-Meteo (1950–2022) first. Under a hold-out, the record is sliced by calendar year first. The expected data and chains are built from the fit years only, and the cube from the evaluation or fit years, as `rollout_years` selects. The builders themselves are unchanged. An artifact named by an explicit `path` is never built: if it is missing, provisioning stops with an error rather than writing full-record data under a hand-chosen name. See [Weather data pipeline](../models/weather-data.md).
 
 ## Internal keys
 

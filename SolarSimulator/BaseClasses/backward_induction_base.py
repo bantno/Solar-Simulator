@@ -10,6 +10,10 @@ from BaseClasses.plotting_utils_base import PlottingUtils
 from numpy.polynomial.legendre import leggauss
 
 
+def _same_sum(a, b) -> bool:
+    return bool(a == b or (np.isnan(a) and np.isnan(b)))
+
+
 class mdpBackwardSolver:
     """
     Backward induction solver for a given MDP using Monte Carlo sampling.
@@ -230,7 +234,9 @@ class mdpAnalyticalBackwardSolver:
         # ─────────────────────────────────────────────────────────────────────────
 
         self.future_value_table = self._initialize_future_value_table()
-        self.optimal_action_table = np.zeros_like(self.future_value_table)
+        # Set by solve() once the table is on disk; pickling then ships the path (see __getstate__).
+        self._table_path: Optional[str] = None
+        self._table_checksum: Optional[float] = None
         soc_values = self.states[:-1, 0]  # exclude the 'broken' terminal state
         self._soc_grid = np.array(sorted(set(np.round(soc_values, 6))))
         self._num_modes = 2  # assume modes 0 and 1, mode==2 is broken
@@ -250,6 +256,34 @@ class mdpAnalyticalBackwardSolver:
             return np.zeros((num_states, self.horizon))
         # (n_bins, num_states, horizon): one value surface per wind bin
         return np.zeros((self.n_bins, num_states, self.horizon))
+
+    @property
+    def optimal_action_table(self) -> np.ndarray:
+        # Never filled by this solver; built on demand so it doesn't double each solver's
+        # memory (a 16-bin, 27000-stage table is about 0.8 GB).
+        return np.zeros(self.future_value_table.shape)
+
+    def __getstate__(self):
+        # A solved table is already saved to disk, so a pickled solver (a sim sent to or
+        # back from a pool worker) carries the path, not the array, and each process maps
+        # the file read-only: one copy in the OS page cache however many processes hold it.
+        state = self.__dict__.copy()
+        path = getattr(self, "_table_path", None)
+        if path and os.path.isfile(path):
+            state["future_value_table"] = None
+        for cache in ("_wind_cache", "_vnext_cache", "_wind_bin_cache"):
+            state[cache] = {}
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if self.future_value_table is None:
+            table = np.load(self._table_path, mmap_mode="r")
+            if table.shape != self._table_shape or not _same_sum(np.sum(table), self._table_checksum):
+                raise RuntimeError(
+                    f"value table {self._table_path} no longer matches the solver that saved "
+                    "it (another solve wrote the same file name)")
+            self.future_value_table = table
 
     def set_start_date(self, start_date):
         self.start_date = start_date
@@ -565,6 +599,10 @@ class mdpAnalyticalBackwardSolver:
             else self.future_value_table
         np.save(self._vf_filename(), table)
         print("Value function table saved to:", self._vf_filename())
+        if table.shape == self.future_value_table.shape:
+            self._table_path = os.path.abspath(self._vf_filename())
+            self._table_shape = table.shape
+            self._table_checksum = float(np.sum(table))
 
     def _solve_iid(self) -> None:
         non_broken = self.states[:-1]

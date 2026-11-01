@@ -151,7 +151,12 @@ class SimulationStorageHDF5:
             scalars.setdefault("episode_index", pos - 1)
 
             for field, val in scalars.items():
-                scalar_cols.setdefault(field, [None] * n_eps)[pos - 1] = val
+                # Not setdefault: its default ([None] * n_eps) would be built on every
+                # call, which made this loop quadratic in the episode count.
+                col = scalar_cols.get(field)
+                if col is None:
+                    col = scalar_cols[field] = [None] * n_eps
+                col[pos - 1] = val
 
             if not arrays:
                 continue

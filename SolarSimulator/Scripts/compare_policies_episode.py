@@ -49,6 +49,7 @@ start_datetime: '{start_iso}'
 threshold_values: [0.25]
 wind_thresholds: [10.0]
 transition_model: moderate
+holdout: false   # single-episode diagnostic on the full-record artifacts
 energy_increment_wh: 5
 episodes: 1
 wind_chain: {{enabled: {str(chain).lower()}}}

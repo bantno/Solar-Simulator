@@ -793,6 +793,80 @@ class HistoricalBootstrapEnvironmentProvider(AbstractEnvironmentProvider):
     def sample_whale_observation(self, t: int, n: int = 1) -> np.ndarray:
         return np.full(n, self.whale_reward_series[t])
 
+
+class CrossModelEnvironmentProvider(AbstractEnvironmentProvider):
+    """Weather from one model's provider, seen through another (the policy's) model.
+
+    Rolls a policy out in a synthetic weather model other than the one it was solved
+    with, e.g. the i.i.d.-solved policy in the wind chain's weather or the chain-solved
+    policy in i.i.d. weather. Sampling is delegated to `world`, so the weather is exactly
+    what that model's own runs see for the same seed. The wind-chain interface the
+    optimal policy reads comes from `policy` (the solver's provider): realized wind is
+    digitized into the policy's bins and its transitions are served, as
+    HistoricalBootstrapEnvironmentProvider does for historical weather. An i.i.d. policy
+    sees no chain. Wind chains only.
+    """
+
+    def __init__(self, world: StochasticWindSolarEnvironmentProvider,
+                 policy: StochasticWindSolarEnvironmentProvider):
+        if getattr(world, "use_solar_chain", False) or getattr(policy, "use_solar_chain", False):
+            raise ValueError("CrossModelEnvironmentProvider supports wind chains only")
+        self.world = world
+        self.use_wind_chain = bool(policy.use_wind_chain)
+        self.use_solar_chain = False
+        self.wind_bin_edges = policy.wind_bin_edges
+        self.wind_transition = policy.wind_transition
+        self.n_wind_bins = policy.n_wind_bins
+        self.n_solar_bins = 1
+        self.last_wind_bins = None
+
+    def __getattr__(self, name):
+        # Everything else (distributions, clear-sky series, panel) is the world's.
+        world = self.__dict__.get("world")
+        if world is None:  # mid-unpickling: no world yet
+            raise AttributeError(name)
+        return getattr(world, name)
+
+    @property
+    def use_exo_chain(self) -> bool:
+        return self.use_wind_chain
+
+    @property
+    def n_exo_bins(self) -> int:
+        return self.n_wind_bins
+
+    @property
+    def last_exo_bins(self):
+        return self.last_wind_bins if self.use_wind_chain else None
+
+    def get_wind_transition(self, t: int) -> np.ndarray:
+        if self.use_wind_chain:
+            return self.wind_transition[t]
+        return np.array([[1.0]])
+
+    def get_exo_transition(self, t: int) -> np.ndarray:
+        return self.get_wind_transition(t)
+
+    def set_seed(self, seed: int) -> None:
+        self.world.set_seed(seed)
+
+    def reset(self, seed: int = None) -> None:
+        self.world.reset(seed)
+        self.last_wind_bins = None
+
+    def sample_sunlight(self, t: int, n: int) -> np.ndarray:
+        return self.world.sample_sunlight(t, n)
+
+    def sample_wind_speed(self, t: int, n: int) -> np.ndarray:
+        wind_t = self.world.sample_wind_speed(t, n)
+        if self.use_wind_chain:
+            self.last_wind_bins = np.digitize(wind_t, self.wind_bin_edges[1:-1]).astype(int)
+        return wind_t
+
+    def sample_whale_observation(self, t: int, n: int = 1) -> np.ndarray:
+        return self.world.sample_whale_observation(t, n)
+
+
 class SinusoidalWindSolarEnvironmentProvider(StochasticWindSolarEnvironmentProvider):
     """Environment provider that uses a constant Weibull shape parameter for wind and a sinusoidally varying scale parameter, alongside a constant diurnal solar cycle.
 

@@ -114,6 +114,15 @@ def _run_one_config(
         traceback.print_exc()
         return
 
+    # Build missing artifacts (year-split hold-out files included) exactly as the harness does.
+    try:
+        from harness.run_experiment import provision_config
+        provision_config(config, label=cfg_base)
+    except Exception as e:
+        print(f"[WARN] skip '{cfg_base}': data provisioning failed: {e}", file=sys.stderr)
+        traceback.print_exc()
+        return
+
     # Mirror GUI checkbox behavior for including optimal sims
     if include_optimal != "auto":
         config["include_optimal"] = (include_optimal == "yes")

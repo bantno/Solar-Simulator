@@ -111,6 +111,20 @@ HDF5 file, `<prefix>_<YYYYmmdd_HHMMSS>.h5`, in `storage_dir`.
 - **Storage.** As each result arrives, the manager stores it as one group, named by
   `_make_group_name`, and flushes. See [Result storage](storage.md).
 
-In the harness, simulations are first **built** in parallel. For optimal simulations that
-includes the solve (`create_simulation_wrapper` over an `mp.Pool`). The list of built
-simulations is then passed to `run_simulations`.
+In the harness, simulations are first **built**, then the list is passed to `run_simulations`.
+
+- **Optimal simulations** are built in parallel, because building one includes the solve
+  (`create_simulation_wrapper` over an `mp.Pool`, longest horizon first).
+- **Threshold simulations** are built in the parent process. They share their case's
+  factory, and so one copy of its weather data. Sent back through a pool, each would carry
+  its own copy, about 30 MB, or 18 GB for a 616-combo tuning config.
+- **Worker count** is capped at the core count.
+
+**Value tables across processes.** `solve()` saves the table to `solver_tables/` and
+records its path, shape and checksum. A pickled solver carries only the path, whether it
+is going to or coming back from a pool worker. On arrival the file is mapped read-only
+with `np.load(mmap_mode="r")`. So every process that holds a simulation shares one copy
+through the OS page cache: a 16-bin, 27000-stage table is about 0.8 GB. If the file no
+longer matches its checksum (another solve wrote the same name), loading raises an error.
+`optimal_action_table` is never filled, so it is built on demand rather than allocated
+with every solver. Checked by `Tests/verify_memory_safety.py`.

@@ -1,0 +1,43 @@
+experiment_name: holdout_chain_small
+description: >
+  Small smoke run of the standard year-split hold-out at lat30/lon-90: the solver's
+  Weibull/Beta table and 4-bin quantile wind chain are fitted on 1950-2002, and episodes
+  are block-bootstrapped from 2003-2022. Chain-optimal plus one threshold policy.
+  The first run builds the _fit1950-2002 and _eval2003-2022 artifacts.
+start_datetime: '2020-07-01T00:00:00'
+
+battery_capacities: [300.0]
+threshold_values: [0.1]
+wind_thresholds: [3.0]
+horizons: [192]
+failure_penalties: [5.0]
+episodes: 500
+
+transition_model: moderate
+solar_panel_model: constant
+whale_series: JoA2026
+energy_increment_wh: 5
+delta_t: 15
+include_optimal: true
+save_states: false
+full_history_episodes: 4
+
+locations:
+- latitude: 30.0
+  longitude: -90.0
+  data_path: Data/EXPECTED_DATA/data_expected_lat30.0_lon-90.0_15min.pkl
+
+# The standard hold-out. Omitting this block gives the same defaults; it is spelled out
+# here for reference. `holdout: false` runs in-sample on the full record.
+holdout:
+  fit_years: [1950, 2002]
+  eval_years: [2003, 2022]
+  rollout_years: eval
+
+wind_chain:
+  enabled: true
+  n_bins: 4
+
+historical_weather:
+  enabled: true
+  block_length_days: 7

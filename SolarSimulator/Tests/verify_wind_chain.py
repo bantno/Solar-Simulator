@@ -53,6 +53,7 @@ threshold_values:
 wind_thresholds:
 - 10.0
 transition_model: moderate
+holdout: false   # mechanics check on the full-record artifacts, not an evaluation
 energy_increment_wh: 5
 episodes: {EPISODES}
 wind_chain:

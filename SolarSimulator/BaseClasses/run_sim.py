@@ -13,6 +13,7 @@ from BaseClasses.seaplane_base import Seaplane
 from BaseClasses.environment_provider_base import (
     StochasticWindSolarEnvironmentProvider,
     HistoricalBootstrapEnvironmentProvider,
+    CrossModelEnvironmentProvider,
 )
 from BaseClasses.mdp_base import stochasticMDP
 from BaseClasses.backward_induction_base import mdpAnalyticalBackwardSolver
@@ -24,10 +25,19 @@ from BaseClasses.simulation_run_manager import SimulationRunManager
 from BaseClasses.whale_base import WhaleRewardSeriesFactory
 
 
-def _derive_chain_path(data_path: str) -> str:
-    """Default wind-chain artifact path: insert '_windchain' before the extension."""
+def _derive_chain_path(data_path: str, n_bins: Optional[int] = None) -> str:
+    """Default wind-chain artifact path: insert '_windchain' (plus '_q<n_bins>' for a
+    quantile chain under the hold-out) before the extension."""
     base, ext = os.path.splitext(data_path)
-    return f"{base}_windchain{ext or '.pkl'}"
+    tag = f"_q{int(n_bins)}" if n_bins is not None else ""
+    return f"{base}_windchain{tag}{ext or '.pkl'}"
+
+
+def wind_chain_needed(config: Dict) -> bool:
+    """True when a run reads the wind-chain artifact: a chain-solved policy, or any policy
+    rolled out in the chain model's synthetic weather (synthetic_world: chain)."""
+    return bool((config.get("wind_chain") or {}).get("enabled", False)
+                or config.get("synthetic_world") == "chain")
 
 
 def _derive_solar_chain_path(data_path: str) -> str:
@@ -57,7 +67,151 @@ def _resolve_data_path(data_path: str, clearsky_model: str) -> str:
     return f"{base}_{clearsky_model}{ext or '.pkl'}"
 
 
-def _load_wind_chain(config: Dict, data_path: str):
+# ----------------------------------------------------------------------------------
+# Year-split hold-out (standard practice since 2026-10-24)
+# ----------------------------------------------------------------------------------
+# The solver's distributions and chains are fitted on `fit_years`; historical-weather
+# episodes are bootstrapped from `eval_years`, so the policy is never scored on weather
+# it was fitted to. A config without a `holdout` key gets this default. `holdout: false`
+# runs in-sample on the full record (the pre-standard behaviour).
+DEFAULT_HOLDOUT = {
+    "fit_years": [1950, 2002],
+    "eval_years": [2003, 2022],
+    "rollout_years": "eval",
+}
+
+# Explicit artifact paths mean hand-built files (e.g. the 2026-10-20 APL hold-out); the
+# hold-out cannot re-derive them, so the two are never combined.
+_EXPLICIT_ARTIFACT_KEYS = (
+    ("wind_chain", "path"),
+    ("solar_chain", "path"),
+    ("historical_weather", "path"),
+)
+
+
+def _year_range(value, name: str) -> List[int]:
+    try:
+        a, b = (int(v) for v in value)
+    except (TypeError, ValueError):
+        raise ValueError(f"holdout.{name} must be [first_year, last_year], got {value!r}")
+    if a > b:
+        raise ValueError(f"holdout.{name} runs backwards: {value!r}")
+    return [a, b]
+
+
+def holdout_spec(config: Dict) -> Optional[Dict]:
+    """Normalized hold-out spec for a config, or None for an in-sample run.
+
+    Config (all keys optional; omit the block entirely for the default):
+        holdout:
+            enabled: true                 # false -> in-sample on the full record
+            fit_years: [1950, 2002]       # solver distributions + wind/solar chains
+            eval_years: [2003, 2022]      # historical bootstrap cube for episodes
+            rollout_years: eval           # 'fit' rolls out on the fit years instead
+                                          # (e.g. to tune a threshold without
+                                          # touching the evaluation years)
+    `holdout: false` (or null) is the in-sample switch. A config that sets an explicit
+    wind_chain/solar_chain/historical_weather path and has no holdout key is treated as
+    in-sample (legacy hand-built artifacts); asking for a hold-out together with explicit
+    paths is an error.
+    """
+    explicit = [f"{blk}.{key}" for blk, key in _EXPLICIT_ARTIFACT_KEYS
+                if (config.get(blk) or {}).get(key)]
+    if "holdout" not in config:
+        if explicit:
+            return None
+        raw = {}
+    else:
+        raw = config["holdout"]
+    if raw is None or raw is False:
+        return None
+    if raw is True:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"holdout must be a mapping, true or false; got {raw!r}")
+    if not raw.get("enabled", True):
+        return None
+    if explicit:
+        raise ValueError(
+            "holdout is enabled but the config also sets explicit artifact path(s) "
+            f"{explicit}. Remove the paths to let the hold-out derive and build its own "
+            "artifacts, or set `holdout: false` to use the hand-built files as given."
+        )
+    fit = _year_range(raw.get("fit_years", DEFAULT_HOLDOUT["fit_years"]), "fit_years")
+    ev = _year_range(raw.get("eval_years", DEFAULT_HOLDOUT["eval_years"]), "eval_years")
+    if fit[0] <= ev[1] and ev[0] <= fit[1]:
+        raise ValueError(f"holdout fit_years {fit} and eval_years {ev} overlap")
+    rollout = raw.get("rollout_years", DEFAULT_HOLDOUT["rollout_years"])
+    if rollout not in ("eval", "fit"):
+        raise ValueError(f"holdout.rollout_years must be 'eval' or 'fit', got {rollout!r}")
+    return {"fit_years": fit, "eval_years": ev, "rollout_years": rollout}
+
+
+def _insert_tag(path: str, tag: str) -> str:
+    base, ext = os.path.splitext(path)
+    return f"{base}{tag}{ext or '.pkl'}"
+
+
+def resolve_artifact_paths(config: Dict, location: Dict) -> Dict:
+    """Every artifact path a run at `location` reads, after clear-sky and hold-out rules.
+
+    Returns a dict with keys expected_data, wind_chain, solar_chain, histcube, holdout
+    (the normalized spec or None), and fit_years / cube_years (year ranges the files are
+    built from; None means the full record). Explicit config paths win; everything else
+    is derived from the location's data_path:
+
+        in-sample:  <data>.pkl, <data>_windchain.pkl, <data>_histcube.pkl
+        hold-out:   <data>_fit1950-2002.pkl, <data>_fit1950-2002_windchain_q4.pkl,
+                    <data>_eval2003-2022_histcube.pkl
+
+    Under the hold-out a quantile chain's file name carries its bin count (q4 above), so
+    configs with different wind_chain.n_bins never share, and rebuild, one file. A chain
+    with explicit bin_edges keeps the plain _windchain name (provisioning rebuilds it when
+    the edges change), as do in-sample runs (pre-hold-out file names).
+    """
+    base = _resolve_data_path(location["data_path"], config.get("clearsky_model", "fatemi"))
+    spec = holdout_spec(config)
+    wc = config.get("wind_chain") or {}
+    sc = config.get("solar_chain") or {}
+    hw = config.get("historical_weather") or {}
+    if spec is None:
+        expected, fit_years, cube_years = base, None, None
+        cube_default = _derive_histcube_path(base)
+    else:
+        fit_years = spec["fit_years"]
+        expected = _insert_tag(base, f"_fit{fit_years[0]}-{fit_years[1]}")
+        if spec["rollout_years"] == "eval":
+            cube_years = spec["eval_years"]
+            cube_default = _derive_histcube_path(
+                _insert_tag(base, f"_eval{cube_years[0]}-{cube_years[1]}"))
+        else:
+            cube_years = fit_years
+            cube_default = _derive_histcube_path(expected)
+    # Same default bin count as provisioning (harness/run_experiment.py).
+    chain_bins = (int(wc.get("n_bins", 3))
+                  if spec is not None and wc.get("bin_edges") is None else None)
+    return {
+        "expected_data": expected,
+        "wind_chain": wc.get("path") or _derive_chain_path(expected, chain_bins),
+        "solar_chain": sc.get("path") or _derive_solar_chain_path(expected),
+        "histcube": hw.get("path") or cube_default,
+        "holdout": spec,
+        "fit_years": fit_years,
+        "cube_years": cube_years,
+    }
+
+
+def _read_artifact(path: str, what: str):
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"{what} artifact not found: {path}. Run through harness/run_experiment.py "
+            "(or Scripts/run_chain_sweep.py --provision-only), which builds missing "
+            "artifacts, including the hold-out's year-split files."
+        )
+    return pd.read_pickle(path)
+
+
+def _load_wind_chain(config: Dict, data_path: str, path: str = None):
     """Return the wind-chain artifact dict if config enables it, else None.
 
     Config:
@@ -68,11 +222,11 @@ def _load_wind_chain(config: Dict, data_path: str):
     wc = config.get("wind_chain") or {}
     if not wc.get("enabled", False):
         return None
-    path = wc.get("path") or _derive_chain_path(data_path)
-    return pd.read_pickle(path)
+    path = path or wc.get("path") or _derive_chain_path(data_path)
+    return _read_artifact(path, "wind-chain")
 
 
-def _load_solar_chain(config: Dict, data_path: str):
+def _load_solar_chain(config: Dict, data_path: str, path: str = None):
     """Return the solar-chain artifact dict if config enables it, else None.
 
     Config:
@@ -83,11 +237,11 @@ def _load_solar_chain(config: Dict, data_path: str):
     sc = config.get("solar_chain") or {}
     if not sc.get("enabled", False):
         return None
-    path = sc.get("path") or _derive_solar_chain_path(data_path)
-    return pd.read_pickle(path)
+    path = path or sc.get("path") or _derive_solar_chain_path(data_path)
+    return _read_artifact(path, "solar-chain")
 
 
-def _load_historical_cube(config: Dict, data_path: str) -> dict:
+def _load_historical_cube(config: Dict, data_path: str, path: str = None) -> dict:
     """Load the historical-weather calendar cube artifact.
 
     Config:
@@ -97,8 +251,8 @@ def _load_historical_cube(config: Dict, data_path: str) -> dict:
             block_length_days: 7  (default)
     """
     hw = config.get("historical_weather") or {}
-    path = hw.get("path") or _derive_histcube_path(data_path)
-    return pd.read_pickle(path)
+    path = path or hw.get("path") or _derive_histcube_path(data_path)
+    return _read_artifact(path, "historical-cube")
 
 
 def _start_offset_min(start_dt: pd.Timestamp) -> int:
@@ -315,13 +469,16 @@ class SimulationFactory:
         # Clear-sky envelope for the expected-data / chain artifacts ("fatemi"
         # default = original pipeline; non-default models resolve to suffixed files).
         self.clearsky_model = config.get("clearsky_model", "fatemi")
-        data_path = _resolve_data_path(location["data_path"], self.clearsky_model)
+        # Clear-sky suffix + year-split hold-out (fit-years tables for the solver,
+        # eval-years cube for historical rollouts); see resolve_artifact_paths.
+        self.artifact_paths = resolve_artifact_paths(config, location)
+        data_path = self.artifact_paths["expected_data"]
         # self.soc_increment = config.get("soc_increment", 1.0)
         self.energy_increment_wh = config.get("energy_increment_wh", None)
 
         # Optional wind / solar Markov-chains (persistence). Default off -> i.i.d. weather.
-        wind_chain = _load_wind_chain(config, data_path)
-        solar_chain = _load_solar_chain(config, data_path)
+        wind_chain = _load_wind_chain(config, data_path, self.artifact_paths["wind_chain"])
+        solar_chain = _load_solar_chain(config, data_path, self.artifact_paths["solar_chain"])
 
         loader = EnvironmentLoader(
             data_path=data_path,
@@ -342,7 +499,7 @@ class SimulationFactory:
         self.sim_env_provider = None
         hw_cfg = config.get("historical_weather") or {}
         if hw_cfg.get("enabled", False):
-            cube = _load_historical_cube(config, data_path)
+            cube = _load_historical_cube(config, data_path, self.artifact_paths["histcube"])
             whale_series = WhaleRewardSeriesFactory.create_series(
                 self.whale_type, self.horizon,
                 delta_t=self.delta_t,
@@ -380,6 +537,32 @@ class SimulationFactory:
                 solar_valid=hist_solar_valid,
                 solar_panel_kwargs=self.solar_panel_kwargs,
             )
+
+        # Optional cross-model rollouts in synthetic weather (no historical weather):
+        #     synthetic_world: iid | chain
+        # rolls the policy out in that weather model instead of the solver's own, e.g. the
+        # i.i.d.-solved policy in the wind chain's weather. Omitted, or equal to the
+        # solver's model, rollouts use the solver's provider (the native world). The world
+        # provider is built exactly as that model's own runs build it and is reset to the
+        # same seed, so policies scored in one world see identical weather.
+        world = config.get("synthetic_world")
+        if world is not None and not hw_cfg.get("enabled", False):
+            if world not in ("iid", "chain"):
+                raise ValueError(f"synthetic_world must be 'iid' or 'chain', got {world!r}")
+            if solar_chain is not None:
+                raise ValueError("synthetic_world does not support solar_chain runs")
+            if (world == "chain") != (wind_chain is not None):
+                world_chain = (_read_artifact(self.artifact_paths["wind_chain"], "wind-chain")
+                               if world == "chain" else None)
+                world_provider = EnvironmentLoader(
+                    data_path=data_path, start_dt=self.start_dt, horizon=self.horizon,
+                    delta_t=self.delta_t, solar_model=self.solar_model,
+                    whale_type=self.whale_type, wind_chain=world_chain, solar_chain=None,
+                    solar_panel_kwargs=self.solar_panel_kwargs,
+                    whale_kwargs=self.whale_kwargs,
+                ).load()
+                self.sim_env_provider = CrossModelEnvironmentProvider(
+                    world_provider, self.env_provider)
 
     def _compute_power_params(self, capacity_wh: float) -> Dict[str, float]:
         plane = Seaplane(
@@ -527,30 +710,44 @@ class YAMLSimulationRunner:
         thresholds      = self.config.get("threshold_values", [])
         wind_thresholds = self.config.get("wind_thresholds", [])
         params: List[Tuple] = []
+        # One factory per (start, location, horizon, penalty, kind): a factory only loads
+        # data and builds providers, and create_simulation does not mutate it, so the
+        # capacity x threshold combos of a case can share it. This avoids reloading the
+        # expected-data table and bootstrap cube for every threshold sim (about 1.5 s each).
+        # Pool workers receive pickled copies; serial runs reset the provider per rollout.
+        factories: Dict[Tuple, "SimulationFactory"] = {}
+
+        def _factory_for(start_dt, loc_idx, loc, H, fp, config_name):
+            key = (start_dt, loc_idx, H, fp, config_name)
+            if key not in factories:
+                factories[key] = SimulationFactory(self.config, loc, H, fp,
+                                                   config_name=config_name)
+            return factories[key]
+
         for start_dt in self.start_datetimes:
             # temporarily override the single start_datetime
             self.config["start_datetime"] = start_dt
             # 1) Threshold-based simulations, now including each failure_penalty:
-            for loc, H, fp, cap, th, wth in product(
-                self.locations,
+            for (loc_idx, loc), H, fp, cap, th, wth in product(
+                enumerate(self.locations),
                 self.horizons,
                 self.failure_penalties,
                 self.config["battery_capacities"],
                 thresholds,
                 wind_thresholds,
             ):
-                factory = SimulationFactory(self.config, loc, H, fp)
+                factory = _factory_for(start_dt, loc_idx, loc, H, fp, None)
                 params.append((factory, "threshold", cap, th, wth))
 
             # 2) Optimal-policy simulations, also over each failure_penalty:
             if self.config.get("include_optimal", True):
-                for loc, H, fp, cap in product(
-                    self.locations,
+                for (loc_idx, loc), H, fp, cap in product(
+                    enumerate(self.locations),
                     self.horizons,
                     self.failure_penalties,
                     self.config["battery_capacities"],
                 ):
-                    factory = SimulationFactory(self.config, loc, H, fp,config_name=self.config_basename)
+                    factory = _factory_for(start_dt, loc_idx, loc, H, fp, self.config_basename)
                     params.append((factory, "optimal", cap, None, None))
 
         return params

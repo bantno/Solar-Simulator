@@ -121,6 +121,7 @@ else:
 print("3. observation gain and reward")
 with open(CONFIG_PATH) as fh:
     base_cfg = yaml.safe_load(fh)
+    base_cfg["holdout"] = False  # mechanics check on the full-record artifacts
 location = dict(base_cfg["locations"][0])
 location["data_path"] = os.path.join(REPO_ROOT, location["data_path"])
 HORIZON = 40          # midnight start -> covers the 06:00-10:00 non-zero blocks
@@ -193,11 +194,13 @@ check(np.array_equal(V_default, V_explicit) and np.array_equal(A_default, A_expl
       "explicit (1.0, 0.0) == defaults (values and actions)")
 with open(CUSTOM_CONFIG_PATH) as fh:
     custom_cfg = yaml.safe_load(fh)
+    custom_cfg["holdout"] = False  # mechanics check on the full-record artifacts
 V_custom, A_custom = solve_table(custom_cfg)
 check(np.array_equal(V_default, V_custom) and np.array_equal(A_default, A_custom),
       "whale_series: custom with the built-in values == JoA2026 (values and actions)")
 with open(ENCOUNTER_CONFIG_PATH) as fh:
     encounter_cfg = yaml.safe_load(fh)
+    encounter_cfg["holdout"] = False  # mechanics check on the full-record artifacts
 focal_cfg = copy.deepcopy(encounter_cfg)
 focal_cfg["whale_species"] = {"name": "kogia_spp", "g0": 1.0}
 focal_cfg["locations"][0].pop("density_per_km2", None)

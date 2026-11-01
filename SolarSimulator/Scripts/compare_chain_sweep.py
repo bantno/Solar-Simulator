@@ -41,7 +41,12 @@ REPO_ROOT = os.path.dirname(PKG_DIR)
 
 CVAR_ALPHA = 0.10  # worst-decile tail
 
-CELL_KEYS = ["sweep", "location_id", "battery_capacity", "start_time", "horizon"]
+CELL_KEYS = ["sweep", "location_id", "battery_capacity", "start_time", "horizon",
+             "failure_penalty"]
+# Arms whose rows are threshold-combo sims rather than an optimal policy.
+THRESH_ARMS = ("thresh", "thresh_tune")
+# Sweeps that vary battery capacity (equal-reliability capacity-saved section).
+CAPACITY_SWEEPS = ("capgrid", "capacity", "location")
 
 
 # ----------------------------------------------------------------------------------
@@ -66,17 +71,19 @@ def load_summaries(manifest, results_base):
     """Concat all cells' summary.csv rows, tagged with manifest fields.
 
     Optimal-arm cells keep their optimal-sim rows; threshold-benchmark cells
-    (arm == "thresh") keep every threshold-combo row instead.
+    (arm == "thresh") keep every threshold-combo row instead. A manifest cell may name
+    its own `results_base` (an arm reused from an earlier sweep's results).
     """
     frames = []
     missing = []
     for cell in manifest["cells"]:
-        run_dir = latest_run_dir(results_base, cell["config_basename"])
+        run_dir = latest_run_dir(cell.get("results_base") or results_base,
+                                 cell["config_basename"])
         if run_dir is None:
             missing.append(cell["config_basename"])
             continue
         df = pd.read_csv(os.path.join(run_dir, "summary.csv"))
-        if cell["arm"] == "thresh":
+        if cell["arm"] in THRESH_ARMS:
             df = df[df["simulation_type"].str.contains("Threshold", case=False, na=False)].copy()
         else:
             df = df[df["simulation_type"].str.contains("Optimal", na=False)].copy()
@@ -95,6 +102,7 @@ def load_summaries(manifest, results_base):
     out["start_time"] = pd.to_datetime(out["start_time"]).dt.strftime("%Y-%m-%d %H:%M:%S")
     out["battery_capacity"] = out["battery_capacity"].astype(float)
     out["horizon"] = out["horizon"].astype(int)
+    out["failure_penalty"] = out["failure_penalty"].astype(float)
     return out
 
 
@@ -156,15 +164,28 @@ def read_all_episode_scalars(run_dir):
     return df
 
 
+_GROUPS_CACHE = {}
+
+
 def read_episode_scalars(run_dir, group):
     """Per-episode scalars for one sim group, cached to CSV inside the run dir.
 
     Returns a DataFrame indexed by episode_index with columns
     total_reward, failure, failure_step, flight_hrs.
+
+    The run's table is split by group once and kept per group: a threshold run holds
+    hundreds of groups x 10,000 episodes, and filtering the whole table for every
+    lookup dominated the comparison's run time.
     """
-    df = read_all_episode_scalars(run_dir)
-    df = df[df["group"] == group].set_index("episode_index").sort_index()
-    return df
+    groups = _GROUPS_CACHE.get(run_dir)
+    if groups is None:
+        df = read_all_episode_scalars(run_dir)
+        groups = {g: sub.set_index("episode_index").sort_index()
+                  for g, sub in df.groupby("group", sort=False)}
+        groups[None] = df.iloc[0:0].set_index("episode_index")  # unknown group -> empty
+        _GROUPS_CACHE[run_dir] = groups
+        _SCALARS_CACHE.pop(run_dir, None)  # the per-group copies replace it
+    return groups.get(group, groups[None])
 
 
 # ----------------------------------------------------------------------------------
@@ -178,13 +199,30 @@ def cvar(rewards, alpha=CVAR_ALPHA):
     return float(r[:k].mean())
 
 
+def cvar_rows(rewards_2d, alpha=CVAR_ALPHA):
+    """cvar() of each row of a 2-D array."""
+    r = np.sort(np.asarray(rewards_2d, dtype=float), axis=1)
+    k = max(1, int(np.ceil(alpha * r.shape[1])))
+    return r[:, :k].mean(axis=1)
+
+
+BOOT_CHUNK = 200  # resamples drawn per block (200 x 10,000 episodes = 16 MB of indices)
+
+
 def _boot_ci(stat_fn, rng, n_boot, *arrays):
-    """Percentile bootstrap CI resampling episode indices (shared across arrays)."""
+    """Percentile bootstrap CI resampling episode indices (shared across arrays).
+
+    `stat_fn` maps 2-D arrays (one resample per row) to one statistic per row. Indices
+    are drawn in blocks of rows, which consumes the generator exactly as one draw per
+    resample would (Tests/verify_compare_fast.py checks this), so CIs match the
+    one-resample-at-a-time loop for the same seed.
+    """
     n = len(arrays[0])
     stats = np.empty(n_boot)
-    for b in range(n_boot):
-        idx = rng.integers(0, n, size=n)
-        stats[b] = stat_fn(*[a[idx] for a in arrays])
+    for start in range(0, n_boot, BOOT_CHUNK):
+        m = min(BOOT_CHUNK, n_boot - start)
+        idx = rng.integers(0, n, size=(m, n))
+        stats[start:start + m] = stat_fn(*[a[idx] for a in arrays])
     return float(np.percentile(stats, 2.5)), float(np.percentile(stats, 97.5))
 
 
@@ -205,11 +243,12 @@ def paired_delta(iid_eps, chain_eps, n_boot, rng, paired=True):
                   for m in ("total_reward", "failure", "flight_hrs")}
         for metric, (a_iid, a_chain) in arrays.items():
             d = a_chain - a_iid
-            lo, hi = _boot_ci(lambda x: x.mean(), rng, n_boot, d)
+            lo, hi = _boot_ci(lambda x: x.mean(axis=1), rng, n_boot, d)
             out[f"d_{metric}"] = float(d.mean())
             out[f"d_{metric}_lo"], out[f"d_{metric}_hi"] = lo, hi
         r_iid, r_chain = arrays["total_reward"]
-        lo, hi = _boot_ci(lambda a, b: cvar(b) - cvar(a), rng, n_boot, r_iid, r_chain)
+        lo, hi = _boot_ci(lambda a, b: cvar_rows(b) - cvar_rows(a), rng, n_boot,
+                          r_iid, r_chain)
         out["d_cvar10"] = cvar(r_chain) - cvar(r_iid)
         out["d_cvar10_lo"], out["d_cvar10_hi"] = lo, hi
         out["n_paired_episodes"] = n
@@ -241,19 +280,38 @@ def _suffix_delta_keys(deltas, suffix):
     return out
 
 
-def best_threshold_for_cell(thresh_rows):
+def _combo(row):
+    return (round(float(row["observation_threshold"]), 9), round(float(row["wind_threshold"]), 9))
+
+
+def best_threshold_for_cell(thresh_rows, tune_rows=None):
     """Select the best threshold combo for one cell.
 
-    Selection is by full-sample mean reward (what a practitioner tuning on these
-    episodes would pick). A split-half check -- select on even episode indices,
-    evaluate on odd -- quantifies the winner's-curse bias of picking the best of
-    ~35 combos on the same episodes. Also records the minimum-failure combo for
-    the reliability-frontier envelope.
+    With a fit-years tuning run (`tune_rows`, arm thresh_tune: the same grid rolled out
+    on the hold-out's fit years) the combo with the best tuning-run mean reward is
+    selected and then scored on the evaluation-year episodes, so selection never sees
+    evaluation weather. Without one, selection is by full-sample mean reward on the
+    evaluation episodes (what a practitioner tuning on these episodes would pick).
+    Either way a split-half check -- select on even evaluation episodes, score on odd --
+    quantifies the winner's-curse bias of picking the best of ~35 combos on the same
+    episodes. Also records the minimum-failure combo for the reliability-frontier
+    envelope.
 
     Returns (best_row, best_eps, extras).
     """
     run_dir = thresh_rows.iloc[0]["run_dir"]
-    best_row = thresh_rows.loc[thresh_rows["average_reward"].idxmax()]
+    selected_on = "evaluation episodes"
+    eval_best_row = thresh_rows.loc[thresh_rows["average_reward"].idxmax()]
+    best_row = eval_best_row
+    if tune_rows is not None and len(tune_rows):
+        tune_best = tune_rows.loc[tune_rows["average_reward"].idxmax()]
+        match = thresh_rows[[_combo(r) == _combo(tune_best) for _, r in thresh_rows.iterrows()]]
+        if len(match):
+            best_row = match.iloc[0]
+            selected_on = "fit-years tuning run"
+        else:
+            print(f"[warn] tuned combo {_combo(tune_best)} missing from the evaluation grid; "
+                  "selecting on evaluation episodes")
     best_eps = read_episode_scalars(run_dir, best_row["group"])
 
     even_means = {}
@@ -269,6 +327,10 @@ def best_threshold_for_cell(thresh_rows):
         ["failure_percentage", "average_reward"], ascending=[True, False]).iloc[0]
 
     extras = {
+        "thresh_selected_on": selected_on,
+        "thresh_eval_best_obs": float(eval_best_row["observation_threshold"]),
+        "thresh_eval_best_wind": float(eval_best_row["wind_threshold"]),
+        "avg_reward_thresh_eval_best": float(eval_best_row["average_reward"]),
         "thresh_best_obs": float(best_row["observation_threshold"]),
         "thresh_best_wind": float(best_row["wind_threshold"]),
         "avg_reward_thresh_holdout": holdout,
@@ -291,25 +353,30 @@ def _n_soc_levels(capacity, energy_increment_wh=5.0):
     return len(np.arange(0, 100 + inc, inc))
 
 
-def _find_solver_table(run_dir, capacity, horizon, start_time):
+def _find_solver_table(run_dir, capacity, horizon, start_time, penalty=None):
     """Locate the value-table .npy: {prefix}_{cap}Wh_{horizon}h_{penalty}p_{start[:12]}.npy."""
     start12 = re.escape(str(start_time)[:12])
-    pat = re.compile(rf"_{capacity}Wh_{horizon}h_.*p_{start12}\.npy$")
+    pen = ".*" if penalty is None else re.escape(f"{float(penalty)}")
+    pat = re.compile(rf"_{capacity}Wh_{horizon}h_{pen}p_{start12}\.npy$")
     for p in glob.glob(os.path.join(run_dir, "solver_tables", "*.npy")):
         if pat.search(os.path.basename(p)):
             return p
     return None
 
 
-def chain_edges_for(data_path, manifest=None):
+def chain_edges_for(data_path, manifest=None, chain_path=None):
     """Interior wind-bin edges for a location, read from its wind-chain artifact.
 
     Edges are per-location when quantile-derived, so they must come from the artifact,
     not the manifest. Falls back to a legacy manifest's global ``bin_edges`` (pre-quantile
-    sweeps) and returns None when neither exists.
+    sweeps) and returns None when neither exists. `chain_path` overrides the path derived
+    from `data_path` (hold-out runs and explicit paths; see artifact_paths_for_run).
     """
-    base, ext = os.path.splitext(data_path)
-    path = f"{base}_windchain{ext or '.pkl'}"
+    if chain_path:
+        path = chain_path
+    else:
+        base, ext = os.path.splitext(data_path)
+        path = f"{base}_windchain{ext or '.pkl'}"
     if os.path.exists(path):
         art = pd.read_pickle(path)
         return np.asarray(art["bin_edges"], dtype=float)[1:-1]
@@ -335,13 +402,14 @@ def _stage0_bin_masses(data_path, start_time, bin_edges):
     return masses / masses.sum()
 
 
-def v0_from_solver_table(run_dir, capacity, horizon, start_time, data_path, bin_edges):
+def v0_from_solver_table(run_dir, capacity, horizon, start_time, data_path, bin_edges,
+                         penalty=None):
     """Solver-predicted value of the initial state [SoC=100, mode=0] at t=0.
 
     2D (iid) tables index directly; 3D (chain) tables are averaged over the
     stage-0 wind-bin masses (the rollout's initial-bin distribution).
     """
-    path = _find_solver_table(run_dir, capacity, horizon, start_time)
+    path = _find_solver_table(run_dir, capacity, horizon, start_time, penalty)
     if path is None:
         return None
     table = np.load(path)
@@ -401,8 +469,8 @@ def build_cells(summaries, manifest, n_boot, rng, do_verify):
 
     grouped = summaries.groupby(["pair_key"] + [k for k in CELL_KEYS if k != "sweep"])
     # pair_key already encodes sweep+location+world; remaining keys pin the cell params.
-    for (pair_key, location_id, capacity, start_time, horizon), grp in grouped:
-        arms = {row["arm"]: row for _, row in grp[grp["arm"] != "thresh"].iterrows()}
+    for (pair_key, location_id, capacity, start_time, horizon, penalty), grp in grouped:
+        arms = {row["arm"]: row for _, row in grp[~grp["arm"].isin(THRESH_ARMS)].iterrows()}
         if "iid" not in arms or "chain" not in arms:
             continue
         iid, chain = arms["iid"], arms["chain"]
@@ -410,7 +478,7 @@ def build_cells(summaries, manifest, n_boot, rng, do_verify):
         cell = {
             "sweep": iid["sweep"], "world": world,
             "location_id": location_id, "battery_capacity": capacity,
-            "start_time": start_time, "horizon": horizon,
+            "start_time": start_time, "horizon": horizon, "failure_penalty": penalty,
             "failure_pct_iid": 100 * iid["failure_percentage"],
             "failure_pct_chain": 100 * chain["failure_percentage"],
             "avg_reward_iid": iid["average_reward"],
@@ -446,7 +514,8 @@ def build_cells(summaries, manifest, n_boot, rng, do_verify):
         # Threshold-policy benchmark (hist world only; arm-agnostic, CRN-paired with both).
         thresh_rows = grp[grp["arm"] == "thresh"]
         if len(thresh_rows):
-            best_row, best_eps, extras = best_threshold_for_cell(thresh_rows)
+            best_row, best_eps, extras = best_threshold_for_cell(
+                thresh_rows, grp[grp["arm"] == "thresh_tune"])
             cell.update(extras)
             cell["failure_pct_thresh"] = 100 * best_row["failure_percentage"]
             cell["avg_reward_thresh"] = best_row["average_reward"]
@@ -457,12 +526,14 @@ def build_cells(summaries, manifest, n_boot, rng, do_verify):
                 if d:
                     cell.update(_suffix_delta_keys(d, f"_{arm_name}_vs_thresh"))
 
-        data_path = _data_path_for_location(manifest, location_id)
-        bin_edges = chain_edges_for(data_path, manifest)
+        art = artifact_paths_for_run(chain["run_dir"], location_id, manifest)
+        data_path = art["expected_data"]
+        bin_edges = chain_edges_for(data_path, manifest, chain_path=art["wind_chain"])
         for arm_name, row in (("iid", iid), ("chain", chain)):
             try:
                 cell[f"v0_{arm_name}"] = v0_from_solver_table(
-                    row["run_dir"], capacity, horizon, start_time, data_path, bin_edges)
+                    row["run_dir"], capacity, horizon, start_time, data_path, bin_edges,
+                    penalty)
             except Exception as e:
                 print(f"[warn] V0 extraction failed for {pair_key}/{arm_name}: {e}")
                 cell[f"v0_{arm_name}"] = None
@@ -473,6 +544,34 @@ def build_cells(summaries, manifest, n_boot, rng, do_verify):
 def _data_path_for_location(manifest, location_id):
     return os.path.join(REPO_ROOT, "Data", "EXPECTED_DATA",
                         f"data_expected_{location_id}_15min.pkl")
+
+
+def artifact_paths_for_run(run_dir, location_id, manifest=None):
+    """Expected-data and wind-chain paths the run in `run_dir` actually used.
+
+    Reads the run's copied config.yaml and applies the same resolver as the simulation
+    factory (clear-sky suffix, explicit paths, year-split hold-out), so V0 and the stage-0
+    bin masses come from the model that was solved. Run folders written before the
+    hold-out standard have no `holdout` key and were in-sample, so a missing key is read
+    as `holdout: false` here. Falls back to the full-record path when no config is found.
+    """
+    import yaml  # noqa: E402
+    from BaseClasses.run_sim import resolve_artifact_paths  # noqa: E402
+    cfg_path = os.path.join(run_dir, "config.yaml")
+    if os.path.exists(cfg_path):
+        with open(cfg_path, "r") as f:
+            cfg = yaml.safe_load(f) or {}
+        cfg.setdefault("holdout", False)
+        for loc in cfg.get("locations", []) or []:
+            try:
+                loc_id = f"lat{float(loc['latitude'])}_lon{float(loc['longitude'])}"
+            except (KeyError, TypeError, ValueError):
+                continue
+            if loc_id == location_id:
+                return resolve_artifact_paths(cfg, loc)
+    dp = _data_path_for_location(manifest, location_id)
+    base, ext = os.path.splitext(dp)
+    return {"expected_data": dp, "wind_chain": f"{base}_windchain{ext or '.pkl'}"}
 
 
 def add_calibration(cells):
@@ -515,16 +614,16 @@ def write_report(cells, out_path, manifest):
     has_thresh = "failure_pct_thresh" in hist.columns and hist["failure_pct_thresh"].notna().any()
     for sweep in hist["sweep"].unique():
         sub = hist[hist["sweep"] == sweep].sort_values(
-            ["location_id", "battery_capacity", "start_time", "horizon"])
+            ["location_id", "battery_capacity", "start_time", "horizon", "failure_penalty"])
         lines.append(f"## Sweep: {sweep} (historical weather)")
         lines.append("")
-        lines.append("| location | cap (Wh) | start | horizon | fail% iid | fail% chain | "
+        lines.append("| location | cap (Wh) | start | horizon | penalty | fail% iid | fail% chain | "
                      "Δreward [95% CI] | ΔCVaR₁₀ [95% CI] | Δflight hrs |")
-        lines.append("|---|---|---|---|---|---|---|---|---|")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|")
         for _, r in sub.iterrows():
             lines.append(
                 f"| {r['location_id']} | {r['battery_capacity']:g} | {str(r['start_time'])[:10]} "
-                f"| {r['horizon']} | {r['failure_pct_iid']:.2f} | {r['failure_pct_chain']:.2f} "
+                f"| {r['horizon']} | {r['failure_penalty']:g} | {r['failure_pct_iid']:.2f} | {r['failure_pct_chain']:.2f} "
                 f"| {_fmt_ci(r, 'd_total_reward')} | {_fmt_ci(r, 'd_cvar10')} "
                 f"| {_fmt_ci(r, 'd_flight_hrs')} |")
         lines.append("")
@@ -532,23 +631,28 @@ def write_report(cells, out_path, manifest):
     if has_thresh:
         lines.append("## Optimal arms vs best threshold policy (historical weather)")
         lines.append("")
-        lines.append("The best threshold combo is selected per cell by full-sample mean "
-                     "reward over the swept grid; deltas are episode-paired (identical "
+        lines.append("The best threshold combo is selected per cell on the fit-years "
+                     "tuning run when the sweep has one (the `selected on` column), otherwise "
+                     "by full-sample mean reward on the evaluation episodes; it is then scored "
+                     "on the evaluation episodes. Deltas are episode-paired (identical "
                      "bootstrap weather across all three policies). The split-half column "
-                     "re-selects on even episodes and evaluates on odd episodes -- if it is "
+                     "re-selects on even evaluation episodes and scores on odd ones -- if it is "
                      "close to the full-sample value, selection bias is negligible.")
         lines.append("")
-        lines.append("| sweep | location | cap (Wh) | start | horizon | best (obs, wind) | "
+        lines.append("| sweep | location | cap (Wh) | start | horizon | penalty | "
+                     "best (obs, wind) | selected on | "
                      "fail% thresh | fail% iid | fail% chain | Δreward iid−thresh [CI] | "
                      "Δreward chain−thresh [CI] | thresh reward (full / split-half) |")
-        lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
         tsub = hist[hist["failure_pct_thresh"].notna()].sort_values(
-            ["sweep", "location_id", "battery_capacity", "start_time", "horizon"])
+            ["sweep", "location_id", "battery_capacity", "start_time", "horizon",
+             "failure_penalty"])
         for _, r in tsub.iterrows():
             lines.append(
                 f"| {r['sweep']} | {r['location_id']} | {r['battery_capacity']:g} "
-                f"| {str(r['start_time'])[:10]} | {r['horizon']} "
+                f"| {str(r['start_time'])[:10]} | {r['horizon']} | {r['failure_penalty']:g} "
                 f"| ({r['thresh_best_obs']:g}, {r['thresh_best_wind']:g}) "
+                f"| {r.get('thresh_selected_on', 'evaluation episodes')} "
                 f"| {r['failure_pct_thresh']:.2f} | {r['failure_pct_iid']:.2f} "
                 f"| {r['failure_pct_chain']:.2f} "
                 f"| {_fmt_ci(r, 'd_total_reward_iid_vs_thresh')} "
@@ -578,7 +682,7 @@ def write_report(cells, out_path, manifest):
         lines.append("")
 
     # Wh saved at equal reliability, from the capgrid frontier.
-    capgrid = hist[hist["sweep"] == "capgrid"]
+    capgrid = hist[hist["sweep"].isin(CAPACITY_SWEEPS)]
     if len(capgrid):
         lines.append("## Battery capacity saved at equal reliability (5% failure)")
         lines.append("")
